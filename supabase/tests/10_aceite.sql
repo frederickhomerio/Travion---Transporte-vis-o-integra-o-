@@ -216,8 +216,9 @@ do $$ begin
   assert (select count(*) from embarque_financeiro) = 1, 'comercial vê financeiro da carteira';
   -- Desde a migração 1310 o comercial cadastra embarques, então enxerga a lista de clientes para escolher o cliente.
   assert (select count(*) from clientes) > 1, 'comercial que cadastra embarque vê a lista de clientes';
-  begin perform atualizar_posicao((select id from posicoes_diarias limit 1), '{"porta":1}', '{"porta":0}');
-    assert false, 'comercial sem permissão de contador'; exception when insufficient_privilege then null; end;
+  -- Desde a migração 1510 o coordenador comercial edita contadores (ajustável em Administração → Permissões).
+  assert (select atualizar_posicao(p.id, jsonb_build_object('porta', coalesce(p.porta, 0) + 1), jsonb_build_object('porta', p.porta)) ->> 'status'
+          from posicoes_diarias p limit 1) = 'ok', 'coordenador comercial edita contador da própria carteira';
 end $$;
 
 -- Usuário pendente não vê nada

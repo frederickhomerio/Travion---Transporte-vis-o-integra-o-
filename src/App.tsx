@@ -9,6 +9,7 @@ import { Mais } from './pages/Mais';
 
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
 const PosicoesEmbarque = lazy(() => import('./pages/PosicoesEmbarque').then((m) => ({ default: m.PosicoesEmbarque })));
+const PosicaoCliente = lazy(() => import('./pages/PosicaoCliente').then((m) => ({ default: m.PosicaoCliente })));
 const Admin = lazy(() => import('./pages/admin/Admin').then((m) => ({ default: m.Admin })));
 const ConsultaPublica = lazy(() => import('./pages/ConsultaPublica').then((m) => ({ default: m.ConsultaPublica })));
 
@@ -40,6 +41,7 @@ export function App({ api }: { api: Api }) {
             <Route path="/" element={<Protegido><ListaFretes /></Protegido>} />
             <Route path="/dashboard" element={<Protegido><Dashboard /></Protegido>} />
             <Route path="/posicoes" element={<Protegido><PosicoesEmbarque /></Protegido>} />
+            <Route path="/posicao-cliente" element={<Protegido><PosicaoCliente /></Protegido>} />
             <Route path="/admin/*" element={<Protegido><Admin /></Protegido>} />
             <Route path="/mais" element={<Protegido><Mais /></Protegido>} />
             <Route path="*" element={<Navigate to="/" replace />} />

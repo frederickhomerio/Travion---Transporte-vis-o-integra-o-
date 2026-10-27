@@ -7,7 +7,7 @@ import type { Api, CotacaoCna, EstadoConexao, EventoTempoReal, LogoCandidata } f
 const COLUNAS_EMBARQUE =
   'id,codigo,cliente_id,comercial_id,filial_id,produto_id,origem_cidade,origem_uf,local_coleta_id,destino_cidade,destino_uf,' +
   'local_entrega_id,status_liberacao,data_liberacao,cadencia_valor,cadencia_unidade,toneladas_por_veiculo,observacao_interna,' +
-  'situacao,is_demo,chave_importacao,versao,atualizado_em,atualizado_por_nome';
+  'situacao,is_demo,chave_importacao,versao,atualizado_em,atualizado_por_nome,suspenso_em,encerrado_em,encerrado_por_nome,encerrado_motivo';
 
 const COLUNAS_CLIENTE =
   'id,nome,documento,comercial_id,restricao_comercial,ativo,is_demo,razao_social,inscricao_estadual,situacao_cadastral,' +
@@ -151,8 +151,15 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
 
     atualizarPosicao: (id, alteracoes, base, forcar = false) =>
       rpc('atualizar_posicao', { p_posicao_id: id, p_alteracoes: alteracoes, p_base: base, p_forcar: forcar }),
+    confirmarPosicao: (id, valores, base) =>
+      rpc('confirmar_posicao', { p_posicao_id: id, p_valores: valores, p_base: base }),
+    agoraServidor: () => rpc<string>('agora_servidor', {}),
     atualizarEmbarque: (id, alteracoes, base, forcar = false) =>
       rpc('atualizar_embarque', { p_embarque_id: id, p_alteracoes: alteracoes, p_base: base, p_forcar: forcar }),
+    async encerrarEmbarque(id, motivo) {
+      const r = await rpc<{ registro: never }>('encerrar_embarque', { p_embarque_id: id, p_motivo: motivo });
+      return r.registro;
+    },
     atualizarFinanceiro: (id, alteracoes, base, forcar = false) =>
       rpc('atualizar_financeiro', { p_embarque_id: id, p_alteracoes: alteracoes, p_base: base, p_forcar: forcar }),
     async criarEmbarque(dados, demo) {

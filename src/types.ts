@@ -10,8 +10,8 @@ export type TipoLocal = 'coleta' | 'entrega' | 'ambos';
 
 export type Permissao =
   | 'embarques.ver' | 'embarques.criar' | 'embarques.editar_cadastro' | 'embarques.liberar'
-  | 'embarques.editar_cadencia' | 'embarques.editar_capacidade' | 'embarques.arquivar'
-  | 'carteira.editar' | 'posicoes.abrir' | 'posicoes.editar_contadores'
+  | 'embarques.editar_cadencia' | 'embarques.editar_capacidade' | 'embarques.arquivar' | 'embarques.encerrar'
+  | 'carteira.editar' | 'posicoes.pagina' | 'posicoes.abrir' | 'posicoes.editar_contadores'
   | 'posicoes.editar_obs_operacional' | 'posicoes.editar_obs_cliente'
   | 'financeiro.ver' | 'financeiro.editar' | 'historico.ver'
   | 'compartilhamento.preparar' | 'compartilhamento.links'
@@ -65,6 +65,10 @@ export interface Embarque {
   toneladas_por_veiculo: number; observacao_interna: string | null; situacao: Situacao;
   is_demo: boolean; chave_importacao: string | null; versao: number;
   atualizado_em: string; atualizado_por_nome: string | null;
+  /** Quando foi suspenso (o banco encerra sozinho após 7 dias sem reativação). */
+  suspenso_em?: string | null;
+  /** Encerrado: arquivado de vez, sem reativação. */
+  encerrado_em?: string | null; encerrado_por_nome?: string | null; encerrado_motivo?: string | null;
 }
 
 export interface Financeiro {
@@ -80,6 +84,8 @@ export interface Posicao {
   obs_operacional: string | null; obs_cliente: string | null; is_demo: boolean;
   origem: 'app' | 'abertura' | 'importacao'; versao: number;
   atualizado_em: string; atualizado_por_nome: string | null;
+  /** Última conferência explícita dos contadores (salvar ou confirmar sem alteração). Abertura e importação não contam. */
+  confirmado_em?: string | null; confirmado_por_nome?: string | null;
 }
 
 export interface Historico {
@@ -106,6 +112,8 @@ export interface Configuracoes {
   cadencia_unidade_padrao: UnidadeCadencia;
   ticket_inclui_frete_zero: boolean;
   link_validade_padrao_horas: number;
+  /** Logo da Transpanorama (data:image/...) no quadro enviado ao cliente. */
+  logo_empresa: string | null;
 }
 
 export const CONFIG_PADRAO: Configuracoes = {
@@ -114,6 +122,7 @@ export const CONFIG_PADRAO: Configuracoes = {
   cadencia_unidade_padrao: 'veiculos_dia',
   ticket_inclui_frete_zero: true,
   link_validade_padrao_horas: 72,
+  logo_empresa: null,
 };
 
 export interface Conflito {
