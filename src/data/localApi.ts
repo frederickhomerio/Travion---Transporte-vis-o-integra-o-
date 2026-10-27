@@ -7,6 +7,7 @@ import { cnpjValido, naoCarregar, type Cadastros } from '../lib/cadastros';
 import { consultarCnpjBrasilApi } from '../lib/cnpj';
 import { hojeSP, somarDias } from '../lib/formato';
 import { normalizar } from '../lib/texto';
+import type { LinhaImportacao } from '../lib/planilha';
 import {
   CONFIG_PADRAO, type CentroCusto, type Cidade, type Cliente, type Comercial, type Configuracoes, type Conflito, type Embarque, type Filial,
   type Financeiro, type Historico, type LinkCliente, type Local, type MetaDiaria, type Papel, type Perfil,
@@ -15,7 +16,16 @@ import {
 import { criarDocLocal } from './docLocal';
 import type { Api, Convite, EventoTempoReal, MatrizPermissoes, RelatorioImportacao, UsuarioAdmin } from './api';
 
-const CHAVE = 'travion-previa-v6';
+// Dados reais opcionais para testar a prévia (arquivo dados-previa.js publicado só junto da prévia, nunca no repositório).
+interface DadosPrevia {
+  id: string;
+  filiais: string[];
+  clientes: Array<{ nome: string; carteira: string | null; restricao: string | null }>;
+  linhas: LinhaImportacao[];
+  centros?: Record<string, string>;
+}
+const DADOS_PREVIA = (globalThis as { TRAVION_DADOS_PREVIA?: DadosPrevia }).TRAVION_DADOS_PREVIA ?? null;
+const CHAVE = DADOS_PREVIA ? `travion-previa-v6-${DADOS_PREVIA.id}` : 'travion-previa-v6';
 const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
@@ -202,13 +212,105 @@ function semear(): Banco {
     config: { ...CONFIG_PADRAO }, convites: [], dadosOrigem: {}, importacoes: [],
   };
 }
+const semearPrevia = (): Banco => (DADOS_PREVIA ? semearDaPlanilha(semear(), DADOS_PREVIA) : semear());
+
+/** Troca os cadastros e embarques fictícios pelos da planilha, mantendo perfis, permissões e configurações da prévia. */
+function semearDaPlanilha(base: Banco, d: DadosPrevia): Banco {
+  const hoje = hojeSP();
+  const porNome = <T extends { nome: string }>(lista: T[], nome: string | null | undefined) => lista.find((x) => normalizar(x.nome) === normalizar(nome ?? ''));
+  const centros_custo: CentroCusto[] = [];
+  const filiais: Filial[] = [];
+  const comerciais: Comercial[] = [];
+  const clientes: Cliente[] = [];
+  const produtos: Produto[] = [];
+  const locais: Local[] = [];
+  const filial = (nome: string) => {
+    let f = porNome(filiais, nome);
+    if (!f) {
+      const cc = d.centros?.[Object.keys(d.centros).find((k) => normalizar(k) === normalizar(nome)) ?? ''];
+      let c = cc ? porNome(centros_custo, cc) : undefined;
+      if (cc && !c) { c = { id: uid(), nome: cc, ativo: true, is_demo: true }; centros_custo.push(c); }
+      f = { id: uid(), nome: nome.trim(), codigo: null, centro_custo_id: c?.id ?? null, ativo: true, is_demo: true };
+      filiais.push(f);
+    }
+    return f;
+  };
+  const comercial = (nome: string | null) => {
+    if (!nome?.trim()) return null;
+    let c = porNome(comerciais, nome);
+    if (!c) { c = { id: uid(), nome: nome.trim(), email: null, ativo: true, is_demo: true }; comerciais.push(c); }
+    return c;
+  };
+  const cliente = (nome: string, carteira: string | null, restricao: string | null) => {
+    let c = porNome(clientes, nome);
+    if (!c) {
+      c = { id: uid(), nome: nome.trim(), documento: null, comercial_id: comercial(carteira)?.id ?? null, restricao_comercial: restricao, ativo: true, is_demo: true };
+      clientes.push(c);
+    }
+    return c;
+  };
+  const produto = (nome: string | null) => {
+    if (!nome?.trim()) return null;
+    let p = porNome(produtos, nome);
+    if (!p) { p = { id: uid(), nome: nome.trim(), ativo: true, is_demo: true }; produtos.push(p); }
+    return p;
+  };
+  const local = (nome: string | null, cidade: string, uf: string | null, tipo: Local['tipo']) => {
+    if (!nome?.trim()) return null;
+    let l = locais.find((x) => x.tipo === tipo && normalizar(x.nome) === normalizar(nome) && normalizar(x.cidade ?? '') === normalizar(cidade));
+    if (!l) { l = { id: uid(), nome: nome.trim(), cidade, uf, tipo, ativo: true, is_demo: true }; locais.push(l); }
+    return l;
+  };
+  for (const f of d.filiais) filial(f);
+  for (const c of d.clientes) cliente(c.nome, c.carteira, c.restricao);
+  const embarques: Embarque[] = [];
+  const financeiro: Financeiro[] = [];
+  const posicoes: Posicao[] = [];
+  d.linhas.forEach((l, i) => {
+    const id = uid();
+    const cli = cliente(l.cliente, l.carteira, null);
+    const origemUf = l.origem_uf ?? 'GO';
+    embarques.push({
+      id, codigo: i + 1, cliente_id: cli.id, comercial_id: comercial(l.carteira)?.id ?? cli.comercial_id, filial_id: filial(l.filial).id,
+      produto_id: produto(l.produto)?.id ?? null, origem_cidade: l.origem_cidade, origem_uf: origemUf,
+      local_coleta_id: local(l.coleta, l.origem_cidade, origemUf, 'coleta')?.id ?? null,
+      destino_cidade: l.destino_cidade, destino_uf: l.destino_uf, local_entrega_id: local(l.entrega, l.destino_cidade, l.destino_uf, 'entrega')?.id ?? null,
+      status_liberacao: l.status, data_liberacao: null, cadencia_valor: l.cadencia_valor, cadencia_unidade: 'veiculos_dia',
+      toneladas_por_veiculo: base.config.capacidade_padrao_t, observacao_interna: null, situacao: 'ativo', is_demo: true,
+      chave_importacao: l.chave, versao: 1, atualizado_em: agora(), atualizado_por_nome: 'Planilha',
+      suspenso_em: l.status === 'suspenso' ? new Date(Date.now() - 86400e3).toISOString() : null,
+    });
+    financeiro.push({ embarque_id: id, frete_empresa: l.frete_empresa, frete_motorista: l.frete_motorista, unidade_frete: 'rs_tonelada',
+      frete_empresa_original: l.frete_empresa_original, frete_motorista_original: l.frete_motorista_original, versao: 1, atualizado_em: agora() });
+    posicoes.push({
+      id: uid(), embarque_id: id, data_operacional: hoje, porta: l.porta, transito: l.transito, carregados: l.carregados,
+      toneladas_por_veiculo: base.config.capacidade_padrao_t, meta_valor: l.cadencia_valor, meta_unidade: 'veiculos_dia',
+      obs_operacional: l.obs_operacional, obs_cliente: l.obs_cliente, is_demo: true, origem: 'importacao', versao: 1,
+      atualizado_em: agora(), atualizado_por_nome: 'Planilha', confirmado_em: null, confirmado_por_nome: null,
+    });
+  });
+  // Mesmo escopo dos perfis da prévia, agora com as filiais reais; o apoio vê todas.
+  const ids = (...nomes: string[]) => nomes.map((n) => porNome(filiais, n)?.id).filter((x): x is string => !!x);
+  const escopo: Record<string, string[]> = {
+    'perfil-1': ids('Rio Verde', 'Montividiu'), 'perfil-2': ids('Rio Verde'), 'perfil-4': ids('Rio Verde', 'Jataí'),
+    'perfil-5': ids('Jataí', 'Itumbiara'), 'perfil-6': ids('Montividiu'),
+    'perfil-7': filiais.map((f) => f.id), 'perfil-8': filiais.map((f) => f.id),
+  };
+  const perfilFiliais = Object.entries(escopo).flatMap(([perfil_id, fs]) => fs.map((filial_id) => ({ perfil_id, filial_id })));
+  const carteira = comerciais.find((c) => embarques.some((e) => e.comercial_id === c.id)) ?? comerciais[0];
+  const perfis = base.perfis.map((p) => (p.papel === 'comercial' ? { ...p, nome: `Coordenador Comercial ${carteira?.nome ?? ''} (prévia)`.replace('  ', ' '), comercial_id: carteira?.id ?? null } : p));
+  return {
+    ...base, seq: embarques.length, filiais, comerciais, clientes, produtos, locais, centros_custo, perfis, perfilFiliais,
+    embarques, financeiro, posicoes, metas: [], historico: [], links: [], dadosOrigem: Object.fromEntries(d.linhas.map((l, i) => [embarques[i].id, l.extras])),
+  };
+}
 
 export function criarLocalApi(): Api {
   let db: Banco = (() => {
     const s = lerStorage(CHAVE);
     if (s) { try { return JSON.parse(s) as Banco; } catch { /* recria */ } }
     // Grava a semente já: outras abas da prévia passam a ver os mesmos registros (mesmos identificadores).
-    const novo = semear();
+    const novo = semearPrevia();
     gravarStorage(CHAVE, JSON.stringify(novo));
     return novo;
   })();
@@ -886,7 +988,7 @@ export function criarLocalApi(): Api {
     },
     async carregarDadosDemo() {
       const sessao = perfilId;
-      db = semear();
+      db = semearPrevia();
       perfilId = sessao;
       salvar();
       emitir({ tabela: 'recarregar', tipo: 'TUDO' });
