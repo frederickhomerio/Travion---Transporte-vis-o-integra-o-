@@ -6,7 +6,7 @@ import type {
 } from '../types';
 import type { ApiDoc, ArquivoDoc, EventoDoc, ResultadoDoc } from './api';
 
-const CHAVE = 'travion-previa-doc-v1';
+const CHAVE = 'travion-previa-doc-v2';
 const TIPOS = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
 const LIMITE = 15 * 1024 * 1024;
 const PLACA = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
@@ -187,8 +187,8 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
     const perfil = (id: string, nome: string) => ({ id, nome, email: null, papel: 'apoio', status: 'ativo', comercial_id: null, criado_em: agora() } as Perfil);
     const gestor = perfil('perfil-1', 'Gestor Rio Verde (prévia)');
     const sup = perfil('perfil-5', 'Supervisor Jataí (prévia)');
-    const lucia = perfil('perfil-7', 'Lúcia · Apoio Operacional (prévia)');
-    const paulo = perfil('perfil-8', 'Paulo · Apoio Operacional (prévia)');
+    const lucia = perfil('perfil-2', 'Apoio Operacional (prévia)');
+    const paulo = lucia;
     const min = (m: number) => new Date(Date.now() - m * 60e3).toISOString();
     const arquivo = async (dono: string, nome: string, blob: Blob) => {
       const caminho = `envios/${dono}/${uid()}${nome.slice(nome.lastIndexOf('.'))}`;

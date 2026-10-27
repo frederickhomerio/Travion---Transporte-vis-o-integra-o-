@@ -6,7 +6,7 @@ import { nome } from '../../lib/cadastros';
 import { fmtDataHora, ROTULO_PAPEL } from '../../lib/formato';
 import type { Papel, Permissao, StatusUsuario } from '../../types';
 
-const PAPEIS: Papel[] = ['administrador', 'gestor', 'supervisor', 'embarcador', 'apoio', 'operacao', 'comercial', 'consulta'];
+const PAPEIS: Papel[] = ['administrador', 'gestor', 'supervisor', 'embarcador', 'apoio', 'comercial', 'consulta'];
 const ROTULO_SITUACAO: Record<StatusUsuario, string> = { pendente: 'Aguardando aprovação', ativo: 'Ativo', bloqueado: 'Bloqueado' };
 
 export function Usuarios() {
@@ -216,7 +216,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
 function NovoConvite({ aoFechar }: { aoFechar: (salvou: boolean) => void }) {
   const { api, estado } = useApp();
   const avisar = useAviso();
-  const [d, setD] = useState({ email: '', nome: '', papel: 'operacao' as Papel, comercial_id: '', filiais: [] as string[] });
+  const [d, setD] = useState({ email: '', nome: '', papel: 'apoio' as Papel, comercial_id: '', filiais: [] as string[] });
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   async function salvar() {
