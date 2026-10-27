@@ -17,13 +17,27 @@ export type Permissao =
   | 'compartilhamento.preparar' | 'compartilhamento.links'
   | 'importacao.executar' | 'cadastros.gerenciar' | 'usuarios.gerenciar' | 'configuracoes.gerenciar';
 
-export interface Filial { id: string; nome: string; codigo: string | null; ativo: boolean; is_demo: boolean }
-export interface Comercial { id: string; nome: string; email: string | null; ativo: boolean; is_demo: boolean }
+export interface Filial { id: string; nome: string; codigo: string | null; supervisor?: string | null; ativo: boolean; is_demo: boolean }
+export interface Comercial { id: string; nome: string; email: string | null; telefone?: string | null; ativo: boolean; is_demo: boolean }
 export interface Cliente {
   id: string; nome: string; documento: string | null; comercial_id: string | null;
   restricao_comercial: string | null; ativo: boolean; is_demo: boolean;
+  razao_social?: string | null; inscricao_estadual?: string | null; situacao_cadastral?: string | null;
+  atividade_principal?: string | null; logradouro?: string | null; numero?: string | null; complemento?: string | null;
+  bairro?: string | null; municipio?: string | null; uf?: string | null; cep?: string | null; email?: string | null;
+  telefone_cadastro?: string | null; telefone_comercial?: string | null; telefone_financeiro?: string | null;
+  logo_url?: string | null; dados_consultados_em?: string | null;
 }
-export interface Produto { id: string; nome: string; ativo: boolean; is_demo: boolean }
+export interface Produto { id: string; nome: string; valor_pauta_kg?: number | null; valor_pauta_data?: string | null; ativo: boolean; is_demo: boolean }
+export interface Cidade { id: string; nome: string; uf: string | null; ativo: boolean; is_demo: boolean }
+
+/** Dados de CNPJ devolvidos pela consulta às bases públicas da Receita. */
+export interface DadosCnpj {
+  fonte: string; cnpj: string; razao_social: string | null; nome_fantasia: string | null; situacao_cadastral: string | null;
+  atividade_principal: string | null; logradouro: string | null; numero: string | null; complemento: string | null;
+  bairro: string | null; municipio: string | null; uf: string | null; cep: string | null; telefone: string | null;
+  email: string | null; inscricao_estadual: string | null; inscricoes_estaduais: Array<{ ie: string; uf: string | null; ativa: boolean }>;
+}
 export interface Local {
   id: string; nome: string; cidade: string | null; uf: string | null; tipo: TipoLocal; ativo: boolean; is_demo: boolean;
 }

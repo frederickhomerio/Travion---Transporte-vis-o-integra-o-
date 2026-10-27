@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { mensagemErro } from '../data/api';
 import { useApp, useIndices } from '../data/store';
-import { nome } from '../lib/cadastros';
+import { nome, separarCidadeUF } from '../lib/cadastros';
+import { normalizar } from '../lib/texto';
 import { fmtData } from '../lib/formato';
 import { parseNumeroBR } from '../lib/texto';
 import { Alerta, Modal, useAviso } from './ui';
@@ -15,7 +16,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
   const filiais = useMemo(() => (s.perfil.papel === 'administrador' ? c.filiais : c.filiais.filter((f) => s.filiais.includes(f.id))).filter((f) => f.ativo), [c.filiais, s]);
   const [d, setD] = useState({
     cliente_id: '', comercial_id: '', filial_id: filiais.length === 1 ? filiais[0].id : '', produto_id: '',
-    origem_cidade: '', origem_uf: '', local_coleta_id: '', destino_cidade: '', destino_uf: '', local_entrega_id: '',
+    origem_cidade: '', origem_uf: '', local_coleta: '', destino_cidade: '', destino_uf: '', local_entrega: '',
     status_liberacao: 'nao_informado', data_liberacao: '', cadencia_valor: '', cadencia_unidade: estado.config.cadencia_unidade_padrao,
     toneladas_por_veiculo: String(estado.config.capacidade_padrao_t), observacao_interna: '',
     frete_empresa: '', frete_motorista: '', unidade_frete: 'rs_tonelada', abrir: pode('posicoes.abrir'),
@@ -42,10 +43,8 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
       status_liberacao: d.status_liberacao, cadencia_unidade: d.cadencia_unidade,
     };
     if (d.produto_id) dados.produto_id = d.produto_id;
-    if (d.origem_uf) dados.origem_uf = d.origem_uf;
-    if (d.destino_uf) dados.destino_uf = d.destino_uf;
-    if (d.local_coleta_id) dados.local_coleta_id = d.local_coleta_id;
-    if (d.local_entrega_id) dados.local_entrega_id = d.local_entrega_id;
+    if (d.origem_uf) dados.origem_uf = d.origem_uf.trim().toUpperCase();
+    if (d.destino_uf) dados.destino_uf = d.destino_uf.trim().toUpperCase();
     if (d.data_liberacao) dados.data_liberacao = d.data_liberacao;
     if (cad) dados.cadencia_valor = cad;
     if (cap !== estado.config.capacidade_padrao_t) dados.toneladas_por_veiculo = cap;
@@ -62,8 +61,20 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
       if (Object.keys(fin).length) dados.financeiro = fin;
     }
     if (d.abrir) dados.abrir_posicao_em = estado.data;
+    if ((d.origem_uf && !/^[A-Za-z]{2}$/.test(d.origem_uf)) || (d.destino_uf && !/^[A-Za-z]{2}$/.test(d.destino_uf))) { setErro('UF deve ter 2 letras.'); return; }
     setEnviando(true);
     try {
+      // Cidades e locais digitados ficam gravados para aparecerem como sugestão nas próximas vezes.
+      const ufO = d.origem_uf.trim().toUpperCase() || null;
+      const ufD = d.destino_uf.trim().toUpperCase() || null;
+      const [, , coleta, entrega] = await Promise.all([
+        api.obterCidade(d.origem_cidade.trim(), ufO, estado.demo),
+        api.obterCidade(d.destino_cidade.trim(), ufD, estado.demo),
+        d.local_coleta.trim() ? api.obterLocal(d.local_coleta.trim(), d.origem_cidade.trim(), ufO, 'coleta', estado.demo) : null,
+        d.local_entrega.trim() ? api.obterLocal(d.local_entrega.trim(), d.destino_cidade.trim(), ufD, 'entrega', estado.demo) : null,
+      ]);
+      if (coleta) dados.local_coleta_id = coleta;
+      if (entrega) dados.local_entrega_id = entrega;
       const e = await api.criarEmbarque(dados, estado.demo);
       aplicarEmbarque(e);
       await recarregar();
@@ -92,12 +103,46 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
     </label>
   );
 
+  const cidadesAtivas = c.cidades.filter((x) => x.ativo);
+  // Campo de cidade com sugestões do cadastro; escolher "Rio Verde/GO" preenche a UF.
+  const cidade = (lado: 'origem' | 'destino', rot: string) => {
+    const kC = `${lado}_cidade` as const;
+    const kU = `${lado}_uf` as const;
+    return (
+      <label className="campo"><span>{rot}</span>
+        <input className="entrada" list="lista-cidades" autoComplete="off" value={d[kC]} placeholder="Digite e escolha"
+          onChange={(e) => {
+            const v = e.target.value;
+            const sug = cidadesAtivas.find((x) => x.uf && `${x.nome}/${x.uf}` === v);
+            if (sug) { setD((x) => ({ ...x, [kC]: sug.nome, [kU]: sug.uf ?? '' })); return; }
+            const p = separarCidadeUF(v);
+            if (p.uf && /\/\s*[A-Za-z]{2}$/.test(v)) setD((x) => ({ ...x, [kC]: p.cidade, [kU]: p.uf ?? '' }));
+            else set(kC, v);
+          }} />
+      </label>
+    );
+  };
+  // Local digitável: sugere os já usados na mesma cidade (ou em qualquer cidade, se a cidade estiver vazia).
+  const local = (k: 'local_coleta' | 'local_entrega', rot: string, cidadeAtual: string, excluirTipo: 'coleta' | 'entrega') => {
+    const nc = normalizar(cidadeAtual);
+    const ops = c.locais.filter((l) => l.ativo && l.tipo !== excluirTipo && (!nc || normalizar(l.cidade) === nc));
+    return (
+      <label className="campo"><span>{rot}</span>
+        <input className="entrada" list={`lista-${k}`} autoComplete="off" value={d[k]} placeholder="Armazém, fazenda ou terminal"
+          onChange={(e) => set(k, e.target.value)} />
+        <datalist id={`lista-${k}`}>{ops.map((l) => <option key={l.id} value={l.nome}>{l.cidade ? `${l.cidade}${l.uf ? `/${l.uf}` : ''}` : ''}</option>)}</datalist>
+        <small>{d[k].trim() && !ops.some((l) => normalizar(l.nome) === normalizar(d[k])) ? 'Novo local: será gravado ao salvar.' : 'Escolha da lista ou digite um novo.'}</small>
+      </label>
+    );
+  };
+
   return (
     <Modal titulo="Novo embarque" aoFechar={() => aoFechar()} rodape={<>
       <button className="btn" onClick={() => aoFechar()}>Cancelar</button>
       <button className="btn primario" disabled={enviando} onClick={salvar}>{enviando ? 'Salvando…' : 'Cadastrar embarque'}</button>
     </>}>
       {estado.demo && <Alerta tipo="aviso">Modo demonstração: este embarque será criado como dado demonstrativo.</Alerta>}
+      <datalist id="lista-cidades">{cidadesAtivas.map((x) => <option key={x.id} value={x.uf ? `${x.nome}/${x.uf}` : x.nome} />)}</datalist>
       <div className="grade-campos">
         <label className="campo"><span>Cliente *</span>
           <select className="entrada" value={d.cliente_id} onChange={(e) => {
@@ -113,12 +158,12 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
           d.cliente_id ? `Sugerida pelo cadastro do cliente: ${nome(idx.comercial, carteiraSugerida, 'sem carteira')}.${pode('carteira.editar') ? '' : ' Alterar exige permissão.'}` : undefined)}
         {sel('filial_id', 'Filial *', filiais, 'Selecione', false, filiais.length === 0 ? 'Você não tem filiais autorizadas.' : undefined)}
         {sel('produto_id', 'Produto', c.produtos.filter((x) => x.ativo), 'Não informado')}
-        {txt('origem_cidade', 'Cidade de origem *')}
+        {cidade('origem', 'Cidade de origem *')}
         {txt('origem_uf', 'UF de origem', { maxLength: 2, style: { textTransform: 'uppercase' } })}
-        {sel('local_coleta_id', 'Carregamento (coleta)', c.locais.filter((l) => l.ativo && l.tipo !== 'entrega').map((l) => ({ id: l.id, nome: `${l.nome}${l.cidade ? ` (${l.cidade})` : ''}` })), 'Não informado')}
-        {txt('destino_cidade', 'Cidade de destino *')}
+        {local('local_coleta', 'Carregamento (coleta)', d.origem_cidade, 'entrega')}
+        {cidade('destino', 'Cidade de destino *')}
         {txt('destino_uf', 'UF de destino', { maxLength: 2, style: { textTransform: 'uppercase' } })}
-        {sel('local_entrega_id', 'Descarga (entrega)', c.locais.filter((l) => l.ativo && l.tipo !== 'coleta').map((l) => ({ id: l.id, nome: `${l.nome}${l.cidade ? ` (${l.cidade})` : ''}` })), 'Não informado')}
+        {local('local_entrega', 'Descarga (entrega)', d.destino_cidade, 'coleta')}
         {pode('embarques.liberar') && sel('status_liberacao', 'Status de liberação', [{ id: 'nao_informado', nome: 'Não informado' }, { id: 'liberado', nome: 'Liberado' }, { id: 'suspenso', nome: 'Suspenso' }])}
         {pode('embarques.liberar') && txt('data_liberacao', 'Data de liberação', { type: 'date' })}
         {pode('embarques.editar_cadencia') && txt('cadencia_valor', 'Cadência (meta)', { inputMode: 'decimal' }, `Vazio = meta padrão (${estado.config.meta_veiculos_lote_padrao} veículos/lote).`)}
@@ -134,7 +179,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
       {pode('posicoes.abrir') && (
         <label className="check"><input type="checkbox" checked={d.abrir} onChange={(e) => set('abrir', e.target.checked)} />Abrir posição em {fmtData(estado.data)} (contadores começam em 0)</label>
       )}
-      <p className="suave pequeno" style={{ margin: 0 }}>Locais, produtos e clientes novos são cadastrados em Administração → Cadastros.</p>
+      <p className="suave pequeno" style={{ margin: 0 }}>Cidades e locais novos são gravados automaticamente. Clientes e produtos novos são cadastrados em Administração → Cadastros.</p>
       {erro && <Alerta tipo="erro">{erro}</Alerta>}
     </Modal>
   );

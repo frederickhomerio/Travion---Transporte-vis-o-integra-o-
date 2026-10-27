@@ -4,7 +4,7 @@
 
 import type { Cadastros } from '../lib/cadastros';
 import type {
-  Configuracoes, Embarque, Financeiro, Historico, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
+  Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
 
@@ -39,7 +39,7 @@ export interface RelatorioImportacao {
 
 export interface ResultadoAbertura { criadas: number; ja_existiam: number; sem_posicao_anterior: number }
 
-export type TipoCadastro = 'filial' | 'comercial' | 'produto' | 'local' | 'cliente';
+export type TipoCadastro = 'filial' | 'comercial' | 'produto' | 'local' | 'cidade' | 'cliente';
 
 export interface Api {
   readonly modo: 'supabase' | 'local';
@@ -71,6 +71,12 @@ export interface Api {
   criarEmbarque(dados: Record<string, unknown>, demo: boolean): Promise<Embarque>;
   abrirPosicoes(data: string, transportar: boolean, embarqueIds: string[] | null, demo: boolean): Promise<ResultadoAbertura>;
   salvarCadastro(tipo: TipoCadastro, id: string | null, dados: Record<string, unknown>, demo: boolean): Promise<unknown>;
+  /** Reaproveita o local (coleta/entrega) com o mesmo nome na mesma cidade ou cria um novo. */
+  obterLocal(nome: string, cidade: string | null, uf: string | null, tipo: 'coleta' | 'entrega', demo: boolean): Promise<string | null>;
+  /** Reaproveita a cidade com o mesmo nome e UF ou cria uma nova. */
+  obterCidade(nome: string, uf: string | null, demo: boolean): Promise<string | null>;
+  /** Consulta dados públicos do CNPJ (Receita Federal e inscrição estadual). */
+  consultarCnpj(cnpj: string): Promise<DadosCnpj>;
   salvarConfiguracao(chave: keyof Configuracoes, valor: unknown): Promise<void>;
   salvarMeta(meta: MetaDiaria): Promise<void>;
 

@@ -330,3 +330,7 @@ textarea.entrada { min-height: 80px; resize: vertical; }
 
 /* Texto de formulário em 16px no celular (evita zoom automático no iOS) */
 @media (max-width: 900px) { .entrada, select.entrada, textarea.entrada, .contador input { font-size: 16px; } }
+
+/* Títulos de seção dentro de formulários longos (ex.: cadastro de cliente) */
+.titulo-secao-form { font-family: var(--fonte-titulo); font-size: .95rem; color: var(--vinho); margin: 8px 0 0; padding-top: 10px; border-top: 1px solid var(--borda); }
+.titulo-secao-form:first-of-type { border-top: 0; padding-top: 0; }

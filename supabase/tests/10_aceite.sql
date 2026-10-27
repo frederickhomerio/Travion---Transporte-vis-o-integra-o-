@@ -32,9 +32,9 @@ select salvar_cadastro('comercial', null, '{"nome":"LEANDRO"}') ->> 'id' as com_
 select set_config('t.com_leandro', :'com_leandro', false);
 select salvar_cadastro('comercial', null, '{"nome":"FREDERICK"}') ->> 'id' as com_frederick \gset
 select set_config('t.com_frederick', :'com_frederick', false);
-select salvar_cadastro('cliente', null, jsonb_build_object('nome', 'CLIENTE ALFA', 'comercial_id', :'com_leandro')) ->> 'id' as cli_alfa \gset
+select salvar_cadastro('cliente', null, jsonb_build_object('nome', 'CLIENTE ALFA', 'comercial_id', :'com_leandro', 'documento', '11.222.333/0001-81', 'telefone_comercial', '(64) 99999-0001')) ->> 'id' as cli_alfa \gset
 select set_config('t.cli_alfa', :'cli_alfa', false);
-select salvar_cadastro('cliente', null, jsonb_build_object('nome', 'CLIENTE BETA', 'comercial_id', :'com_frederick')) ->> 'id' as cli_beta \gset
+select salvar_cadastro('cliente', null, jsonb_build_object('nome', 'CLIENTE BETA', 'comercial_id', :'com_frederick', 'documento', '11444777000161', 'telefone_comercial', '(64) 99999-0002')) ->> 'id' as cli_beta \gset
 select set_config('t.cli_beta', :'cli_beta', false);
 select salvar_cadastro('produto', null, '{"nome":"MILHO EM GRÃOS"}') ->> 'id' as prod \gset
 select set_config('t.prod', :'prod', false);

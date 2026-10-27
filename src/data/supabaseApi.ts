@@ -1,12 +1,18 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Cadastros } from '../lib/cadastros';
-import { CONFIG_PADRAO, type Configuracoes, type Perfil, type Permissao, type Sessao } from '../types';
+import { consultarCnpjBrasilApi } from '../lib/cnpj';
+import { CONFIG_PADRAO, type Configuracoes, type DadosCnpj, type Perfil, type Permissao, type Sessao } from '../types';
 import type { Api, EstadoConexao, EventoTempoReal } from './api';
 
 const COLUNAS_EMBARQUE =
   'id,codigo,cliente_id,comercial_id,filial_id,produto_id,origem_cidade,origem_uf,local_coleta_id,destino_cidade,destino_uf,' +
   'local_entrega_id,status_liberacao,data_liberacao,cadencia_valor,cadencia_unidade,toneladas_por_veiculo,observacao_interna,' +
   'situacao,is_demo,chave_importacao,versao,atualizado_em,atualizado_por_nome';
+
+const COLUNAS_CLIENTE =
+  'id,nome,documento,comercial_id,restricao_comercial,ativo,is_demo,razao_social,inscricao_estadual,situacao_cadastral,' +
+  'atividade_principal,logradouro,numero,complemento,bairro,municipio,uf,cep,email,telefone_cadastro,telefone_comercial,' +
+  'telefone_financeiro,logo_url,dados_consultados_em';
 
 type Res<T> = { data: T | null; error: { message: string } | null };
 
@@ -96,14 +102,15 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
     },
 
     async carregarCadastros(demo) {
-      const [filiais, comerciais, clientes, produtos, locais] = await Promise.all([
-        todos((a, b) => sb.from('filiais').select('id,nome,codigo,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
-        todos((a, b) => sb.from('comerciais').select('id,nome,email,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
-        todos((a, b) => sb.from('clientes').select('id,nome,documento,comercial_id,restricao_comercial,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
-        todos((a, b) => sb.from('produtos').select('id,nome,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
+      const [filiais, comerciais, clientes, produtos, locais, cidades] = await Promise.all([
+        todos((a, b) => sb.from('filiais').select('id,nome,codigo,supervisor,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
+        todos((a, b) => sb.from('comerciais').select('id,nome,email,telefone,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
+        todos((a, b) => sb.from('clientes').select(COLUNAS_CLIENTE).eq('is_demo', demo).order('nome').range(a, b)),
+        todos((a, b) => sb.from('produtos').select('id,nome,valor_pauta_kg,valor_pauta_data,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
         todos((a, b) => sb.from('locais').select('id,nome,cidade,uf,tipo,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
+        todos((a, b) => sb.from('cidades').select('id,nome,uf,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
       ]);
-      return { filiais, comerciais, clientes, produtos, locais } as Cadastros;
+      return { filiais, comerciais, clientes, produtos, locais, cidades } as unknown as Cadastros;
     },
 
     async carregarConfiguracoes() {
@@ -154,6 +161,18 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
     abrirPosicoes: (data, transportar, ids, demo) =>
       rpc('abrir_posicoes', { p_data: data, p_transportar_saldos: transportar, p_embarque_ids: ids, p_is_demo: demo }),
     salvarCadastro: (tipo, id, dados, demo) => rpc('salvar_cadastro', { p_tipo: tipo, p_id: id, p_dados: dados, p_is_demo: demo }),
+    obterLocal: (nome, cidade, uf, tipo, demo) =>
+      rpc('obter_local', { p_nome: nome, p_cidade: cidade, p_uf: uf, p_tipo: tipo, p_is_demo: demo }),
+    obterCidade: (nome, uf, demo) => rpc('obter_cidade', { p_nome: nome, p_uf: uf, p_is_demo: demo }),
+    async consultarCnpj(cnpj) {
+      const { data, error } = await sb.functions.invoke('consulta-cnpj', { body: { cnpj } });
+      if (!error) return data as DadosCnpj;
+      // Resposta de erro da função (ex.: CNPJ inexistente) traz a mensagem no corpo.
+      const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
+      if (corpo?.erro && (error as { context?: Response }).context?.status === 404) throw new Error(corpo.erro);
+      // Função indisponível: tenta direto na base pública (sem inscrição estadual).
+      return consultarCnpjBrasilApi(cnpj);
+    },
     salvarConfiguracao: (chave, valor) => rpc('salvar_configuracao', { p_chave: chave, p_valor: valor }),
     salvarMeta: (m) => rpc('salvar_meta_diaria', {
       p_data: m.data_operacional, p_is_demo: m.is_demo, p_meta_faturamento: m.meta_faturamento,

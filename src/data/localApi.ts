@@ -3,11 +3,12 @@
 // Reproduz as regras do servidor (permissões, escopo, conflito por campo, histórico) para que as telas
 // possam ser avaliadas; a segurança real está no banco (supabase/migrations).
 
-import type { Cadastros } from '../lib/cadastros';
+import { cnpjValido, type Cadastros } from '../lib/cadastros';
+import { consultarCnpjBrasilApi } from '../lib/cnpj';
 import { hojeSP, somarDias } from '../lib/formato';
 import { normalizar } from '../lib/texto';
 import {
-  CONFIG_PADRAO, type Cliente, type Comercial, type Configuracoes, type Conflito, type Embarque, type Filial,
+  CONFIG_PADRAO, type Cidade, type Cliente, type Comercial, type Configuracoes, type Conflito, type Embarque, type Filial,
   type Financeiro, type Historico, type LinkCliente, type Local, type MetaDiaria, type Papel, type Perfil,
   type Permissao, type Posicao, type PosicaoPublica, type Produto, type Sessao,
 } from '../types';
@@ -60,6 +61,7 @@ interface Banco {
   clientes: Cliente[];
   produtos: Produto[];
   locais: Local[];
+  cidades?: Cidade[];
   perfis: Perfil[];
   perfilFiliais: Array<{ perfil_id: string; filial_id: string }>;
   perfilPermissoes: Array<{ perfil_id: string; chave: Permissao; permitido: boolean }>;
@@ -167,6 +169,17 @@ export function criarLocalApi(): Api {
     if (s) { try { return JSON.parse(s) as Banco; } catch { /* recria */ } }
     return semear();
   })();
+  // Bancos da prévia gravados antes do cadastro de cidades: deriva as cidades das rotas existentes.
+  if (!db.cidades) {
+    const vistas = new Map<string, Cidade>();
+    for (const e of db.embarques) {
+      for (const [nome, uf] of [[e.origem_cidade, e.origem_uf], [e.destino_cidade, e.destino_uf]] as const) {
+        const k = `${normalizar(nome)}|${uf ?? ''}|${e.is_demo}`;
+        if (!vistas.has(k)) vistas.set(k, { id: uid(), nome, uf, ativo: true, is_demo: e.is_demo });
+      }
+    }
+    db.cidades = [...vistas.values()];
+  }
   let perfilId: string | null = lerStorage(CHAVE_SESSAO);
   const ouvintesAuth = new Set<(e: string) => void>();
   const ouvintesDados = new Set<(e: EventoTempoReal) => void>();
@@ -290,7 +303,7 @@ export function criarLocalApi(): Api {
     unidade_frete: { perm: 'financeiro.editar', tipo: 'enum', valores: ['nao_confirmada', 'rs_tonelada', 'rs_viagem', 'outra'] },
   };
 
-  const listaCadastro = (tipo: string) => ({ filial: db.filiais, comercial: db.comerciais, produto: db.produtos, local: db.locais, cliente: db.clientes } as Record<string, Array<{ id: string; nome: string; is_demo: boolean }>>)[tipo];
+  const listaCadastro = (tipo: string) => ({ filial: db.filiais, comercial: db.comerciais, produto: db.produtos, local: db.locais, cidade: db.cidades!, cliente: db.clientes } as Record<string, Array<{ id: string; nome: string; is_demo: boolean }>>)[tipo];
 
   function abrir(data: string, transportar: boolean, ids: string[] | null) {
     let criadas = 0, ja = 0, semAnt = 0;
@@ -343,9 +356,9 @@ export function criarLocalApi(): Api {
     aoMudarAutenticacao(cb) { ouvintesAuth.add(cb); return () => ouvintesAuth.delete(cb); },
 
     async carregarCadastros(demo) {
-      if (!ativo()) return { filiais: [], comerciais: [], clientes: [], produtos: [], locais: [] };
+      if (!ativo()) return { filiais: [], comerciais: [], clientes: [], produtos: [], locais: [], cidades: [] };
       const f = <T extends { is_demo: boolean; nome: string }>(xs: T[]) => clone(xs.filter((x) => x.is_demo === demo)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-      return { filiais: f(db.filiais), comerciais: f(db.comerciais), clientes: f(db.clientes.filter(veCliente)), produtos: f(db.produtos), locais: f(db.locais) } as Cadastros;
+      return { filiais: f(db.filiais), comerciais: f(db.comerciais), clientes: f(db.clientes.filter(veCliente)), produtos: f(db.produtos), locais: f(db.locais), cidades: f(db.cidades!) } as Cadastros;
     },
     async carregarConfiguracoes() { return clone(db.config); },
     async carregarEmbarques(demo) { return clone(db.embarques.filter((e) => e.is_demo === demo && veEmbarque(e))); },
@@ -478,10 +491,45 @@ export function criarLocalApi(): Api {
       salvar();
       return r;
     },
+    async obterLocal(nomeL, cidade, uf, tipo, demo) {
+      if (!tem('embarques.criar') && !tem('embarques.editar_cadastro') && !tem('cadastros.gerenciar')) exigir('embarques.criar');
+      if (!nomeL.trim()) return null;
+      const achado = db.locais.find((l) => l.is_demo === demo && normalizar(l.nome) === normalizar(nomeL) && normalizar(l.cidade) === normalizar(cidade));
+      if (achado) {
+        if (achado.tipo !== tipo && achado.tipo !== 'ambos') { achado.tipo = 'ambos'; salvar(); }
+        return achado.id;
+      }
+      const novo: Local = { id: uid(), nome: nomeL.trim(), cidade: cidade?.trim() || null, uf: uf?.trim().toUpperCase() || null, tipo, ativo: true, is_demo: demo };
+      db.locais.push(novo);
+      salvar();
+      return novo.id;
+    },
+    async obterCidade(nomeC, uf, demo) {
+      if (!tem('embarques.criar') && !tem('embarques.editar_cadastro') && !tem('cadastros.gerenciar')) exigir('embarques.criar');
+      if (!nomeC.trim()) return null;
+      const u = uf?.trim().toUpperCase() || null;
+      const achada = db.cidades!.find((c) => c.is_demo === demo && normalizar(c.nome) === normalizar(nomeC) && c.uf === u);
+      if (achada) return achada.id;
+      const nova: Cidade = { id: uid(), nome: nomeC.trim(), uf: u, ativo: true, is_demo: demo };
+      db.cidades!.push(nova);
+      salvar();
+      return nova.id;
+    },
+    consultarCnpj: (cnpj) => consultarCnpjBrasilApi(cnpj),
     async salvarCadastro(tipo, id, dados, demo) {
       exigir('cadastros.gerenciar');
       const lista = listaCadastro(tipo);
       if (!lista) erro('Tipo de cadastro inválido.');
+      if (typeof dados.documento === 'string') dados = { ...dados, documento: dados.documento.replace(/\D/g, '') };
+      if (typeof dados.uf === 'string') dados = { ...dados, uf: dados.uf.trim().toUpperCase() || null };
+      if (tipo === 'cliente') {
+        const atual = (id ? lista.find((y) => y.id === id) : {}) as Record<string, unknown>;
+        const final = { ...atual, ...dados };
+        if (!cnpjValido(final.documento as string)) erro('Informe um CNPJ válido.');
+        if (!String(final.telefone_comercial ?? '').trim()) erro('Telefone de contato comercial é obrigatório.');
+        if (!final.comercial_id) erro('Informe o comercial responsável pelo cliente.');
+        if (db.clientes.some((x) => x.id !== id && x.is_demo === demo && x.documento === final.documento)) erro('Já existe um cliente com este CNPJ.');
+      }
       if (dados.nome !== undefined) {
         const n = normalizar(dados.nome);
         if (!n) erro('Nome é obrigatório.');
@@ -502,7 +550,7 @@ export function criarLocalApi(): Api {
         return clone(x);
       }
       if (tipo === 'cliente' && dados.comercial_id) exigir('carteira.editar');
-      const base: Record<string, unknown> = { filial: { codigo: null }, comercial: { email: null }, produto: {}, local: { cidade: null, uf: null, tipo: 'ambos' },
+      const base: Record<string, unknown> = { filial: { codigo: null }, comercial: { email: null }, produto: {}, local: { cidade: null, uf: null, tipo: 'ambos' }, cidade: { uf: null },
         cliente: { documento: null, comercial_id: null, restricao_comercial: null } }[tipo]!;
       const novo = { id: uid(), ativo: true, is_demo: demo, ...base, ...dados };
       (lista as unknown[]).push(novo);
