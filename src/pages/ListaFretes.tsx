@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BarraFiltros } from '../components/Filtros';
 import { Layout } from '../components/Layout';
 import { AbrirPosicoes } from '../components/AbrirPosicoes';
@@ -10,11 +10,13 @@ import { useApp, useIndices, useLinhas } from '../data/store';
 import { type DadosAnuncio, cidadeAnuncio, semDemo, textoWhatsApp, valorFrete, UNIDADE_ANUNCIO } from '../lib/anuncio';
 import { type Indices, codigoEmbarque, nome } from '../lib/cadastros';
 import { aplicarFiltros } from '../lib/filtros';
-import { fmtPct, fmtReais, fmtT } from '../lib/formato';
+import { fmtPct, fmtReais, fmtT, hojeSP } from '../lib/formato';
+import { normalizar } from '../lib/texto';
 import { type ItemLista, baixarListaJpeg, baixarListaPdf } from '../lib/listaExport';
 import type { Financeiro, LinhaFrete } from '../types';
 
-type Agrupar = 'nenhum' | 'origem' | 'destino' | 'filial' | 'produto';
+type CampoBusca = 'origem' | 'destino' | 'filial' | 'produto';
+type Agrupar = 'nenhum' | CampoBusca;
 const CHAVE_AGRUPAR = 'travion-agrupar-v2';
 const AGRUPAMENTOS: Agrupar[] = ['nenhum', 'origem', 'destino', 'filial', 'produto'];
 
@@ -22,9 +24,20 @@ export function ListaFretes() {
   const { estado, pode } = useApp();
   const idx = useIndices();
   const todas = useLinhas();
+  const { definirData } = useApp();
+  // A lista é sempre a do dia (sem escolher data operacional).
+  useEffect(() => { const h = hojeSP(); if (estado.data !== h) definirData(h); }, [estado.data, definirData]);
+  const [buscarPor, setBuscarPor] = useState<CampoBusca>('origem');
+  const [texto, setTexto] = useState('');
   // Vitrine para a equipe de campo: só fretes liberados e ativos.
-  const linhas = useMemo(() => aplicarFiltros(todas, estado.filtros, idx).filter((l) => l.embarque.status_liberacao === 'liberado' && l.embarque.situacao === 'ativo'),
-    [todas, estado.filtros, idx]);
+  const liberados = useMemo(() => aplicarFiltros(todas, { ...estado.filtros, busca: '' }, idx)
+    .filter((l) => l.embarque.status_liberacao === 'liberado' && l.embarque.situacao === 'ativo'), [todas, estado.filtros, idx]);
+  const linhas = useMemo(() => {
+    const t = normalizar(texto);
+    return t ? liberados.filter((l) => normalizar(chaveGrupo(l, buscarPor, idx)).includes(t)) : liberados;
+  }, [liberados, texto, buscarPor, idx]);
+  const sugestoes = useMemo(() => [...new Set(liberados.map((l) => chaveGrupo(l, buscarPor, idx)))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [liberados, buscarPor, idx]);
   const [agrupar, setAgrupar] = useState<Agrupar>(() => {
     try { const v = localStorage.getItem(CHAVE_AGRUPAR) as Agrupar; return AGRUPAMENTOS.includes(v) ? v : 'nenhum'; } catch { return 'nenhum'; }
   });
@@ -96,12 +109,28 @@ export function ListaFretes() {
 
   return (
     <Layout titulo="Lista de Fretes" acoes={acoes}>
-      <BarraFiltros linhas={todas} extra={
+      <BarraFiltros linhas={todas} semData semBusca inicio={
+        <>
+        <div className="campo"><span>Buscar por</span>
+          <Segmentado rotulo="Buscar por" valor={buscarPor} aoMudar={(v) => { setBuscarPor(v); setTexto(''); }}
+            opcoes={[{ valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
+              { valor: 'filial', rotulo: 'Filial' }, { valor: 'produto', rotulo: 'Produto' }]} />
+        </div>
+        <label className="campo busca">
+          <span>Busca</span>
+          <input className="entrada" type="search" list="sugestoes-busca" value={texto} onChange={(e) => setTexto(e.target.value)}
+            placeholder={{ origem: 'Digite a cidade de origem…', destino: 'Digite a cidade de destino…', filial: 'Digite a filial…', produto: 'Digite o produto…' }[buscarPor]} />
+          <datalist id="sugestoes-busca">{sugestoes.map((s) => <option key={s} value={s} />)}</datalist>
+        </label>
+        </>
+      } extra={
+        <>
         <div className="campo"><span>Agrupar por</span>
           <Segmentado rotulo="Agrupar por" valor={agrupar} aoMudar={mudarAgrupar}
             opcoes={[{ valor: 'nenhum', rotulo: 'Nenhum' }, { valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
               { valor: 'filial', rotulo: 'Filial' }, { valor: 'produto', rotulo: 'Produto' }]} />
         </div>
+        </>
       } />
 
       <div className="grupo-btn so-celular" style={{ marginBottom: 12 }}>

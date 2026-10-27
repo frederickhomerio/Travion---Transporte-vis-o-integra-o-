@@ -6,7 +6,7 @@ import type { LinhaFrete } from '../types';
 import { Icone } from './ui';
 
 /** Data operacional + busca + filtros. O mesmo estado é usado na Lista de Fretes e no Dashboard. */
-export function BarraFiltros({ linhas, semBusca = false, extra }: { linhas: LinhaFrete[]; semBusca?: boolean; extra?: React.ReactNode }) {
+export function BarraFiltros({ linhas, semBusca = false, semData = false, inicio, extra }: { linhas: LinhaFrete[]; semBusca?: boolean; semData?: boolean; inicio?: React.ReactNode; extra?: React.ReactNode }) {
   const { estado, definirData, definirFiltros } = useApp();
   const idx = useIndices();
   const f = estado.filtros;
@@ -18,11 +18,14 @@ export function BarraFiltros({ linhas, semBusca = false, extra }: { linhas: Linh
   return (
     <>
       <div className="ferramentas">
-        <label className="campo" style={{ width: 170 }}>
-          <span>Data operacional</span>
-          <input className="entrada" type="date" value={estado.data} max={hoje} onChange={(e) => e.target.value && definirData(e.target.value)} />
-        </label>
-        {estado.data !== hoje && (
+        {inicio}
+        {!semData && (
+          <label className="campo" style={{ width: 170 }}>
+            <span>Data operacional</span>
+            <input className="entrada" type="date" value={estado.data} max={hoje} onChange={(e) => e.target.value && definirData(e.target.value)} />
+          </label>
+        )}
+        {!semData && estado.data !== hoje && (
           <button className="btn sutil" onClick={() => definirData(hoje)}>Ir para hoje</button>
         )}
         {!semBusca && (
