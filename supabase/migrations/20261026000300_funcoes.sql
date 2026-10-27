@@ -1167,5 +1167,10 @@ revoke all on all functions in schema private from public, anon;
 grant execute on all functions in schema private to authenticated;
 revoke execute on function private.promover_administrador(text) from authenticated;
 -- O serviço de login do Supabase dispara o gatilho de novos usuários.
-grant usage on schema private to supabase_auth_admin;
-grant execute on function private.ao_criar_usuario() to supabase_auth_admin;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
+    grant usage on schema private to supabase_auth_admin;
+    grant execute on function private.ao_criar_usuario() to supabase_auth_admin;
+  end if;
+end $$;

@@ -17,6 +17,8 @@ Este guia leva o app da prévia local para produção com banco de dados real.
 
 ## 2. Criar o banco
 
+> **Situação em 27/10/2026:** o banco da Transpanorama (projeto `xdnjwnhhyttysbmmzjpn`) já está com os passos 2.1 a 2.4 concluídos. Esse projeto também guarda tabelas de outro sistema (`freight_quotes`, `whatsapp_*`, funções `iq_*`). As migrações do Travion só alteram os próprios objetos e não mexem nessas tabelas.
+
 1. Crie o projeto no Supabase (região São Paulo, `sa-east-1`, de preferência).
 2. Abra **SQL Editor** e execute, **nesta ordem**, o conteúdo de cada arquivo:
    1. `supabase/migrations/20261026000100_estrutura.sql`
@@ -24,6 +26,7 @@ Este guia leva o app da prévia local para produção com banco de dados real.
    3. `supabase/migrations/20261026000300_funcoes.sql`
    4. `supabase/migrations/20261026000400_importacao_realtime.sql`
    5. `supabase/migrations/20261026000500_dados_demo.sql`
+   6. `supabase/migrations/20261027000600_search_path.sql`
 
    Alternativa: com a [Supabase CLI](https://supabase.com/docs/guides/cli), `supabase link --project-ref SEU_PROJETO` e depois `supabase db push`.
 3. **Não execute** nada da pasta `supabase/tests/`. Aqueles arquivos simulam o Supabase e servem só para testes locais.
