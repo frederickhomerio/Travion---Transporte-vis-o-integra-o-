@@ -11,7 +11,7 @@ import { type DadosAnuncio, cidadeAnuncio, semDemo, textoWhatsApp, valorFrete, U
 import { type Indices, codigoEmbarque, nome } from '../lib/cadastros';
 import { resumir } from '../lib/calculos';
 import { aplicarFiltros } from '../lib/filtros';
-import { fmtT } from '../lib/formato';
+import { fmtPct, fmtReais, fmtT } from '../lib/formato';
 import type { Financeiro, LinhaFrete } from '../types';
 
 type Agrupar = 'nenhum' | 'cliente' | 'filial';
@@ -29,6 +29,7 @@ export function ListaFretes() {
   const [abrir, setAbrir] = useState(false);
   const [novo, setNovo] = useState(false);
   const [rapido, setRapido] = useState<string | null>(null);
+  const [anuncioNovo, setAnuncioNovo] = useState<string | null>(null);
   const [imagem, setImagem] = useState<DadosAnuncio | null>(null);
   const [textoManual, setTextoManual] = useState<string | null>(null);
   const avisar = useAviso();
@@ -103,7 +104,7 @@ export function ListaFretes() {
           <div className="cartao tabela-fretes-wrap">
             <table className="tabela-fretes">
               <thead>
-                <tr><th>Origem</th><th>Destino</th><th>Produto</th>{verFrete && <th className="n-frete">Frete motorista</th>}<th className="td-acao"><span className="sr">Ações</span></th></tr>
+                <tr><th>Origem</th><th>Destino</th><th>Produto</th>{verFrete && <><th className="n-frete">Frete motorista</th><th className="n-frete">Margem</th></>}<th className="td-acao"><span className="sr">Ações</span></th></tr>
               </thead>
               <tbody>
                 {grupos.map((g) => (
@@ -133,7 +134,11 @@ export function ListaFretes() {
       )}
       {detalhe && <DetalhesEmbarque embarqueId={detalhe} aoFechar={() => setDetalhe(null)} />}
       {abrir && <AbrirPosicoes aoFechar={() => setAbrir(false)} />}
-      {novo && <NovoEmbarque aoFechar={(id) => { setNovo(false); if (id) setDetalhe(id); }} />}
+      {novo && <NovoEmbarque aoFechar={(id) => { setNovo(false); if (id) setAnuncioNovo(id); }} />}
+      {anuncioNovo && estado.embarques[anuncioNovo] && (
+        <ImagemAnuncio titulo="Anúncio do novo frete" dados={anuncioDe({ embarque: estado.embarques[anuncioNovo] } as LinhaFrete, idx, estado.financeiro[anuncioNovo] ?? null)}
+          aoFechar={() => setAnuncioNovo(null)} />
+      )}
     </Layout>
   );
 }
@@ -178,6 +183,19 @@ function FreteMotorista({ fin }: { fin: Financeiro | null | undefined }) {
   return <span className="frete-valor">{v}{u && <small> {u}</small>}</span>;
 }
 
+/** Margem do embarque = frete empresa − frete motorista, em R$ e em % do frete empresa. Nunca vai no anúncio. */
+function Margem({ fin }: { fin: Financeiro | null | undefined }) {
+  const emp = fin?.frete_empresa;
+  const mot = fin?.frete_motorista;
+  if (emp == null || mot == null || !(emp > 0)) return <span className="suave pequeno">—</span>;
+  const m = emp - mot;
+  return (
+    <span className={`margem ${m < 0 ? 'negativa' : ''}`} title={`Frete empresa ${fmtReais(emp)} − frete motorista ${fmtReais(mot)}`}>
+      {fmtReais(m)}<small> · {fmtPct((m / emp) * 100)}</small>
+    </span>
+  );
+}
+
 function BotoesAnuncio({ l, acoes }: { l: LinhaFrete; acoes: AcoesLinha }) {
   return (
     <div className="grupo-btn botoes-anuncio">
@@ -195,7 +213,7 @@ function GrupoTabela({ g, agrupar, idx, verFrete, acoes }: {
   return (
     <>
       {g.titulo && (
-        <tr className="grupo-cab"><td colSpan={verFrete ? 5 : 4}>{g.titulo}<span className="totais">{subtituloGrupo(g.linhas, idx, agrupar)}</span></td></tr>
+        <tr className="grupo-cab"><td colSpan={verFrete ? 6 : 4}>{g.titulo}<span className="totais">{subtituloGrupo(g.linhas, idx, agrupar)}</span></td></tr>
       )}
       {g.linhas.map((l) => {
         const e = l.embarque;
@@ -204,7 +222,7 @@ function GrupoTabela({ g, agrupar, idx, verFrete, acoes }: {
             <td><PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} /></td>
             <td><PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></td>
             <td>{semDemo(nome(idx.produto, e.produto_id))}</td>
-            {verFrete && <td className="n-frete"><FreteMotorista fin={estado.financeiro[e.id]} /></td>}
+            {verFrete && <><td className="n-frete"><FreteMotorista fin={estado.financeiro[e.id]} /></td><td className="n-frete"><Margem fin={estado.financeiro[e.id]} /></td></>}
             <td className="td-acao"><BotoesAnuncio l={l} acoes={acoes} /></td>
           </tr>
         );
@@ -226,7 +244,7 @@ function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaFrete; idx: Indices;
       </div>
       <div className="rodape">
         <span className="pequeno suave">{semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))}</span>
-        {verFrete && <FreteMotorista fin={estado.financeiro[e.id]} />}
+        {verFrete && <span style={{ textAlign: 'right' }}><FreteMotorista fin={estado.financeiro[e.id]} /><br /><span className="pequeno">Margem <Margem fin={estado.financeiro[e.id]} /></span></span>}
       </div>
       <BotoesAnuncio l={l} acoes={acoes} />
     </article>

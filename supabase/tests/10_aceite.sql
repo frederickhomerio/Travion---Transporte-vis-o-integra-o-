@@ -214,7 +214,8 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d
 do $$ begin
   assert (select count(*) from embarques) = 1, 'comercial vê só a carteira FREDERICK';
   assert (select count(*) from embarque_financeiro) = 1, 'comercial vê financeiro da carteira';
-  assert (select count(*) from clientes) = 1, 'comercial vê só clientes da carteira';
+  -- Desde a migração 1310 o comercial cadastra embarques, então enxerga a lista de clientes para escolher o cliente.
+  assert (select count(*) from clientes) > 1, 'comercial que cadastra embarque vê a lista de clientes';
   begin perform atualizar_posicao((select id from posicoes_diarias limit 1), '{"porta":1}', '{"porta":0}');
     assert false, 'comercial sem permissão de contador'; exception when insufficient_privilege then null; end;
 end $$;

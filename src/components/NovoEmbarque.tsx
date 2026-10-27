@@ -17,7 +17,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
   const [d, setD] = useState({
     cliente_id: '', comercial_id: '', filial_id: filiais.length === 1 ? filiais[0].id : '', produto_id: '',
     origem_cidade: '', origem_uf: '', local_coleta: '', destino_cidade: '', destino_uf: '', local_entrega: '',
-    status_liberacao: 'nao_informado', data_liberacao: '', cadencia_valor: '', cadencia_unidade: estado.config.cadencia_unidade_padrao,
+    status_liberacao: pode('embarques.liberar') ? 'liberado' : 'nao_informado', data_liberacao: '', cadencia_valor: '', cadencia_unidade: estado.config.cadencia_unidade_padrao,
     toneladas_por_veiculo: String(estado.config.capacidade_padrao_t), observacao_interna: '',
     frete_empresa: '', frete_motorista: '', unidade_frete: 'rs_tonelada', abrir: pode('posicoes.abrir'),
   });
@@ -78,7 +78,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
       const e = await api.criarEmbarque(dados, estado.demo);
       aplicarEmbarque(e);
       await recarregar();
-      avisar('ok', 'Embarque cadastrado.');
+      avisar('ok', 'Embarque cadastrado. Anúncio pronto para divulgar.');
       aoFechar(e.id);
     } catch (err) {
       setErro(mensagemErro(err));

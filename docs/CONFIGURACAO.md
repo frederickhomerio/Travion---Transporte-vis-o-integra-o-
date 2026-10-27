@@ -33,6 +33,7 @@ Este guia leva o app da prévia local para produção com banco de dados real.
   10. `supabase/migrations/20261027001000_precos_cna.sql` (preços da CNA às 15h; liga pg_cron e pg_net)
   11. `supabase/migrations/20261027001100_precos_cna_conversoes.sql` (etanol em litro e algodão em libra-peso para kg)
 - `20261027001200_locais_link_mapa.sql`: link do Google Maps nos locais (anúncio de frete).
+- `20261027001300_papeis_supervisor_embarcador.sql` e `20261027001310_matriz_novo_embarque.sql`: papéis Supervisor e Embarcador; quem cadastra embarque.
 
    Alternativa: com a [Supabase CLI](https://supabase.com/docs/guides/cli), `supabase link --project-ref SEU_PROJETO` e depois `supabase db push`.
 3. **Não execute** nada da pasta `supabase/tests/`. Aqueles arquivos simulam o Supabase e servem só para testes locais.

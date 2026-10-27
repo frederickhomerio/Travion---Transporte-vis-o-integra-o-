@@ -14,7 +14,7 @@ import {
 } from '../types';
 import type { Api, Convite, EventoTempoReal, MatrizPermissoes, RelatorioImportacao, UsuarioAdmin } from './api';
 
-const CHAVE = 'travion-previa-v1';
+const CHAVE = 'travion-previa-v2';
 const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
@@ -47,9 +47,15 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links'],
+  supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
+    'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
+    'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar'],
+  embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
+    'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar'],
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional'],
-  comercial: ['embarques.ver', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia', 'posicoes.editar_obs_cliente',
-    'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links'],
+  comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
+    'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links'],
   consulta: ['embarques.ver'],
 };
 
@@ -109,6 +115,7 @@ function semear(): Banco {
   const perfis: Perfil[] = [
     ['Administrador (prévia)', 'administrador'], ['Gestor Rio Verde (prévia)', 'gestor'], ['Operação Rio Verde (prévia)', 'operacao'],
     ['Comercial Ana (prévia)', 'comercial'], ['Consulta interna (prévia)', 'consulta'],
+    ['Supervisor Jataí (prévia)', 'supervisor'], ['Embarcador Montividiu (prévia)', 'embarcador'],
   ].map(([nome, papel], i) => ({
     id: `perfil-${i}`, nome, email: `${papel}@previa.local`, papel: papel as Papel, status: 'ativo',
     comercial_id: papel === 'comercial' ? comerciais[0].id : null, criado_em: agora(),
@@ -116,7 +123,8 @@ function semear(): Banco {
   const perfilFiliais = [
     { perfil_id: 'perfil-1', filial_id: filiais[0].id }, { perfil_id: 'perfil-1', filial_id: filiais[3].id },
     { perfil_id: 'perfil-2', filial_id: filiais[0].id }, { perfil_id: 'perfil-4', filial_id: filiais[0].id },
-    { perfil_id: 'perfil-4', filial_id: filiais[1].id },
+    { perfil_id: 'perfil-4', filial_id: filiais[1].id }, { perfil_id: 'perfil-5', filial_id: filiais[1].id },
+    { perfil_id: 'perfil-6', filial_id: filiais[3].id },
   ];
   const papelPermissoes = Object.entries(MATRIZ_INICIAL).flatMap(([papel, ps]) => ps.map((chave) => ({ papel: papel as Papel, chave })));
 
@@ -789,8 +797,10 @@ export function criarLocalApi(): Api {
 
 export const PERFIS_PREVIA = [
   { email: 'administrador@previa.local', rotulo: 'Administrador', descricao: 'Acesso completo' },
-  { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu, sem financeiro' },
+  { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra embarques' },
+  { email: 'supervisor@previa.local', rotulo: 'Supervisor', descricao: 'Filial Jataí: cadastra embarques' },
+  { email: 'embarcador@previa.local', rotulo: 'Embarcador', descricao: 'Filial Montividiu: cadastra embarques, vê frete motorista e margem, anuncia' },
   { email: 'operacao@previa.local', rotulo: 'Operação', descricao: 'Filial Rio Verde: contadores e observação operacional' },
-  { email: 'comercial@previa.local', rotulo: 'Comercial', descricao: 'Carteira [DEMO] Ana, com financeiro' },
+  { email: 'comercial@previa.local', rotulo: 'Comercial', descricao: 'Carteira [DEMO] Ana: cadastra embarques' },
   { email: 'consulta@previa.local', rotulo: 'Consulta interna', descricao: 'Somente leitura nas filiais Rio Verde e Jataí' },
 ];

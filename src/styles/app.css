@@ -339,7 +339,7 @@ textarea.entrada { min-height: 80px; resize: vertical; }
 .faixa-versao { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 20px; background: var(--vinho); color: #fff; font-weight: 600; }
 
 /* Lista de Fretes (vitrine de fretes liberados) */
-.ponto-rota .cidade { font-weight: 800; font-style: italic; letter-spacing: 0.01em; color: var(--vinho); }
+.ponto-rota .cidade { white-space: nowrap; font-weight: 800; font-style: italic; letter-spacing: 0.01em; color: var(--vinho); }
 .ponto-rota .local { font-size: 0.8rem; font-weight: 700; font-style: italic; color: var(--dourado-escuro); }
 .tabela-fretes th.n-frete, .tabela-fretes td.n-frete { text-align: right; white-space: nowrap; }
 .frete-valor { font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -356,3 +356,6 @@ textarea.entrada { min-height: 80px; resize: vertical; }
 .detalhes-rapidos .rot { font-size: 0.72rem; font-weight: 700; color: var(--cinza-600); text-transform: uppercase; }
 .detalhes-rapidos .grande { font-size: 1.6rem; font-weight: 800; }
 .anuncio-canvas { display: block; width: 100%; max-width: 320px; height: auto; margin: 0 auto; border-radius: 10px; box-shadow: var(--sombra); }
+.margem { font-weight: 700; color: var(--verde-700); font-variant-numeric: tabular-nums; }
+.margem small { font-weight: 500; color: var(--texto-suave); }
+.margem.negativa { color: var(--vermelho-700); }

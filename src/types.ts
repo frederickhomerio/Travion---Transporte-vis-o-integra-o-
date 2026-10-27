@@ -1,6 +1,6 @@
 // Tipos espelhando as tabelas do banco (supabase/migrations).
 
-export type Papel = 'administrador' | 'gestor' | 'operacao' | 'comercial' | 'consulta';
+export type Papel = 'administrador' | 'gestor' | 'supervisor' | 'embarcador' | 'operacao' | 'comercial' | 'consulta';
 export type StatusUsuario = 'pendente' | 'ativo' | 'bloqueado';
 export type StatusLiberacao = 'liberado' | 'suspenso' | 'nao_informado';
 export type Situacao = 'ativo' | 'arquivado';

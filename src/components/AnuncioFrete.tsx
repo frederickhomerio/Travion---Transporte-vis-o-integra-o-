@@ -65,7 +65,7 @@ export async function desenharAnuncio(canvas: HTMLCanvasElement, d: DadosAnuncio
 const nomeArquivo = (d: DadosAnuncio) =>
   `frete-${d.origem_cidade}-${d.destino_cidade}`.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase() + '.png';
 
-export function ImagemAnuncio({ dados, aoFechar }: { dados: DadosAnuncio; aoFechar: () => void }) {
+export function ImagemAnuncio({ dados, aoFechar, titulo = 'Imagem de divulgação' }: { dados: DadosAnuncio; aoFechar: () => void; titulo?: string }) {
   const avisar = useAviso();
   const ref = useRef<HTMLCanvasElement>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -100,11 +100,15 @@ export function ImagemAnuncio({ dados, aoFechar }: { dados: DadosAnuncio; aoFech
   };
 
   return (
-    <Modal titulo="Imagem de divulgação" aoFechar={aoFechar} rodape={
+    <Modal titulo={titulo} aoFechar={aoFechar} rodape={
       <>
         <button className="btn" onClick={aoFechar}>Fechar</button>
         <button className="btn" disabled={!pronto} onClick={async () => baixar(await arquivo())}>Baixar imagem</button>
         <button className="btn esconder-celular" disabled={!pronto} onClick={copiar}>Copiar imagem</button>
+        <button className="btn" onClick={async () => {
+          if (await copiarTextoWhatsApp(dados)) avisar('ok', 'Texto do anúncio copiado.');
+          else avisar('erro', 'O navegador não deixou copiar o texto.');
+        }}>Copiar texto</button>
         <button className="btn primario" disabled={!pronto} onClick={compartilhar}>Enviar no WhatsApp</button>
       </>
     }>
