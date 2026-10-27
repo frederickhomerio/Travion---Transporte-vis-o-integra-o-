@@ -3,7 +3,7 @@ import { mensagemErro } from '../data/api';
 import { useApp, useIndices } from '../data/store';
 import { type Indices, cidadeUF, codigoEmbarque, nome } from '../lib/cadastros';
 import { metaDaPosicao, metaDoEmbarque, volumes } from '../lib/calculos';
-import { fmtData, fmtDataHora, fmtNum, fmtReais, fmtT, ROTULO_CADENCIA, ROTULO_STATUS, ROTULO_UNIDADE_FRETE } from '../lib/formato';
+import { fmtData, fmtDataAsHora, fmtDataHora, fmtNum, fmtReais, fmtT, ROTULO_CADENCIA, ROTULO_STATUS, ROTULO_UNIDADE_FRETE } from '../lib/formato';
 import type { Embarque, Historico } from '../types';
 import { AbrirPosicoes } from './AbrirPosicoes';
 import { Contador } from './Contador';
@@ -39,10 +39,12 @@ export function DetalhesEmbarque({ embarqueId, aoFechar }: { embarqueId: string;
       subtitulo={<>{codigoEmbarque(e.codigo)} · {nome(idx.cliente, e.cliente_id)} · {nome(idx.filial, e.filial_id)} {e.is_demo && <span className="badge demo">DEMO</span>}</>}
       aoFechar={aoFechar}
     >
-      {e.status_liberacao === 'suspenso' && (
-        <Alerta tipo="erro"><span><strong>Embarque suspenso.</strong> Continua visível e pode receber atualizações para acompanhar os veículos já envolvidos.</span></Alerta>
+      {e.status_liberacao === 'suspenso' && !e.encerrado_em && (
+        <Alerta tipo="erro"><span><strong>Embarque suspenso.</strong> Fora da Lista de Fretes e das Posições de Embarque; reative em Lista de Fretes → Suspensos. Sem reativação em 7 dias, é encerrado automaticamente.</span></Alerta>
       )}
-      {e.situacao === 'arquivado' && <Alerta tipo="aviso">Embarque arquivado: somente consulta. Reative na aba Cadastro para voltar a atualizar.</Alerta>}
+      {e.encerrado_em ? (
+        <Alerta tipo="aviso"><span><strong>Embarque encerrado</strong> em {fmtDataAsHora(e.encerrado_em)} por {e.encerrado_por_nome ?? 'Sistema'}{e.encerrado_motivo ? ` (${e.encerrado_motivo})` : ''}. Somente consulta, sem reativação.</span></Alerta>
+      ) : e.situacao === 'arquivado' && <Alerta tipo="aviso">Embarque arquivado: somente consulta. Reative na aba Cadastro para voltar a atualizar.</Alerta>}
 
       <div className="abas" role="tablist">
         {abas.filter((a) => a[2]).map(([k, r]) => (
@@ -154,7 +156,9 @@ function PosicaoDia({ embarque, posicaoId }: { embarque: Embarque; posicaoId: st
 }
 
 function Cadastro({ e, idx }: { e: Embarque; idx: Indices }) {
-  const { api, estado, pode, aplicarEmbarque, recarregar } = useApp();
+  const { api, estado, pode: podeApp, aplicarEmbarque, recarregar } = useApp();
+  // Encerrado não se altera nem se reativa (o banco também recusa).
+  const pode: typeof podeApp = (k) => !e.encerrado_em && podeApp(k);
   const c = estado.cadastros;
   const campos: DefCampo[] = [
     { campo: 'status_liberacao', rotulo: 'Status de liberação', tipo: 'select', pode: pode('embarques.liberar'),

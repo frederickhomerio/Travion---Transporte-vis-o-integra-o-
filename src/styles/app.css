@@ -612,3 +612,18 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
   .qp:not(.qp-captura) .qp-tabela td.qp-obs-vazia { display: none; }
   .qp:not(.qp-captura) .qp-tabela td.qp-sem { grid-column: 1 / -1; }
 }
+
+/* Suspender e encerrar embarques (Lista de Fretes) */
+.btn.suspender { background: var(--vermelho-700); border-color: var(--vermelho-700); color: #fff; }
+.btn.suspender:hover { filter: brightness(0.92); }
+.btn.encerrar { background: #fff; border-color: var(--cinza-600); color: var(--cinza-900); }
+.btn.encerrar:hover { background: var(--cinza-50); }
+.contador-suspensos { margin-left: 6px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--vermelho-700); color: #fff; font-size: 0.75rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.se-rota { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.se-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 55vh; overflow-y: auto; }
+.se-lista li { border: 1px solid var(--cinza-200); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.se-urgente { color: var(--vermelho-700); font-weight: 700; }
+.cartao-frete .botoes-anuncio { flex-wrap: wrap; }
+.cartao-frete .botoes-anuncio .btn { flex: 1 1 40%; }
+.tabela-fretes .td-acao .botoes-anuncio { display: grid; grid-template-columns: repeat(2, auto); gap: 6px; justify-content: end; }
+.tabela-fretes .td-acao .botoes-anuncio .btn { justify-content: center; }

@@ -85,7 +85,7 @@ export const ROTULO_PAPEL: Record<string, string> = {
   supervisor: 'Supervisor',
   embarcador: 'Embarcador',
   operacao: 'Operação',
-  comercial: 'Comercial',
+  comercial: 'Coordenador Comercial',
   consulta: 'Consulta interna',
 };
 

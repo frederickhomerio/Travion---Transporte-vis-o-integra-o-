@@ -80,6 +80,8 @@ export interface Api {
   /** Horário do servidor (ISO), referência da janela de duas horas. */
   agoraServidor(): Promise<string>;
   atualizarEmbarque(id: string, alteracoes: Partial<Embarque>, base: Partial<Embarque>, forcar?: boolean): Promise<ResultadoGravacao<Embarque> & { posicoes_atualizadas?: number }>;
+  /** Encerra de vez (arquivado sem reativação). Só gestor e administrador. */
+  encerrarEmbarque(id: string, motivo: string | null): Promise<Embarque>;
   atualizarFinanceiro(embarqueId: string, alteracoes: Partial<Financeiro>, base: Partial<Financeiro>, forcar?: boolean): Promise<ResultadoGravacao<Financeiro>>;
   criarEmbarque(dados: Record<string, unknown>, demo: boolean): Promise<Embarque>;
   abrirPosicoes(data: string, transportar: boolean, embarqueIds: string[] | null, demo: boolean): Promise<ResultadoAbertura>;

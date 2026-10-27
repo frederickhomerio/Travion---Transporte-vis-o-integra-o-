@@ -134,6 +134,15 @@ As duas telas leem a mesma tabela de posições diárias. Os supervisores gravam
 
 **Pendências:** (1) enviar o arquivo oficial da logo da TP; (2) cadastrar as logos dos clientes; (3) confirmar que o centro de custo do embarque é sempre o da filial; (4) a observação para o cliente continua sendo editada na Lista de Fretes (detalhes do embarque), já que a página dos supervisores só edita os três contadores.
 
+### 7.2 Suspender e encerrar embarques — desde 27/10/2026
+
+- **Acesso à página Posições de Embarque:** Administrador, Gestor, Supervisor e Coordenador Comercial (o papel `comercial` aparece como "Coordenador Comercial"). Operação, Embarcador e Consulta não veem a página; continuam atualizando contadores pela Lista de Fretes conforme a matriz.
+- **Suspender** (botão vermelho em cada frete liberado da Lista de Fretes; quem tem `embarques.liberar`): o embarque sai da Lista de Fretes e das Posições de Embarque. O banco grava `suspenso_em`.
+- **Suspensos** (botão no topo da Lista de Fretes): busca por código, cidade, cliente, filial ou produto, mostra o prazo e permite **Reativar** (volta para liberado e limpa `suspenso_em`).
+- **Encerramento automático:** suspenso há mais de 7 dias sem reativação é encerrado pelo banco (`private.encerrar_suspensos_vencidos`, pg_cron de hora em hora), autor "Sistema", motivo "Suspenso há mais de 7 dias sem reativação".
+- **Encerrar** (só Gestor e Administrador, permissão `embarques.encerrar`): arquiva com data, autor e motivo opcional. Um gatilho no banco impede qualquer alteração ou reativação depois disso. O histórico fica.
+- A Posição do Cliente continua mostrando embarques suspensos com o alerta que já existia (decisão a confirmar).
+
 ## 8. Importação da planilha
 
 - Fluxo: arquivo → aba → mapeamento de colunas → **data operacional obrigatória** → prévia com inconsistências → confirmação → relatório. O nome do arquivo não comprova a data.

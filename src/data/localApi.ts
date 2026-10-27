@@ -14,7 +14,7 @@ import {
 } from '../types';
 import type { Api, Convite, EventoTempoReal, MatrizPermissoes, RelatorioImportacao, UsuarioAdmin } from './api';
 
-const CHAVE = 'travion-previa-v3';
+const CHAVE = 'travion-previa-v4';
 const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
@@ -25,6 +25,7 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['embarques.editar_cadencia', 'Embarques', 'Alterar cadência (meta) do embarque'],
   ['embarques.editar_capacidade', 'Embarques', 'Alterar toneladas médias por veículo'],
   ['embarques.arquivar', 'Embarques', 'Arquivar ou reativar embarques'],
+  ['embarques.encerrar', 'Embarques', 'Encerrar embarque definitivamente (sem reativação)'],
   ['carteira.editar', 'Comercial', 'Alterar a carteira (responsável comercial) de clientes e embarques'],
   ['posicoes.abrir', 'Posições', 'Abrir posição para nova data operacional'],
   ['posicoes.editar_contadores', 'Posições', 'Alterar porta, trânsito e carregados'],
@@ -46,7 +47,7 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
   gestor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
-    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar'],
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
@@ -116,7 +117,7 @@ function semear(): Banco {
   ];
   const perfis: Perfil[] = [
     ['Administrador (prévia)', 'administrador'], ['Gestor Rio Verde (prévia)', 'gestor'], ['Operação Rio Verde (prévia)', 'operacao'],
-    ['Comercial Ana (prévia)', 'comercial'], ['Consulta interna (prévia)', 'consulta'],
+    ['Coordenador Comercial Ana (prévia)', 'comercial'], ['Consulta interna (prévia)', 'consulta'],
     ['Supervisor Jataí (prévia)', 'supervisor'], ['Embarcador Montividiu (prévia)', 'embarcador'],
   ].map(([nome, papel], i) => ({
     id: `perfil-${i}`, nome, email: `${papel}@previa.local`, papel: papel as Papel, status: 'ativo',
@@ -157,6 +158,7 @@ function semear(): Banco {
       { confirmado_em: minutos(190 + i), confirmado_por_nome: '[DEMO] Marta Lima' },
       { confirmado_em: null, confirmado_por_nome: null }][i % 3];
   const embarques: Embarque[] = [];
+  let suspensos = 0;
   const financeiro: Financeiro[] = [];
   const posicoes: Posicao[] = [];
   lotes.forEach((l, i) => {
@@ -167,6 +169,7 @@ function semear(): Banco {
       destino_cidade: l[5], destino_uf: l[6], local_entrega_id: locais[l[7]].id, status_liberacao: l[8], data_liberacao: null,
       cadencia_valor: l[9], cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: 40, observacao_interna: i === 6 ? 'Carregamento das 7h às 17h. Levar lona e EPI.' : null,
       situacao: 'ativo', is_demo: true, chave_importacao: null, versao: 1, atualizado_em: agora(), atualizado_por_nome: 'Demonstração',
+      suspenso_em: l[8] === 'suspenso' ? new Date(Date.now() - [1, 5, 6][suspensos++ % 3] * 86400e3 - 3600e3).toISOString() : null,
     });
     financeiro.push({ embarque_id: id, frete_empresa: l[10], frete_motorista: l[11], unidade_frete: 'rs_tonelada',
       frete_empresa_original: null, frete_motorista_original: null, versao: 1, atualizado_em: agora() });
@@ -253,6 +256,22 @@ export function criarLocalApi(): Api {
     });
   };
   const emitir = (e: EventoTempoReal) => { for (const o of ouvintesDados) o(e); };
+  const encerrar = (e: Embarque, motivo: string | null, autor: string) => {
+    db.historico.unshift({
+      id: db.historico.length + 1, entidade: 'embarque', registro_id: e.id, embarque_id: e.id, posicao_id: null, cliente_id: e.cliente_id,
+      data_operacional: null, campo: 'encerramento', valor_anterior: e.status_liberacao === 'suspenso' ? 'Suspenso' : 'Ativo',
+      valor_novo: `Encerrado${motivo ? `: ${motivo}` : ''}`, sensivel: false, origem: 'app', usuario_nome: autor, alterado_em: agora(),
+    });
+    Object.assign(e, { situacao: 'arquivado', encerrado_em: agora(), encerrado_por_nome: autor, encerrado_motivo: motivo,
+      versao: e.versao + 1, atualizado_em: agora(), atualizado_por_nome: autor });
+  };
+  // Simula o agendamento de hora em hora (private.encerrar_suspensos_vencidos): suspenso há mais de 7 dias é encerrado.
+  const encerrarVencidos = () => {
+    const limite = Date.now() - 7 * 86400e3;
+    const vencidos = db.embarques.filter((e) => e.status_liberacao === 'suspenso' && !e.encerrado_em && e.suspenso_em && Date.parse(e.suspenso_em) <= limite);
+    for (const e of vencidos) encerrar(e, 'Suspenso há mais de 7 dias sem reativação', 'Sistema');
+    if (vencidos.length) salvar();
+  };
   const txt = (v: unknown) => (v === null || v === undefined ? null : String(v));
 
   type Regra = { perm: Permissao; tipo: 'contador' | 'texto' | 'texto_obrigatorio' | 'positivo' | 'dinheiro' | 'enum' | 'uuid' | 'uf' | 'data'; valores?: string[] };
@@ -396,7 +415,7 @@ export function criarLocalApi(): Api {
       return { filiais: f(db.filiais), comerciais: f(db.comerciais), clientes: f(db.clientes.filter(veCliente)), produtos: f(db.produtos), locais: f(db.locais), cidades: f(db.cidades!), centros_custo: f(db.centros_custo!) } as Cadastros;
     },
     async carregarConfiguracoes() { return { ...CONFIG_PADRAO, ...clone(db.config) }; },
-    async carregarEmbarques(demo) { return clone(db.embarques.filter((e) => e.is_demo === demo && veEmbarque(e))); },
+    async carregarEmbarques(demo) { encerrarVencidos(); return clone(db.embarques.filter((e) => e.is_demo === demo && veEmbarque(e))); },
     async carregarPosicoes(demo, inicio, fim) {
       const vis = new Set(db.embarques.filter(veEmbarque).map((e) => e.id));
       return clone(db.posicoes.filter((p) => p.is_demo === demo && vis.has(p.embarque_id) && p.data_operacional >= inicio && p.data_operacional <= fim));
@@ -475,6 +494,7 @@ export function criarLocalApi(): Api {
       if (!ativo()) erro('Seu acesso ainda não foi aprovado ou está bloqueado.');
       const e = db.embarques.find((x) => x.id === id);
       if (!e || !veEmbarque(e)) erro('Embarque não encontrado ou fora do seu escopo.');
+      if (e.encerrado_em) erro('Embarque encerrado: não pode ser reativado nem alterado.');
       if (e.situacao === 'arquivado' && !('situacao' in alt)) erro('Embarque arquivado: reative o cadastro antes de alterá-lo.');
       const { novo, conflitos } = preparar(e, alt, base, forcar, R_EMB);
       if (conflitos.length) return { status: 'conflito', conflitos, registro: clone(e) };
@@ -485,7 +505,9 @@ export function criarLocalApi(): Api {
         registrar({ entidade: 'embarque', registro_id: e.id, embarque_id: e.id, cliente_id: n.cliente_id, campo: k,
           valor_anterior: txt((e as never)[k]), valor_novo: txt(v) });
       }
-      Object.assign(e, novo, { versao: e.versao + 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario() });
+      // Mesmo gatilho da migração 1500: marca e limpa a data da suspensão.
+      const suspenso_em = n.status_liberacao === 'suspenso' ? (e.status_liberacao === 'suspenso' ? e.suspenso_em ?? agora() : agora()) : null;
+      Object.assign(e, novo, { suspenso_em, versao: e.versao + 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario() });
       let propagadas = 0;
       if ('toneladas_por_veiculo' in novo || 'cadencia_valor' in novo || 'cadencia_unidade' in novo) {
         for (const p of db.posicoes.filter((x) => x.embarque_id === e.id && x.data_operacional >= hojeSP())) {
@@ -500,6 +522,17 @@ export function criarLocalApi(): Api {
       }
       salvar();
       return { status: 'ok', registro: clone(e), posicoes_atualizadas: propagadas };
+    },
+    async encerrarEmbarque(id, motivo) {
+      exigir('embarques.encerrar');
+      const e = db.embarques.find((x) => x.id === id);
+      if (!e || !veEmbarque(e)) erro('Embarque não encontrado ou fora do seu escopo.');
+      if (e.encerrado_em) erro('Embarque já encerrado.');
+      const m = motivo?.trim() || null;
+      if (m && m.length > 500) erro('Motivo muito longo (máximo de 500 caracteres).');
+      encerrar(e, m, nomeUsuario());
+      salvar();
+      return clone(e);
     },
     async atualizarFinanceiro(id, alt, base, forcar = false) {
       exigir('financeiro.ver');
@@ -859,10 +892,10 @@ export function criarLocalApi(): Api {
 
 export const PERFIS_PREVIA = [
   { email: 'administrador@previa.local', rotulo: 'Administrador', descricao: 'Acesso completo' },
-  { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra embarques, com financeiro' },
+  { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra, suspende e encerra embarques, com financeiro' },
   { email: 'supervisor@previa.local', rotulo: 'Supervisor', descricao: 'Filiais Jataí e Itumbiara: posições de embarque e cadastro de embarques' },
   { email: 'embarcador@previa.local', rotulo: 'Embarcador', descricao: 'Filial Montividiu: cadastra embarques, vê frete motorista e margem, anuncia' },
   { email: 'operacao@previa.local', rotulo: 'Operação', descricao: 'Filial Rio Verde: contadores e observação operacional' },
-  { email: 'comercial@previa.local', rotulo: 'Comercial', descricao: 'Carteira [DEMO] Ana: cadastra embarques' },
+  { email: 'comercial@previa.local', rotulo: 'Coordenador Comercial', descricao: 'Carteira [DEMO] Ana: cadastra embarques e suspende fretes' },
   { email: 'consulta@previa.local', rotulo: 'Consulta interna', descricao: 'Somente leitura nas filiais Rio Verde e Jataí' },
 ];

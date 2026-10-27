@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { PERFIS_PREVIA } from '../data/localApi';
 import { useApp } from '../data/store';
 import { ROTULO_PAPEL } from '../lib/formato';
+import { acessaPosicoes } from '../lib/posicoes';
 import { NovaVersao } from './NovaVersao';
 import { Icone, Logo } from './ui';
 
@@ -26,7 +27,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
         <nav className="nav" aria-label="Principal">
           <NavLink to="/" end><Icone nome="lista" />Lista de Fretes</NavLink>
           <NavLink to="/dashboard"><Icone nome="painel" />Dashboard Operacional</NavLink>
-          <NavLink to="/posicoes"><Icone nome="caminhao" />Posições de Embarque</NavLink>
+          {acessaPosicoes(s.perfil.papel) && <NavLink to="/posicoes"><Icone nome="caminhao" />Posições de Embarque</NavLink>}
           {pode('compartilhamento.preparar') && <NavLink to="/posicao-cliente"><Icone nome="cliente" />Posição do Cliente</NavLink>}
           <div className="grupo">Em breve</div>
           <span className="em-breve" aria-disabled="true"><span style={{ display: 'flex', gap: 10 }}><Icone nome="analise" />Análise</span><span className="badge info">Em breve</span></span>
@@ -67,7 +68,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
       <nav className="navinf" aria-label="Principal (celular)">
         <NavLink to="/" end><Icone nome="lista" />Fretes</NavLink>
         <NavLink to="/dashboard"><Icone nome="painel" />Dashboard</NavLink>
-        <NavLink to="/posicoes"><Icone nome="caminhao" />Posições</NavLink>
+        {acessaPosicoes(s.perfil.papel) && <NavLink to="/posicoes"><Icone nome="caminhao" />Posições</NavLink>}
         <NavLink to="/mais"><Icone nome="config" />Mais</NavLink>
       </nav>
     </div>

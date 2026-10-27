@@ -5,6 +5,7 @@ import { AbrirPosicoes } from '../components/AbrirPosicoes';
 import { ImagemAnuncio, ModalDivulgacao } from '../components/AnuncioFrete';
 import { DetalhesEmbarque } from '../components/DetalhesEmbarque';
 import { NovoEmbarque } from '../components/NovoEmbarque';
+import { ConfirmarEncerramento, ConfirmarSuspensao, EmbarquesSuspensos } from '../components/SuspenderEncerrar';
 import { Alerta, Carregando, EstadoVazio, Icone, Modal, Segmentado, useAviso } from '../components/ui';
 import { useApp, useIndices, useLinhas } from '../data/store';
 import { type DadosAnuncio, cidadeAnuncio, semDemo, valorFrete, UNIDADE_ANUNCIO } from '../lib/anuncio';
@@ -13,7 +14,8 @@ import { aplicarFiltros } from '../lib/filtros';
 import { fmtPct, fmtReais, fmtT, hojeSP } from '../lib/formato';
 import { normalizar } from '../lib/texto';
 import { type ItemLista, baixarListaPdf, desenharLista, textoLista } from '../lib/listaExport';
-import type { Financeiro, LinhaFrete } from '../types';
+import { reativavel } from '../lib/suspensao';
+import type { Embarque, Financeiro, LinhaFrete } from '../types';
 
 type Campo = 'origem' | 'destino' | 'filial' | 'produto';
 type CampoBusca = 'nenhum' | Campo;
@@ -50,12 +52,18 @@ export function ListaFretes() {
   const [rapido, setRapido] = useState<string | null>(null);
   const [anuncioNovo, setAnuncioNovo] = useState<string | null>(null);
   const [imagem, setImagem] = useState<DadosAnuncio | null>(null);
+  const [suspender, setSuspender] = useState<Embarque | null>(null);
+  const [encerrar, setEncerrar] = useState<Embarque | null>(null);
+  const [verSuspensos, setVerSuspensos] = useState(false);
   const avisar = useAviso();
+  const suspensos = useMemo(() => todas.map((l) => l.embarque).filter(reativavel), [todas]);
 
   const dadosAnuncio = (l: LinhaFrete): DadosAnuncio => anuncioDe(l, idx, estado.financeiro[l.embarque.id] ?? null);
   const acoesLinha: AcoesLinha = {
     detalhes: (id) => setRapido(id),
     imagem: (l) => setImagem(dadosAnuncio(l)),
+    suspender: pode('embarques.liberar') ? (l) => setSuspender(l.embarque) : undefined,
+    encerrar: pode('embarques.encerrar') ? (l) => setEncerrar(l.embarque) : undefined,
   };
   const verFrete = pode('financeiro.ver');
 
@@ -97,6 +105,7 @@ export function ListaFretes() {
 
   const acoes = (
     <div className="grupo-btn esconder-celular">
+      {pode('embarques.liberar') && <BotaoSuspensos n={suspensos.length} aoClicar={() => setVerSuspensos(true)} />}
       {pode('posicoes.abrir') && <button className="btn" onClick={() => setAbrir(true)}>Abrir posições</button>}
       {pode('embarques.criar') && <button className="btn primario" onClick={() => setNovo(true)}><Icone nome="mais" tam={18} />Novo embarque</button>}
     </div>
@@ -133,6 +142,7 @@ export function ListaFretes() {
       <BarraFiltros linhas={todas} semData semBusca />
 
       <div className="grupo-btn so-celular" style={{ marginBottom: 12 }}>
+        {pode('embarques.liberar') && <BotaoSuspensos n={suspensos.length} aoClicar={() => setVerSuspensos(true)} />}
         {pode('posicoes.abrir') && <button className="btn" onClick={() => setAbrir(true)}>Abrir posições</button>}
         {pode('embarques.criar') && <button className="btn primario" onClick={() => setNovo(true)}><Icone nome="mais" tam={18} />Novo embarque</button>}
       </div>
@@ -142,7 +152,7 @@ export function ListaFretes() {
 
       {estado.carregando && Object.keys(estado.embarques).length === 0 ? <Carregando /> : linhas.length === 0 ? (
         <div className="cartao"><EstadoVazio titulo={todas.length === 0 ? 'Nenhum embarque cadastrado' : 'Nenhum frete liberado'}>
-          <p>{todas.length === 0 ? (pode('embarques.criar') ? 'Cadastre um embarque ou importe a planilha em Administração.' : 'Ainda não há embarques no seu escopo.') : 'Nenhum frete liberado com estes filtros. Embarques suspensos ou sem liberação aparecem em Posições de Embarque.'}</p>
+          <p>{todas.length === 0 ? (pode('embarques.criar') ? 'Cadastre um embarque ou importe a planilha em Administração.' : 'Ainda não há embarques no seu escopo.') : 'Nenhum frete liberado com estes filtros. Embarques suspensos ficam no botão Suspensos.'}</p>
         </EstadoVazio></div>
       ) : (
         <>
@@ -175,6 +185,9 @@ export function ListaFretes() {
         <ModalDivulgacao titulo="Divulgação da lista de fretes" desenhar={desenharListaAtual} texto={textoLista(lista, estado.data, verFrete)}
           arquivoNome={`lista-fretes-${estado.data}.jpg`} tipo="image/jpeg" aoFechar={() => setLista(null)} />
       )}
+      {suspender && <ConfirmarSuspensao e={suspender} aoFechar={() => setSuspender(null)} />}
+      {encerrar && <ConfirmarEncerramento e={encerrar} aoFechar={() => setEncerrar(null)} />}
+      {verSuspensos && <EmbarquesSuspensos embarques={suspensos} aoFechar={() => setVerSuspensos(false)} />}
       {detalhe && <DetalhesEmbarque embarqueId={detalhe} aoFechar={() => setDetalhe(null)} />}
       {abrir && <AbrirPosicoes aoFechar={() => setAbrir(false)} />}
       {novo && <NovoEmbarque aoFechar={(id) => { setNovo(false); if (id) setAnuncioNovo(id); }} />}
@@ -203,7 +216,14 @@ function TituloGrupo({ titulo, linhas }: { titulo: string; linhas: LinhaFrete[] 
   return <div className="grupo-titulo"><span>{titulo}</span><span className="pequeno suave" style={{ fontWeight: 500 }}>{subtituloGrupo(linhas)}</span></div>;
 }
 
-type AcoesLinha = { detalhes: (id: string) => void; imagem: (l: LinhaFrete) => void };
+type AcoesLinha = {
+  detalhes: (id: string) => void; imagem: (l: LinhaFrete) => void;
+  suspender?: (l: LinhaFrete) => void; encerrar?: (l: LinhaFrete) => void;
+};
+
+function BotaoSuspensos({ n, aoClicar }: { n: number; aoClicar: () => void }) {
+  return <button className="btn" onClick={aoClicar}>Suspensos{n > 0 && <span className="contador-suspensos">{n}</span>}</button>;
+}
 
 function anuncioDe(l: LinhaFrete, idx: Indices, fin: Financeiro | null): DadosAnuncio {
   const e = l.embarque;
@@ -251,6 +271,8 @@ function BotoesAnuncio({ l, acoes }: { l: LinhaFrete; acoes: AcoesLinha }) {
     <div className="grupo-btn botoes-anuncio">
       <button className="btn peq" onClick={() => acoes.detalhes(l.embarque.id)}>Detalhes</button>
       <button className="btn peq primario" onClick={() => acoes.imagem(l)} title="Imagem e texto para divulgar no WhatsApp">Divulgação</button>
+      {acoes.suspender && <button className="btn peq suspender" onClick={() => acoes.suspender!(l)} title="Tirar da Lista de Fretes e das Posições de Embarque">Suspender</button>}
+      {acoes.encerrar && <button className="btn peq encerrar" onClick={() => acoes.encerrar!(l)} title="Encerrar e arquivar, sem reativação">Encerrar</button>}
     </div>
   );
 }

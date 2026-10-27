@@ -9,7 +9,7 @@ import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, Carregando, Icone } from '../components/ui';
 import { useApp, useIndices, useLinhas } from '../data/store';
 import { fmtDataAsHora, fmtData, hojeSP, ROTULO_PAPEL } from '../lib/formato';
-import { ajustarFiltros, FILTROS_SUPERVISOR_VAZIOS, type FiltrosSupervisor, filtrarSupervisor, type Opcao, opcoesSupervisor } from '../lib/posicoes';
+import { acessaPosicoes, ajustarFiltros, FILTROS_SUPERVISOR_VAZIOS, type FiltrosSupervisor, filtrarSupervisor, type Opcao, opcoesSupervisor } from '../lib/posicoes';
 
 const CHAVE_RASCUNHOS = 'travion-rascunhos-posicoes';
 
@@ -48,8 +48,10 @@ export function PosicoesEmbarque() {
   }, [recarregar]);
 
 
-  const comPosicao = useMemo(() => todas.filter((l) => l.posicao && l.embarque.situacao === 'ativo'), [todas]);
-  const semPosicao = todas.filter((l) => !l.posicao && l.embarque.situacao === 'ativo').length;
+  // Suspensos saem da página até serem reativados na Lista de Fretes.
+  const operando = useMemo(() => todas.filter((l) => l.embarque.situacao === 'ativo' && l.embarque.status_liberacao !== 'suspenso'), [todas]);
+  const comPosicao = useMemo(() => operando.filter((l) => l.posicao), [operando]);
+  const semPosicao = operando.filter((l) => !l.posicao).length;
   // Só contam rascunhos de posições de hoje ainda visíveis para o usuário.
   const pendentes = comPosicao.filter((l) => rascunhoAlterado(rascunhos[l.posicao!.id])).map((l) => l.posicao!.id);
 
@@ -90,9 +92,9 @@ export function PosicoesEmbarque() {
     return c && (!m || c > m) ? c : m;
   }, null);
 
-  if (!pode('embarques.ver')) return <Layout titulo="Posições de Embarque"><AcessoNegado /></Layout>;
+  if (!pode('embarques.ver') || !acessaPosicoes(s.perfil.papel)) return <Layout titulo="Posições de Embarque"><AcessoNegado /></Layout>;
 
-  const papel = s.perfil.papel === 'supervisor' ? 'Supervisor' : ROTULO_PAPEL[s.perfil.papel];
+  const papel = ROTULO_PAPEL[s.perfil.papel];
   const ir = (d: number) => { const n = lista[i + d]; if (n) setAtualId(n.embarque.id); };
   const filtrando = !!(fValido.centro || fValido.filial || fValido.cidade);
   const carregando = estado.carregando && !comPosicao.length;
