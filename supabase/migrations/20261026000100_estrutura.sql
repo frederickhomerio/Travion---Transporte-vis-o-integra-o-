@@ -238,7 +238,7 @@ create table public.embarque_financeiro (
   embarque_id uuid primary key references public.embarques (id) on delete cascade,
   frete_empresa numeric(12, 2) check (frete_empresa is null or frete_empresa >= 0),
   frete_motorista numeric(12, 2) check (frete_motorista is null or frete_motorista >= 0),
-  unidade_frete public.unidade_frete not null default 'nao_confirmada',
+  unidade_frete public.unidade_frete not null default 'rs_tonelada',
   frete_empresa_original text,
   frete_motorista_original text,
   versao integer not null default 1,

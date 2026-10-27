@@ -79,7 +79,7 @@ Publique a pasta `dist/` em qualquer hospedagem de site estático. O app usa rot
 1. **Administração → Cadastros:** confira filiais, comerciais e produtos (ou deixe a importação criar).
 2. **Administração → Importação:** envie a planilha `.xlsx`, escolha a aba **Lista de Fretes** e a aba **Clientes**, revise o mapeamento de colunas, **informe a data operacional** e gere a prévia. Só depois de conferir, confirme.
 3. **Administração → Configurações:** confirme 40 t por veículo e meta de 2 veículos por lote.
-4. Para cada embarque com frete, confirme a **unidade do frete** (R$/t, R$/viagem…) na aba Financeiro dos detalhes. Enquanto ela estiver “não confirmada”, o Dashboard não apresenta faturamento e margem como válidos.
+4. Os fretes entram como **R$/t** (regra confirmada). Se algum embarque for cobrado de outra forma, ajuste a unidade na aba Financeiro dos detalhes; o Dashboard então marca as projeções financeiras como não validadas.
 5. **Administração → Metas diárias:** cadastre as metas financeiras do dia, se houver.
 
 ### Dados demonstrativos

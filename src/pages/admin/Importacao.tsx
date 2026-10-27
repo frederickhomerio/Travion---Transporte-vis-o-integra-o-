@@ -327,7 +327,7 @@ export function Importacao() {
               <dt>Posições atualizadas</dt><dd>{relatorio.posicoes_atualizadas}</dd>
               <dt>Posições iguais (sem mudança)</dt><dd>{relatorio.posicoes_iguais}</dd>
               <dt>Posições divergentes mantidas</dt><dd>{relatorio.posicoes_divergentes}</dd>
-              <dt>Valores de frete</dt><dd>{relatorio.financeiro_importado ? 'Importados (unidade do frete a confirmar)' : 'Não importados (sem permissão)'}</dd>
+              <dt>Valores de frete</dt><dd>{relatorio.financeiro_importado ? 'Importados em R$/t' : 'Não importados (sem permissão)'}</dd>
             </dl>
             {relatorio.avisos.length > 0 && (
               <details open={relatorio.avisos.length <= 10}>

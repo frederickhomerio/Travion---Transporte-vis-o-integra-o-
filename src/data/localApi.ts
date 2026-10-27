@@ -142,7 +142,7 @@ function semear(): Banco {
       cadencia_valor: l[9], cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: 40, observacao_interna: null,
       situacao: 'ativo', is_demo: true, chave_importacao: null, versao: 1, atualizado_em: agora(), atualizado_por_nome: 'Demonstração',
     });
-    financeiro.push({ embarque_id: id, frete_empresa: l[10], frete_motorista: l[11], unidade_frete: 'nao_confirmada',
+    financeiro.push({ embarque_id: id, frete_empresa: l[10], frete_motorista: l[11], unidade_frete: 'rs_tonelada',
       frete_empresa_original: null, frete_motorista_original: null, versao: 1, atualizado_em: agora() });
     for (const d of [1, 0]) {
       posicoes.push({
@@ -425,7 +425,7 @@ export function criarLocalApi(): Api {
       const e = db.embarques.find((x) => x.id === id);
       if (!e || !veEmbarque(e)) erro('Embarque não encontrado ou fora do seu escopo.');
       let f = db.financeiro.find((x) => x.embarque_id === id);
-      if (!f) { f = { embarque_id: id, frete_empresa: null, frete_motorista: null, unidade_frete: 'nao_confirmada', frete_empresa_original: null, frete_motorista_original: null, versao: 1, atualizado_em: agora() }; db.financeiro.push(f); }
+      if (!f) { f = { embarque_id: id, frete_empresa: null, frete_motorista: null, unidade_frete: 'rs_tonelada', frete_empresa_original: null, frete_motorista_original: null, versao: 1, atualizado_em: agora() }; db.financeiro.push(f); }
       const { novo, conflitos } = preparar(f, alt, base, forcar, R_FIN);
       if (conflitos.length) return { status: 'conflito', conflitos, registro: clone(f) };
       if (!Object.keys(novo).length) return { status: 'sem_alteracao', registro: clone(f) };
@@ -464,7 +464,7 @@ export function criarLocalApi(): Api {
       const fin = (d.financeiro ?? {}) as Partial<Financeiro>;
       if (Object.keys(fin).length) { exigir('financeiro.editar'); }
       db.financeiro.push({ embarque_id: e.id, frete_empresa: fin.frete_empresa ?? null, frete_motorista: fin.frete_motorista ?? null,
-        unidade_frete: fin.unidade_frete ?? 'nao_confirmada', frete_empresa_original: null, frete_motorista_original: null, versao: 1, atualizado_em: agora() });
+        unidade_frete: fin.unidade_frete ?? 'rs_tonelada', frete_empresa_original: null, frete_motorista_original: null, versao: 1, atualizado_em: agora() });
       registrar({ entidade: 'embarque', registro_id: e.id, embarque_id: e.id, cliente_id: e.cliente_id, campo: 'criacao',
         valor_novo: `Embarque EMB-${String(e.codigo).padStart(6, '0')} criado` });
       if (d.abrir_posicao_em) abrir(String(d.abrir_posicao_em), false, [e.id]);
@@ -627,7 +627,7 @@ export function criarLocalApi(): Api {
           };
           db.embarques.push(e);
           db.financeiro.push({ embarque_id: e.id, frete_empresa: tem('financeiro.editar') ? (l.frete_empresa as number) ?? null : null,
-            frete_motorista: tem('financeiro.editar') ? (l.frete_motorista as number) ?? null : null, unidade_frete: 'nao_confirmada',
+            frete_motorista: tem('financeiro.editar') ? (l.frete_motorista as number) ?? null : null, unidade_frete: 'rs_tonelada',
             frete_empresa_original: (l.frete_empresa_original as string) ?? null, frete_motorista_original: (l.frete_motorista_original as string) ?? null, versao: 1, atualizado_em: agora() });
           rel.embarques_criados++;
         } else rel.embarques_vinculados++;

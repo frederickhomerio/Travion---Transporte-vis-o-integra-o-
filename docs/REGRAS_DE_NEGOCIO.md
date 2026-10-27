@@ -1,6 +1,6 @@
 # Frete IQ — Regras de negócio, premissas e pontos em aberto
 
-Versão 0.1, de 27/10/2026. A referência é a planilha **“Lista fretes 2025 3.xlsx”**. Ela foi usada como fonte de dados e de regras de cálculo. Textos dentro das células foram tratados como dados, nunca como instruções.
+Versão 0.2, de 27/10/2026. A referência é a planilha **“Lista fretes 2025 3.xlsx”**. Ela foi usada como fonte de dados e de regras de cálculo. Textos dentro das células foram tratados como dados, nunca como instruções.
 
 ## 1. Modelo de dados
 
@@ -131,7 +131,7 @@ Cada item abaixo foi decidido de forma conservadora para não travar o trabalho.
 
 | # | Ponto | O que o app faz hoje | Decisão necessária |
 |---|---|---|---|
-| 1 | **Unidade do frete** | Todos os fretes começam como “não confirmada”. Faturamento, margem R$ e margem % aparecem como “Não validado”. | Confirmar se FRETE EMP e FRETE MOT são R$/t. Se forem, confirmar em lote. |
+| 1 | **Unidade do frete** | **Definido em 27/10/2026: frete cobrado por tonelada (R$/t).** Fretes novos e importados entram como R$/t, e faturamento e margem ficam válidos. Um embarque pode ser marcado como R$/viagem ou outra unidade; nesse caso o Dashboard volta a mostrar “Não validado”. | Resolvido. |
 | 2 | Coluna OBSERVAÇÃO | Importada como **observação interna**. A aba Posição de Embarques da planilha a mostrava ao cliente. | Pode ir para o cliente? Se sim, mapear como “Observação para o cliente” na importação. |
 | 3 | UF de origem | A planilha não tem. A origem fica sem UF. | Informar UF por cidade ou aceitar sem UF. |
 | 4 | Coluna META | Mapeada como cadência (veículos/dia). Na planilha de referência ela está vazia, então vale o padrão de 2 veículos/lote. | Confirmar o significado de META e se a cadência deve ser em veículos/dia ou t/dia. |

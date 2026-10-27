@@ -18,7 +18,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
     origem_cidade: '', origem_uf: '', local_coleta_id: '', destino_cidade: '', destino_uf: '', local_entrega_id: '',
     status_liberacao: 'nao_informado', data_liberacao: '', cadencia_valor: '', cadencia_unidade: estado.config.cadencia_unidade_padrao,
     toneladas_por_veiculo: String(estado.config.capacidade_padrao_t), observacao_interna: '',
-    frete_empresa: '', frete_motorista: '', unidade_frete: 'nao_confirmada', abrir: pode('posicoes.abrir'),
+    frete_empresa: '', frete_motorista: '', unidade_frete: 'rs_tonelada', abrir: pode('posicoes.abrir'),
   });
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -58,7 +58,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
       const fin: Record<string, unknown> = {};
       if (fe !== null) fin.frete_empresa = fe;
       if (fm !== null) fin.frete_motorista = fm;
-      if (d.unidade_frete !== 'nao_confirmada') fin.unidade_frete = d.unidade_frete;
+      if (fe !== null || fm !== null || d.unidade_frete !== 'rs_tonelada') fin.unidade_frete = d.unidade_frete;
       if (Object.keys(fin).length) dados.financeiro = fin;
     }
     if (d.abrir) dados.abrir_posicao_em = estado.data;
