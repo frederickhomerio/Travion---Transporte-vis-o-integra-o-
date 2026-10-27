@@ -35,6 +35,7 @@ Este guia leva o app da prévia local para produção com banco de dados real.
 - `20261027001200_locais_link_mapa.sql`: link do Google Maps nos locais (anúncio de frete).
 - `20261027001300_papeis_supervisor_embarcador.sql` e `20261027001310_matriz_novo_embarque.sql`: papéis Supervisor e Embarcador; quem cadastra embarque.
 - `20261027001400_posicoes_confirmacao.sql`: confirmação da posição pelos supervisores (Posições de Embarque), horário do servidor e logo da TP (Posição do Cliente). Só acrescenta colunas e funções; não apaga nem altera dados.
+- `20261027001510_permissao_pagina_posicoes.sql`: permissão `posicoes.pagina` (acesso à página Posições de Embarque) e edição de contadores para o Coordenador Comercial.
 - `20261027001500_suspender_encerrar.sql`: suspensão com encerramento automático após 7 dias (pg_cron de hora em hora) e encerramento definitivo (permissão nova `embarques.encerrar`, gestor). Rode antes de publicar o app: a tela lê as colunas novas `suspenso_em` e `encerrado_*`.
 
    Alternativa: com a [Supabase CLI](https://supabase.com/docs/guides/cli), `supabase link --project-ref SEU_PROJETO` e depois `supabase db push`.

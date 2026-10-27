@@ -11,7 +11,7 @@ export type TipoLocal = 'coleta' | 'entrega' | 'ambos';
 export type Permissao =
   | 'embarques.ver' | 'embarques.criar' | 'embarques.editar_cadastro' | 'embarques.liberar'
   | 'embarques.editar_cadencia' | 'embarques.editar_capacidade' | 'embarques.arquivar' | 'embarques.encerrar'
-  | 'carteira.editar' | 'posicoes.abrir' | 'posicoes.editar_contadores'
+  | 'carteira.editar' | 'posicoes.pagina' | 'posicoes.abrir' | 'posicoes.editar_contadores'
   | 'posicoes.editar_obs_operacional' | 'posicoes.editar_obs_cliente'
   | 'financeiro.ver' | 'financeiro.editar' | 'historico.ver'
   | 'compartilhamento.preparar' | 'compartilhamento.links'

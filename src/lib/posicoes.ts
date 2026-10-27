@@ -1,14 +1,10 @@
 // Regras das telas Posições de Embarque (supervisores) e Posição do Cliente (mesa comercial).
 // Funções puras: a autorização real está no banco; aqui só se organiza o que o servidor já liberou.
 
-import type { LinhaFrete, Papel, Posicao, StatusLiberacao } from '../types';
+import type { LinhaFrete, Posicao, StatusLiberacao } from '../types';
 import { type Indices, cidadeUF, nome } from './cadastros';
 import { hojeSP } from './formato';
 import { normalizar } from './texto';
-
-/** Quem usa a página Posições de Embarque (pedido de 27/10/2026). Edição continua pela matriz de permissões. */
-export const PAPEIS_POSICOES: readonly Papel[] = ['administrador', 'gestor', 'comercial', 'supervisor'];
-export const acessaPosicoes = (papel: Papel) => PAPEIS_POSICOES.includes(papel);
 
 export const CAMPOS_CONTADOR = ['porta', 'transito', 'carregados'] as const;
 export type CampoContador = (typeof CAMPOS_CONTADOR)[number];

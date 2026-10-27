@@ -9,7 +9,7 @@ import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, Carregando, Icone } from '../components/ui';
 import { useApp, useIndices, useLinhas } from '../data/store';
 import { fmtDataAsHora, fmtData, hojeSP, ROTULO_PAPEL } from '../lib/formato';
-import { acessaPosicoes, ajustarFiltros, FILTROS_SUPERVISOR_VAZIOS, type FiltrosSupervisor, filtrarSupervisor, type Opcao, opcoesSupervisor } from '../lib/posicoes';
+import { ajustarFiltros, FILTROS_SUPERVISOR_VAZIOS, type FiltrosSupervisor, filtrarSupervisor, type Opcao, opcoesSupervisor } from '../lib/posicoes';
 
 const CHAVE_RASCUNHOS = 'travion-rascunhos-posicoes';
 
@@ -92,7 +92,7 @@ export function PosicoesEmbarque() {
     return c && (!m || c > m) ? c : m;
   }, null);
 
-  if (!pode('embarques.ver') || !acessaPosicoes(s.perfil.papel)) return <Layout titulo="Posições de Embarque"><AcessoNegado /></Layout>;
+  if (!pode('embarques.ver') || !pode('posicoes.pagina')) return <Layout titulo="Posições de Embarque"><AcessoNegado /></Layout>;
 
   const papel = ROTULO_PAPEL[s.perfil.papel];
   const ir = (d: number) => { const n = lista[i + d]; if (n) setAtualId(n.embarque.id); };

@@ -34,6 +34,8 @@ insert into perfil_filiais (perfil_id, filial_id) values
   ('00000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-0000000000f1'),
   ('00000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-0000000000f2'),
   ('00000000-0000-0000-0000-0000000000a4', '00000000-0000-0000-0000-0000000000f1');
+-- Desde a migração 1510 o coordenador comercial edita contadores; aqui a permissão é retirada só deste usuário.
+insert into perfil_permissoes (perfil_id, chave, permitido) values ('00000000-0000-0000-0000-0000000000a4', 'posicoes.editar_contadores', false);
 
 do $$ begin
   assert (select confirmado_em from posicoes_diarias where id = '00000000-0000-0000-0000-0000000000d1') is null,

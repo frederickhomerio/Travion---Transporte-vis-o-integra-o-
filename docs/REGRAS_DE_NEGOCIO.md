@@ -136,7 +136,7 @@ As duas telas leem a mesma tabela de posições diárias. Os supervisores gravam
 
 ### 7.2 Suspender e encerrar embarques — desde 27/10/2026
 
-- **Acesso à página Posições de Embarque:** Administrador, Gestor, Supervisor e Coordenador Comercial (o papel `comercial` aparece como "Coordenador Comercial"). Operação, Embarcador e Consulta não veem a página; continuam atualizando contadores pela Lista de Fretes conforme a matriz.
+- **Acesso à página Posições de Embarque:** permissão `posicoes.pagina` na matriz (Administração → Permissões; migração 1510). Padrão: Gestor, Supervisor e Coordenador Comercial (o papel `comercial` aparece como "Coordenador Comercial" e também edita contadores); Administrador tem todas. Tudo ajustável por função na matriz.
 - **Suspender** (botão vermelho em cada frete liberado da Lista de Fretes; quem tem `embarques.liberar`): o embarque sai da Lista de Fretes e das Posições de Embarque. O banco grava `suspenso_em`.
 - **Suspensos** (botão no topo da Lista de Fretes): busca por código, cidade, cliente, filial ou produto, mostra o prazo e permite **Reativar** (volta para liberado e limpa `suspenso_em`).
 - **Encerramento automático:** suspenso há mais de 7 dias sem reativação é encerrado pelo banco (`private.encerrar_suspensos_vencidos`, pg_cron de hora em hora), autor "Sistema", motivo "Suspenso há mais de 7 dias sem reativação".

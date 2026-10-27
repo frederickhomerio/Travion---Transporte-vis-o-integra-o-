@@ -14,7 +14,7 @@ import {
 } from '../types';
 import type { Api, Convite, EventoTempoReal, MatrizPermissoes, RelatorioImportacao, UsuarioAdmin } from './api';
 
-const CHAVE = 'travion-previa-v4';
+const CHAVE = 'travion-previa-v5';
 const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
@@ -27,6 +27,7 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['embarques.arquivar', 'Embarques', 'Arquivar ou reativar embarques'],
   ['embarques.encerrar', 'Embarques', 'Encerrar embarque definitivamente (sem reativação)'],
   ['carteira.editar', 'Comercial', 'Alterar a carteira (responsável comercial) de clientes e embarques'],
+  ['posicoes.pagina', 'Posições', 'Acessar a página Posições de Embarque'],
   ['posicoes.abrir', 'Posições', 'Abrir posição para nova data operacional'],
   ['posicoes.editar_contadores', 'Posições', 'Alterar porta, trânsito e carregados'],
   ['posicoes.editar_obs_operacional', 'Posições', 'Alterar observação operacional interna'],
@@ -47,16 +48,17 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
   gestor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
-    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar'],
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
-    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar'],
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina'],
   embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar'],
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
-    'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links'],
+    'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
+    'posicoes.pagina', 'posicoes.editar_contadores'],
   consulta: ['embarques.ver'],
 };
 
