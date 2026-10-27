@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Alerta, EstadoVazio, Modal, Segmentado, useAviso } from '../../components/ui';
-import { mensagemErro, type LogoCandidata, type TipoCadastro } from '../../data/api';
+import { mensagemErro, type CotacaoCna, type LogoCandidata, type TipoCadastro } from '../../data/api';
 import { useApp, useIndices } from '../../data/store';
 import { cnpjValido, formatarCnpj, formatarTelefone, mascaraCnpj, naoCarregar, nome } from '../../lib/cadastros';
 import { dominioDoEmail, reduzirDataUrl, reduzirImagem } from '../../lib/cnpj';
@@ -33,7 +33,7 @@ const DEF: Record<TipoCadastro, { rotulo: string; lista: Lista; campos: DefCampo
   ] },
   produto: { rotulo: 'Produtos', lista: 'produtos', campos: [
     { campo: 'nome', rotulo: 'Nome', obrigatorio: true },
-    { campo: 'valor_pauta_kg', rotulo: 'Valor aproximado de pauta (R$/kg)', tipo: 'decimal', ajuda: 'Ex.: 1,35. Use o botão abaixo para consultar o mercado.' },
+    { campo: 'valor_pauta_kg', rotulo: 'Valor aproximado de pauta (R$/kg)', tipo: 'decimal', ajuda: 'Ex.: 1,35. Use "Buscar preço na CNA" para preencher com a cotação do dia.' },
     { campo: 'valor_pauta_data', rotulo: 'Data do valor', tipo: 'data' },
     { campo: 'ativo', rotulo: 'Ativo', tipo: 'bool' },
   ] },
@@ -220,16 +220,71 @@ function EditarCadastro({ tipo, registro, aoFechar }: { tipo: TipoCadastro; regi
       {tipo === 'filial' && estado.cadastros.centros_custo.length === 0 && <Alerta tipo="aviso">Cadastre primeiro os centros de custo (aba Centros de custo).</Alerta>}
       </div>
       {tipo === 'produto' && (
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <a className="btn secundario" target="_blank" rel="noopener noreferrer"
-            href={`https://www.google.com/search?q=${encodeURIComponent(`preço ${String(d.nome || 'produto')} por kg hoje cotação`)}`}>
-            Pesquisar preço de mercado ↗
-          </a>
-          {valorKg ? <span className="pequeno suave">≈ {fmtReais(valorKg * 1000)} por tonelada</span> : null}
-        </div>
+        <PrecoCna nome={String(d.nome ?? '')} valorKg={valorKg ?? null}
+          aoUsar={(kg, data) => setD((x) => ({ ...x, valor_pauta_kg: String(kg).replace('.', ','), valor_pauta_data: data }))} />
       )}
       {erro && <Alerta tipo="erro">{erro}</Alerta>}
     </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Produto: cotação do dia na CNA (Preços das Commodities), convertida para R$/kg
+// ---------------------------------------------------------------------------
+function PrecoCna({ nome: produto, valorKg, aoUsar }: { nome: string; valorKg: number | null; aoUsar: (kg: number, data: string) => void }) {
+  const { api } = useApp();
+  const [buscando, setBuscando] = useState(false);
+  const [res, setRes] = useState<{ produtos: string[]; cotacoes: CotacaoCna[] } | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const dataIso = (br: string) => { const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? `${m[3]}-${m[2]}-${m[1]}` : hojeSP(); };
+
+  async function buscar() {
+    if (produto.trim().length < 2) { setErro('Informe o nome do produto primeiro (ex.: Soja, Milho).'); return; }
+    setErro(null); setRes(null); setBuscando(true);
+    try { setRes(await api.precoCna(produto)); } catch (e) { setErro(mensagemErro(e)); } finally { setBuscando(false); }
+  }
+
+  const conv = res?.cotacoes.filter((c) => c.valor_kg !== null) ?? [];
+  const go = conv.filter((c) => c.uf === 'GO');
+  const mediaGo = go.length > 1 ? Math.round((go.reduce((a, c) => a + c.valor_kg!, 0) / go.length) * 10000) / 10000 : null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button type="button" className="btn secundario" disabled={buscando} onClick={buscar}>{buscando ? 'Consultando a CNA…' : 'Buscar preço na CNA'}</button>
+        {valorKg ? <span className="pequeno suave">≈ {fmtReais(valorKg * 1000)} por tonelada</span> : null}
+      </div>
+      {erro && <Alerta tipo="erro">{erro}</Alerta>}
+      {res && res.cotacoes.length === 0 && (
+        <Alerta tipo="aviso">"{produto}" não aparece na tabela da CNA hoje. Produtos disponíveis: {res.produtos.join(', ')}. Ajuste o nome ou informe o valor manualmente.</Alerta>
+      )}
+      {res && res.cotacoes.length > 0 && (
+        <div className="cartao rolagem-x" style={{ maxHeight: 300, overflowY: 'auto' }}>
+          <table className="tabela">
+            <thead><tr><th>Praça</th><th>Cotação ({res.cotacoes[0].data})</th><th>R$/kg</th><th /></tr></thead>
+            <tbody>
+              {mediaGo !== null && (
+                <tr>
+                  <td><strong>Média de Goiás</strong><div className="pequeno suave">{go.length} praças</div></td>
+                  <td>—</td>
+                  <td className="num"><strong>{fmtReais(mediaGo, 4)}</strong></td>
+                  <td className="td-acao"><button type="button" className="btn peq primario" onClick={() => aoUsar(mediaGo, dataIso(go[0].data))}>Usar</button></td>
+                </tr>
+              )}
+              {res.cotacoes.map((c, i) => (
+                <tr key={i}>
+                  <td>{c.praca}/{c.uf}{new Set(res.cotacoes.map((x) => x.produto)).size > 1 && <div className="pequeno suave">{c.produto}</div>}</td>
+                  <td className="num">{fmtReais(c.valor)}<div className="pequeno suave">{c.unidade}</div></td>
+                  <td className="num">{c.valor_kg === null ? <span className="suave">—</span> : fmtReais(c.valor_kg, 4)}</td>
+                  <td className="td-acao">{c.valor_kg !== null && <button type="button" className="btn peq" onClick={() => aoUsar(c.valor_kg!, dataIso(c.data))}>Usar</button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <small className="suave">Fonte: CNA, Preços das Commodities (atualizado diariamente). O valor por kg é calculado a partir da unidade da cotação (saca, tonelada ou arroba).</small>
+    </div>
   );
 }
 

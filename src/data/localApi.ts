@@ -518,6 +518,7 @@ export function criarLocalApi(): Api {
       return nova.id;
     },
     consultarCnpj: (cnpj) => consultarCnpjBrasilApi(cnpj),
+    async precoCna() { erro('A consulta de preços da CNA funciona só no app oficial (precisa do servidor).'); },
     async buscarLogos() { erro('A busca de logo pelo site funciona só no app oficial (precisa do servidor). Na prévia, envie a imagem.'); },
     async salvarCadastro(tipo, id, dados, demo) {
       exigir('cadastros.gerenciar');

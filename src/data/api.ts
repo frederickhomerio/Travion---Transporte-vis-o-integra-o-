@@ -40,6 +40,11 @@ export interface RelatorioImportacao {
 export interface ResultadoAbertura { criadas: number; ja_existiam: number; sem_posicao_anterior: number }
 
 export interface LogoCandidata { url: string; origem: string; dataUrl: string }
+/** Cotação diária da CNA (Preços das Commodities), já convertida para R$/kg quando a unidade permite. */
+export interface CotacaoCna {
+  produto: string; unidade: string; uf: string; praca: string; data: string;
+  valor: number; valor_kg: number | null; variacao_mensal: number | null;
+}
 
 export type TipoCadastro = 'filial' | 'centro_custo' | 'comercial' | 'produto' | 'local' | 'cidade' | 'cliente';
 
@@ -81,6 +86,7 @@ export interface Api {
   consultarCnpj(cnpj: string): Promise<DadosCnpj>;
   /** Procura a logo no site da empresa e devolve as imagens candidatas já baixadas. */
   buscarLogos(site: string, nome?: string): Promise<LogoCandidata[]>;
+  precoCna(produto: string): Promise<{ produtos: string[]; cotacoes: CotacaoCna[] }>;
   salvarConfiguracao(chave: keyof Configuracoes, valor: unknown): Promise<void>;
   salvarMeta(meta: MetaDiaria): Promise<void>;
 
