@@ -190,6 +190,12 @@ export function criarLocalApi(): Api {
     db.cidades = [...vistas.values()];
   }
   if (!db.centros_custo) db.centros_custo = [];
+  if (!db.centros_custo.some((c) => c.is_demo)) {
+    // Centros de custo fictícios para a prévia do Dashboard (Meta x Projeção por centro de custo)
+    const cc = ['[DEMO] Vegetal', '[DEMO] Sul'].map((nome) => ({ id: uid(), nome, ativo: true, is_demo: true }));
+    db.centros_custo.push(...cc);
+    db.filiais.filter((f) => f.is_demo && !f.centro_custo_id).forEach((f, i) => { f.centro_custo_id = cc[i % 2].id; });
+  }
   let perfilId: string | null = lerStorage(CHAVE_SESSAO);
   const ouvintesAuth = new Set<(e: string) => void>();
   const ouvintesDados = new Set<(e: EventoTempoReal) => void>();
