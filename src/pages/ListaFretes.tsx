@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarraFiltros } from '../components/Filtros';
 import { Layout } from '../components/Layout';
 import { AbrirPosicoes } from '../components/AbrirPosicoes';
-import { ImagemAnuncio, copiarTextoWhatsApp } from '../components/AnuncioFrete';
+import { ImagemAnuncio, ModalDivulgacao } from '../components/AnuncioFrete';
 import { DetalhesEmbarque } from '../components/DetalhesEmbarque';
 import { NovoEmbarque } from '../components/NovoEmbarque';
 import { Alerta, Carregando, EstadoVazio, Icone, Modal, Segmentado, useAviso } from '../components/ui';
 import { useApp, useIndices, useLinhas } from '../data/store';
-import { type DadosAnuncio, cidadeAnuncio, semDemo, textoWhatsApp, valorFrete, UNIDADE_ANUNCIO } from '../lib/anuncio';
+import { type DadosAnuncio, cidadeAnuncio, semDemo, valorFrete, UNIDADE_ANUNCIO } from '../lib/anuncio';
 import { type Indices, codigoEmbarque, nome } from '../lib/cadastros';
 import { aplicarFiltros } from '../lib/filtros';
 import { fmtPct, fmtReais, fmtT, hojeSP } from '../lib/formato';
 import { normalizar } from '../lib/texto';
-import { type ItemLista, baixarListaJpeg, baixarListaPdf } from '../lib/listaExport';
+import { type ItemLista, baixarListaPdf, desenharLista, textoLista } from '../lib/listaExport';
 import type { Financeiro, LinhaFrete } from '../types';
 
-type CampoBusca = 'origem' | 'destino' | 'filial' | 'produto';
-type Agrupar = 'nenhum' | CampoBusca;
+type Campo = 'origem' | 'destino' | 'filial' | 'produto';
+type CampoBusca = 'nenhum' | Campo;
+type Agrupar = 'nenhum' | Campo;
 const CHAVE_AGRUPAR = 'travion-agrupar-v2';
 const AGRUPAMENTOS: Agrupar[] = ['nenhum', 'origem', 'destino', 'filial', 'produto'];
 
@@ -27,39 +28,34 @@ export function ListaFretes() {
   const { definirData } = useApp();
   // A lista é sempre a do dia (sem escolher data operacional).
   useEffect(() => { const h = hojeSP(); if (estado.data !== h) definirData(h); }, [estado.data, definirData]);
-  const [buscarPor, setBuscarPor] = useState<CampoBusca>('origem');
+  const [buscarPor, setBuscarPor] = useState<CampoBusca>('nenhum');
   const [texto, setTexto] = useState('');
   // Vitrine para a equipe de campo: só fretes liberados e ativos.
   const liberados = useMemo(() => aplicarFiltros(todas, { ...estado.filtros, busca: '' }, idx)
     .filter((l) => l.embarque.status_liberacao === 'liberado' && l.embarque.situacao === 'ativo'), [todas, estado.filtros, idx]);
   const linhas = useMemo(() => {
     const t = normalizar(texto);
-    return t ? liberados.filter((l) => normalizar(chaveGrupo(l, buscarPor, idx)) === t) : liberados;
+    return t && buscarPor !== 'nenhum' ? liberados.filter((l) => normalizar(chaveGrupo(l, buscarPor, idx)) === t) : liberados;
   }, [liberados, texto, buscarPor, idx]);
-  const sugestoes = useMemo(() => [...new Set(liberados.map((l) => chaveGrupo(l, buscarPor, idx)))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+  const sugestoes = useMemo(() => buscarPor === 'nenhum' ? [] : [...new Set(liberados.map((l) => chaveGrupo(l, buscarPor, idx)))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [liberados, buscarPor, idx]);
   const [agrupar, setAgrupar] = useState<Agrupar>(() => {
     try { const v = localStorage.getItem(CHAVE_AGRUPAR) as Agrupar; return AGRUPAMENTOS.includes(v) ? v : 'nenhum'; } catch { return 'nenhum'; }
   });
-  const [gerando, setGerando] = useState<'' | 'jpeg' | 'pdf'>('');
+  const [gerando, setGerando] = useState(false);
+  const [lista, setLista] = useState<ItemLista[] | null>(null);
   const [detalhe, setDetalhe] = useState<string | null>(null);
   const [abrir, setAbrir] = useState(false);
   const [novo, setNovo] = useState(false);
   const [rapido, setRapido] = useState<string | null>(null);
   const [anuncioNovo, setAnuncioNovo] = useState<string | null>(null);
   const [imagem, setImagem] = useState<DadosAnuncio | null>(null);
-  const [textoManual, setTextoManual] = useState<string | null>(null);
   const avisar = useAviso();
 
   const dadosAnuncio = (l: LinhaFrete): DadosAnuncio => anuncioDe(l, idx, estado.financeiro[l.embarque.id] ?? null);
   const acoesLinha: AcoesLinha = {
     detalhes: (id) => setRapido(id),
     imagem: (l) => setImagem(dadosAnuncio(l)),
-    whatsapp: async (l) => {
-      const d = dadosAnuncio(l);
-      if (await copiarTextoWhatsApp(d)) avisar('ok', 'Texto do anúncio copiado. Cole na conversa do WhatsApp.');
-      else setTextoManual(textoWhatsApp(d));
-    },
   };
   const verFrete = pode('financeiro.ver');
 
@@ -83,19 +79,18 @@ export function ListaFretes() {
     const d = anuncioDe(l, idx, estado.financeiro[l.embarque.id] ?? null);
     const v = valorFrete(d.frete);
     return { grupo: g.titulo, cliente: nome(idx.cliente, l.embarque.cliente_id), origem_cidade: d.origem_cidade, origem_uf: d.origem_uf, coleta: d.coleta,
-      destino_cidade: d.destino_cidade, destino_uf: d.destino_uf, entrega: d.entrega, produto: d.produto, frete: v };
+      destino_cidade: d.destino_cidade, destino_uf: d.destino_uf, entrega: d.entrega, produto: d.produto, frete: v, anuncio: d };
   }));
-  const gerar = async (tipo: 'jpeg' | 'pdf') => {
-    setGerando(tipo);
-    try {
-      if (tipo === 'jpeg') await baixarListaJpeg(itensLista(), estado.data, verFrete);
-      else await baixarListaPdf(itensLista(), estado.data, verFrete);
-    } catch (e) { avisar('erro', (e as Error).message); } finally { setGerando(''); }
+  const gerarPdf = async () => {
+    setGerando(true);
+    try { await baixarListaPdf(itensLista(), estado.data, verFrete); }
+    catch (e) { avisar('erro', (e as Error).message); } finally { setGerando(false); }
   };
+  const desenharListaAtual = useCallback((c: HTMLCanvasElement) => desenharLista(c, lista ?? [], estado.data, verFrete), [lista, estado.data, verFrete]);
   const botoesExportar = (
     <>
-      <button className="btn" disabled={!linhas.length || !!gerando} onClick={() => gerar('jpeg')}><Icone nome="baixar" tam={18} />{gerando === 'jpeg' ? 'Gerando…' : 'Lista de fretes (JPEG)'}</button>
-      <button className="btn" disabled={!linhas.length || !!gerando} onClick={() => gerar('pdf')}><Icone nome="baixar" tam={18} />{gerando === 'pdf' ? 'Gerando…' : 'Exportar PDF'}</button>
+      <button className="btn" disabled={!linhas.length} onClick={() => setLista(itensLista())}><Icone nome="baixar" tam={18} />Lista de fretes</button>
+      <button className="btn" disabled={!linhas.length || gerando} onClick={gerarPdf}><Icone nome="baixar" tam={18} />{gerando ? 'Gerando…' : 'Exportar PDF'}</button>
       <button className="btn" disabled={!linhas.length} onClick={() => exportarCSV(linhas, idx, estado.data)}><Icone nome="baixar" tam={18} />CSV</button>
     </>
   );
@@ -114,12 +109,12 @@ export function ListaFretes() {
           <span className="controle-rot">Buscar por</span>
           <div className="controle-corpo">
             <Segmentado rotulo="Buscar por" valor={buscarPor} aoMudar={(v) => { setBuscarPor(v); setTexto(''); }}
-              opcoes={[{ valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
+              opcoes={[{ valor: 'nenhum', rotulo: 'Nenhum' }, { valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
                 { valor: 'filial', rotulo: 'Filial' }, { valor: 'produto', rotulo: 'Produto' }]} />
-            <select className="entrada controle-valor" aria-label="Valor da busca" value={texto} onChange={(e) => setTexto(e.target.value)}>
-              <option value="">{{ origem: 'Todas as origens', destino: 'Todos os destinos', filial: 'Todas as filiais', produto: 'Todos os produtos' }[buscarPor]}</option>
+            {buscarPor !== 'nenhum' && <select className="entrada controle-valor" aria-label="Valor da busca" value={texto} onChange={(e) => setTexto(e.target.value)}>
+              <option value="">{{ nenhum: '', origem: 'Todas as origens', destino: 'Todos os destinos', filial: 'Todas as filiais', produto: 'Todos os produtos' }[buscarPor]}</option>
               {sugestoes.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
+            </select>}
           </div>
         </div>
         <div className="controle-linha">
@@ -176,11 +171,9 @@ export function ListaFretes() {
 
       {rapido && <DetalhesRapidos embarqueId={rapido} aoFechar={() => setRapido(null)} aoFichaCompleta={() => { setDetalhe(rapido); setRapido(null); }} />}
       {imagem && <ImagemAnuncio dados={imagem} aoFechar={() => setImagem(null)} />}
-      {textoManual !== null && (
-        <Modal titulo="Texto para WhatsApp" aoFechar={() => setTextoManual(null)} rodape={<button className="btn primario" onClick={() => setTextoManual(null)}>Fechar</button>}>
-          <p className="pequeno suave" style={{ marginTop: 0 }}>O navegador não deixou copiar sozinho. Selecione o texto abaixo e copie.</p>
-          <textarea readOnly value={textoManual} rows={7} style={{ width: '100%' }} onFocus={(e) => e.currentTarget.select()} />
-        </Modal>
+      {lista && (
+        <ModalDivulgacao titulo="Divulgação da lista de fretes" desenhar={desenharListaAtual} texto={textoLista(lista, estado.data, verFrete)}
+          arquivoNome={`lista-fretes-${estado.data}.jpg`} tipo="image/jpeg" aoFechar={() => setLista(null)} />
       )}
       {detalhe && <DetalhesEmbarque embarqueId={detalhe} aoFechar={() => setDetalhe(null)} />}
       {abrir && <AbrirPosicoes aoFechar={() => setAbrir(false)} />}
@@ -210,7 +203,7 @@ function TituloGrupo({ titulo, linhas }: { titulo: string; linhas: LinhaFrete[] 
   return <div className="grupo-titulo"><span>{titulo}</span><span className="pequeno suave" style={{ fontWeight: 500 }}>{subtituloGrupo(linhas)}</span></div>;
 }
 
-type AcoesLinha = { detalhes: (id: string) => void; imagem: (l: LinhaFrete) => void; whatsapp: (l: LinhaFrete) => void };
+type AcoesLinha = { detalhes: (id: string) => void; imagem: (l: LinhaFrete) => void };
 
 function anuncioDe(l: LinhaFrete, idx: Indices, fin: Financeiro | null): DadosAnuncio {
   const e = l.embarque;
@@ -257,8 +250,7 @@ function BotoesAnuncio({ l, acoes }: { l: LinhaFrete; acoes: AcoesLinha }) {
   return (
     <div className="grupo-btn botoes-anuncio">
       <button className="btn peq" onClick={() => acoes.detalhes(l.embarque.id)}>Detalhes</button>
-      <button className="btn peq" onClick={() => acoes.imagem(l)} title="Gerar imagem de divulgação"><Icone nome="baixar" tam={16} />Imagem</button>
-      <button className="btn peq btn-whats" onClick={() => acoes.whatsapp(l)} title="Copiar texto do anúncio para o WhatsApp">WhatsApp</button>
+      <button className="btn peq primario" onClick={() => acoes.imagem(l)} title="Imagem e texto para divulgar no WhatsApp">Divulgação</button>
     </div>
   );
 }

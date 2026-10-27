@@ -1,11 +1,13 @@
 // Lista de fretes liberados para divulgar: imagem JPEG (motoristas) e PDF no modelo da planilha antiga.
 // Só leva o frete do MOTORISTA; o JPEG não leva cliente.
 
-import { cidadeAnuncio, semDemo } from './anuncio';
+import { type DadosAnuncio, cidadeAnuncio, semDemo, textoWhatsApp } from './anuncio';
 
 export interface ItemLista {
   grupo: string; cliente: string; origem_cidade: string; origem_uf: string | null; coleta: string | null;
   destino_cidade: string; destino_uf: string | null; entrega: string | null; produto: string | null; frete: string | null;
+  /** Dados do anúncio individual (texto do WhatsApp). */
+  anuncio: DadosAnuncio;
 }
 
 const BANNER = `${import.meta.env.BASE_URL}anuncio/banner-lista.jpg`;
@@ -21,14 +23,6 @@ function carregar(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function baixar(blob: Blob, nome: string) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = nome;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-}
-
 /** Corta o texto com "…" até caber na largura. */
 function caber(ctx: CanvasRenderingContext2D, t: string, larg: number) {
   if (ctx.measureText(t).width <= larg) return t;
@@ -39,8 +33,14 @@ function caber(ctx: CanvasRenderingContext2D, t: string, larg: number) {
 
 const dataBR = (iso: string) => iso.split('-').reverse().join('/');
 
-/** Imagem com vários fretes: origem, destino, produto e frete motorista. */
-export async function gerarListaJpeg(itens: ItemLista[], data: string, comFrete: boolean): Promise<Blob> {
+/** Texto para WhatsApp com todos os fretes da lista (só frete motorista). */
+export function textoLista(itens: ItemLista[], data: string, comFrete: boolean): string {
+  const blocos = itens.map((i) => textoWhatsApp(comFrete ? i.anuncio : { ...i.anuncio, frete: null }));
+  return [`🚛 *FRETES LIBERADOS · ${dataBR(data)}*`, ...blocos].join('\n\n');
+}
+
+/** Desenha a imagem com vários fretes: origem, destino, produto e frete motorista. */
+export async function desenharLista(c: HTMLCanvasElement, itens: ItemLista[], data: string, comFrete: boolean): Promise<void> {
   const banner = await carregar(BANNER);
   try { await document.fonts.load('700 28px Sora'); } catch { /* fonte reserva */ }
   const W = 1080;
@@ -49,7 +49,6 @@ export async function gerarListaJpeg(itens: ItemLista[], data: string, comFrete:
   const temGrupo = itens.some((i) => i.grupo);
   const LINHA = 92;
   const H = hBanner + 96 + 56 + itens.length * LINHA + (temGrupo ? grupos * 52 : 0) + 70;
-  const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d')!;
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
@@ -107,12 +106,6 @@ export async function gerarListaJpeg(itens: ItemLista[], data: string, comFrete:
   ctx.fillStyle = VINHO; ctx.fillRect(0, H - 70, W, 70);
   ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.font = 'italic 700 26px Sora, Arial, sans-serif';
   ctx.fillText('CARREGUE CONOSCO! · TRANSPANORAMA', W / 2, H - 35);
-
-  return new Promise((ok, falha) => c.toBlob((b) => (b ? ok(b) : falha(new Error('Falha ao gerar a imagem.'))), 'image/jpeg', 0.9));
-}
-
-export async function baixarListaJpeg(itens: ItemLista[], data: string, comFrete: boolean) {
-  baixar(await gerarListaJpeg(itens, data, comFrete), `lista-fretes-${data}.jpg`);
 }
 
 /** PDF no modelo "LISTA DE FRETE": cabeçalho com a foto da frota e tabela com cliente, rota, produto e frete motorista. */

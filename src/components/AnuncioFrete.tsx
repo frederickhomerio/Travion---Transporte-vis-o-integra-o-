@@ -1,7 +1,7 @@
 // Imagem de divulgação de frete liberado (modelo "Carregue conosco") e texto para WhatsApp.
 // A imagem é desenhada no navegador sobre o fundo em public/anuncio; nada é enviado a ninguém automaticamente.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { type DadosAnuncio, textoWhatsApp, textosImagem } from '../lib/anuncio';
 import { Alerta, Modal, useAviso } from './ui';
 
@@ -65,25 +65,22 @@ export async function desenharAnuncio(canvas: HTMLCanvasElement, d: DadosAnuncio
 const nomeArquivo = (d: DadosAnuncio) =>
   `frete-${d.origem_cidade}-${d.destino_cidade}`.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase() + '.png';
 
-export function ImagemAnuncio({ dados, aoFechar, titulo = 'Imagem de divulgação' }: { dados: DadosAnuncio; aoFechar: () => void; titulo?: string }) {
+/** Tela de divulgação: prévia da imagem e as ações (enviar no WhatsApp, baixar, copiar imagem, copiar texto). */
+export function ModalDivulgacao({ titulo, desenhar, texto, arquivoNome, tipo = 'image/png', aviso, aoFechar }: {
+  titulo: string; desenhar: (c: HTMLCanvasElement) => Promise<void>; texto: string; arquivoNome: string;
+  tipo?: 'image/png' | 'image/jpeg'; aviso?: string | null; aoFechar: () => void;
+}) {
   const avisar = useAviso();
   const ref = useRef<HTMLCanvasElement>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [pronto, setPronto] = useState(false);
 
   useEffect(() => {
-    if (ref.current) desenharAnuncio(ref.current, dados).then(() => setPronto(true)).catch((e: Error) => setErro(e.message));
-  }, [dados]);
+    if (ref.current) desenhar(ref.current).then(() => setPronto(true)).catch((e: Error) => setErro(e.message));
+  }, [desenhar]);
 
-  const arquivo = () => new Promise<File>((ok, falha) => ref.current!.toBlob((b) => (b ? ok(new File([b], nomeArquivo(dados), { type: 'image/png' })) : falha(new Error('Falha ao gerar a imagem.'))), 'image/png'));
+  const arquivo = () => new Promise<File>((ok, falha) => ref.current!.toBlob((b) => (b ? ok(new File([b], arquivoNome, { type: tipo })) : falha(new Error('Falha ao gerar a imagem.'))), tipo, 0.9));
 
-  const compartilhar = async () => {
-    try {
-      const f = await arquivo();
-      if (navigator.canShare?.({ files: [f] })) { await navigator.share({ files: [f], text: textoWhatsApp(dados) }); return; }
-      baixar(f);
-    } catch (e) { if ((e as Error).name !== 'AbortError') avisar('erro', (e as Error).message); }
-  };
   const baixar = (f: File) => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(f);
@@ -91,12 +88,24 @@ export function ImagemAnuncio({ dados, aoFechar, titulo = 'Imagem de divulgaçã
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   };
-  const copiar = async () => {
+  const compartilhar = async () => {
     try {
       const f = await arquivo();
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': f })]);
+      if (navigator.canShare?.({ files: [f] })) { await navigator.share({ files: [f], text: texto }); return; }
+      baixar(f);
+    } catch (e) { if ((e as Error).name !== 'AbortError') avisar('erro', (e as Error).message); }
+  };
+  const copiarImagem = async () => {
+    try {
+      // A área de transferência só aceita PNG.
+      const png = await new Promise<Blob>((ok, falha) => ref.current!.toBlob((b) => (b ? ok(b) : falha(new Error())), 'image/png'));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
       avisar('ok', 'Imagem copiada. Cole (Ctrl+V) na conversa do WhatsApp.');
     } catch { avisar('erro', 'Este navegador não deixa copiar imagem. Use "Baixar imagem".'); }
+  };
+  const copiarTexto = async () => {
+    try { await navigator.clipboard.writeText(texto); avisar('ok', 'Texto copiado. Cole na conversa do WhatsApp.'); }
+    catch { avisar('erro', 'O navegador não deixou copiar o texto.'); }
   };
 
   return (
@@ -104,18 +113,23 @@ export function ImagemAnuncio({ dados, aoFechar, titulo = 'Imagem de divulgaçã
       <>
         <button className="btn" onClick={aoFechar}>Fechar</button>
         <button className="btn" disabled={!pronto} onClick={async () => baixar(await arquivo())}>Baixar imagem</button>
-        <button className="btn esconder-celular" disabled={!pronto} onClick={copiar}>Copiar imagem</button>
-        <button className="btn" onClick={async () => {
-          if (await copiarTextoWhatsApp(dados)) avisar('ok', 'Texto do anúncio copiado.');
-          else avisar('erro', 'O navegador não deixou copiar o texto.');
-        }}>Copiar texto</button>
+        <button className="btn esconder-celular" disabled={!pronto} onClick={copiarImagem}>Copiar imagem</button>
+        <button className="btn" onClick={copiarTexto}>Copiar texto</button>
         <button className="btn primario" disabled={!pronto} onClick={compartilhar}>Enviar no WhatsApp</button>
       </>
     }>
       {erro && <Alerta tipo="erro">{erro}</Alerta>}
-      {!dados.frete?.frete_motorista && <div style={{ marginBottom: 10 }}><Alerta tipo="aviso">Sem frete do motorista cadastrado: a imagem sai com "A COMBINAR".</Alerta></div>}
+      {aviso && <div style={{ marginBottom: 10 }}><Alerta tipo="aviso">{aviso}</Alerta></div>}
       <canvas ref={ref} className="anuncio-canvas" aria-label="Prévia da imagem de divulgação" />
     </Modal>
+  );
+}
+
+export function ImagemAnuncio({ dados, aoFechar, titulo = 'Divulgação do frete' }: { dados: DadosAnuncio; aoFechar: () => void; titulo?: string }) {
+  const desenhar = useCallback((c: HTMLCanvasElement) => desenharAnuncio(c, dados), [dados]);
+  return (
+    <ModalDivulgacao titulo={titulo} desenhar={desenhar} texto={textoWhatsApp(dados)} arquivoNome={nomeArquivo(dados)} aoFechar={aoFechar}
+      aviso={dados.frete?.frete_motorista ? null : 'Sem frete do motorista cadastrado: a imagem sai com "A COMBINAR".'} />
   );
 }
 
