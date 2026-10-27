@@ -360,3 +360,23 @@ textarea.entrada { min-height: 80px; resize: vertical; }
 .margem small { font-weight: 500; color: var(--texto-suave); }
 .margem.negativa { color: var(--vermelho-700); }
 .tabela-fretes td.td-produto { min-width: 110px; }
+.controles-lista { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.controle-linha { display: grid; grid-template-columns: 110px minmax(0, 1fr); align-items: center; gap: 12px; }
+.controle-rot { font-size: 0.85rem; font-weight: 600; color: var(--texto-suave); }
+.controle-corpo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.controle-corpo .controle-valor { flex: 0 0 auto; width: 260px; max-width: 100%; }
+.controle-botoes .btn { white-space: nowrap; }
+.controles-lista + .ferramentas { margin-left: 122px; }
+@media (max-width: 720px) {
+  .controle-linha { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .controle-corpo .controle-valor { width: 100%; }
+  .controle-corpo .segmentado { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--borda); width: 100%; }
+  .controle-corpo .segmentado button { padding: 0 8px; font-size: 0.88rem; border: 0; background: var(--branco); }
+  .controle-corpo .segmentado button.ativo { background: var(--azul-700); }
+  .controle-corpo .segmentado button + button { border-left: 0; }
+  .controle-corpo .segmentado button:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .controle-botoes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+  .controle-botoes .btn { justify-content: center; padding: 0 6px; font-size: 0.82rem; white-space: normal; text-align: center; line-height: 1.15; }
+  .controle-botoes .btn svg { display: none; }
+  .controles-lista + .ferramentas { margin-left: 0; }
+}

@@ -34,7 +34,7 @@ export function ListaFretes() {
     .filter((l) => l.embarque.status_liberacao === 'liberado' && l.embarque.situacao === 'ativo'), [todas, estado.filtros, idx]);
   const linhas = useMemo(() => {
     const t = normalizar(texto);
-    return t ? liberados.filter((l) => normalizar(chaveGrupo(l, buscarPor, idx)).includes(t)) : liberados;
+    return t ? liberados.filter((l) => normalizar(chaveGrupo(l, buscarPor, idx)) === t) : liberados;
   }, [liberados, texto, buscarPor, idx]);
   const sugestoes = useMemo(() => [...new Set(liberados.map((l) => chaveGrupo(l, buscarPor, idx)))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
     [liberados, buscarPor, idx]);
@@ -109,29 +109,33 @@ export function ListaFretes() {
 
   return (
     <Layout titulo="Lista de Fretes" acoes={acoes}>
-      <BarraFiltros linhas={todas} semData semBusca inicio={
-        <>
-        <div className="campo"><span>Buscar por</span>
-          <Segmentado rotulo="Buscar por" valor={buscarPor} aoMudar={(v) => { setBuscarPor(v); setTexto(''); }}
-            opcoes={[{ valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
-              { valor: 'filial', rotulo: 'Filial' }, { valor: 'produto', rotulo: 'Produto' }]} />
+      <div className="controles-lista">
+        <div className="controle-linha">
+          <span className="controle-rot">Buscar por</span>
+          <div className="controle-corpo">
+            <Segmentado rotulo="Buscar por" valor={buscarPor} aoMudar={(v) => { setBuscarPor(v); setTexto(''); }}
+              opcoes={[{ valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
+                { valor: 'filial', rotulo: 'Filial' }, { valor: 'produto', rotulo: 'Produto' }]} />
+            <select className="entrada controle-valor" aria-label="Valor da busca" value={texto} onChange={(e) => setTexto(e.target.value)}>
+              <option value="">{{ origem: 'Todas as origens', destino: 'Todos os destinos', filial: 'Todas as filiais', produto: 'Todos os produtos' }[buscarPor]}</option>
+              {sugestoes.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
         </div>
-        <label className="campo busca">
-          <span>Busca</span>
-          <input className="entrada" type="search" list="sugestoes-busca" value={texto} onChange={(e) => setTexto(e.target.value)}
-            placeholder={{ origem: 'Digite a cidade de origem…', destino: 'Digite a cidade de destino…', filial: 'Digite a filial…', produto: 'Digite o produto…' }[buscarPor]} />
-          <datalist id="sugestoes-busca">{sugestoes.map((s) => <option key={s} value={s} />)}</datalist>
-        </label>
-        </>
-      } extra={
-        <>
-        <div className="campo"><span>Agrupar por</span>
-          <Segmentado rotulo="Agrupar por" valor={agrupar} aoMudar={mudarAgrupar}
-            opcoes={[{ valor: 'nenhum', rotulo: 'Nenhum' }, { valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
-              { valor: 'filial', rotulo: 'Filial' }, { valor: 'produto', rotulo: 'Produto' }]} />
+        <div className="controle-linha">
+          <span className="controle-rot">Agrupar por</span>
+          <div className="controle-corpo">
+            <Segmentado rotulo="Agrupar por" valor={agrupar} aoMudar={mudarAgrupar}
+              opcoes={[{ valor: 'nenhum', rotulo: 'Nenhum' }, { valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
+                { valor: 'filial', rotulo: 'Filial' }, { valor: 'produto', rotulo: 'Produto' }]} />
+          </div>
         </div>
-        </>
-      } />
+        <div className="controle-linha">
+          <span className="controle-rot"><strong>{linhas.length}</strong> frete(s)</span>
+          <div className="controle-corpo controle-botoes">{botoesExportar}</div>
+        </div>
+      </div>
+      <BarraFiltros linhas={todas} semData semBusca />
 
       <div className="grupo-btn so-celular" style={{ marginBottom: 12 }}>
         {pode('posicoes.abrir') && <button className="btn" onClick={() => setAbrir(true)}>Abrir posições</button>}
@@ -140,10 +144,6 @@ export function ListaFretes() {
 
       {estado.erro && <Alerta tipo="erro"><span><strong>Erro ao carregar:</strong> {estado.erro}</span></Alerta>}
 
-      <div className="resumo-linha" aria-live="polite">
-        <span><strong>{linhas.length}</strong> frete(s) liberado(s)</span>
-        <div className="grupo-btn" style={{ marginLeft: 'auto' }}>{botoesExportar}</div>
-      </div>
 
       {estado.carregando && Object.keys(estado.embarques).length === 0 ? <Carregando /> : linhas.length === 0 ? (
         <div className="cartao"><EstadoVazio titulo={todas.length === 0 ? 'Nenhum embarque cadastrado' : 'Nenhum frete liberado'}>
