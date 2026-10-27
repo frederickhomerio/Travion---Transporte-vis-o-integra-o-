@@ -1147,9 +1147,25 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- Privilégios das funções
 -- ---------------------------------------------------------------------------
-revoke all on all functions in schema public from public, anon;
-grant execute on all functions in schema public to authenticated;
+-- Só as funções deste app: o projeto pode conter funções de outros sistemas.
+do $$
+declare f regprocedure;
+begin
+  for f in
+    select p.oid::regprocedure from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in (
+      'abrir_posicoes', 'admin_atualizar_usuario', 'atualizar_embarque', 'atualizar_financeiro', 'atualizar_posicao',
+      'criar_convite', 'criar_embarque', 'criar_link_cliente', 'excluir_convite', 'limpar_dados_demo', 'posicao_publica',
+      'revogar_link_cliente', 'salvar_cadastro', 'salvar_configuracao', 'salvar_meta_diaria', 'salvar_permissao_papel')
+  loop
+    execute format('revoke all on function %s from public, anon', f);
+    execute format('grant execute on function %s to authenticated', f);
+  end loop;
+end $$;
 grant execute on function public.posicao_publica(text) to anon;
 revoke all on all functions in schema private from public, anon;
 grant execute on all functions in schema private to authenticated;
 revoke execute on function private.promover_administrador(text) from authenticated;
+-- O serviço de login do Supabase dispara o gatilho de novos usuários.
+grant usage on schema private to supabase_auth_admin;
+grant execute on function private.ao_criar_usuario() to supabase_auth_admin;

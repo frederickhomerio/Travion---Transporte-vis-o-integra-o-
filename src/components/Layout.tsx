@@ -21,7 +21,7 @@ export function Layout({ titulo, acoes, children }: { titulo: string; acoes?: Re
   return (
     <div className="app">
       <aside className="lateral">
-        <div className="marca"><Logo /><div>Travion<small>Transpanorama</small></div></div>
+        <div className="marca"><Logo /><div>TRAVION<small>by Transpanorama</small></div></div>
         <nav className="nav" aria-label="Principal">
           <NavLink to="/" end><Icone nome="lista" />Lista de Fretes</NavLink>
           <NavLink to="/dashboard"><Icone nome="painel" />Dashboard Operacional</NavLink>
@@ -33,8 +33,8 @@ export function Layout({ titulo, acoes, children }: { titulo: string; acoes?: Re
         </nav>
         <div className="lateral-rodape">
           <div className="nome">{s.perfil.nome || s.perfil.email}</div>
-          <div style={{ color: '#9fb4e6' }}>{ROTULO_PAPEL[s.perfil.papel]}</div>
-          <button className="btn sutil peq" style={{ color: '#dbe5ff', paddingLeft: 0, marginTop: 6 }} onClick={() => { void api.sair(); nav('/login'); }}>
+          <div style={{ color: 'var(--dourado-claro)' }}>{ROTULO_PAPEL[s.perfil.papel]}</div>
+          <button className="btn sutil peq" style={{ color: '#f3e6e8', paddingLeft: 0, marginTop: 6 }} onClick={() => { void api.sair(); nav('/login'); }}>
             <Icone nome="sair" tam={16} />Sair
           </button>
         </div>

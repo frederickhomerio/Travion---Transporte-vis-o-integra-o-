@@ -47,7 +47,7 @@ export function Login() {
       <div className="caixa-login">
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <Logo tam={40} />
-          <div><h1>Travion</h1><div className="suave pequeno">Acompanhamento operacional de embarques</div></div>
+          <div><h1 style={{ letterSpacing: '0.08em', fontWeight: 700 }}>TRAVION</h1><div className="pequeno" style={{ color: 'var(--dourado-escuro)', fontWeight: 600 }}>by Transpanorama</div><div className="suave pequeno">Inteligência que move toda a operação.</div></div>
         </div>
 
         {api.modo === 'local' ? (

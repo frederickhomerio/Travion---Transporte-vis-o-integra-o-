@@ -162,7 +162,13 @@ as $$ select coalesce(nullif(p.nome, ''), p.email, 'Usuário') from public.perfi
 -- ---------------------------------------------------------------------------
 -- Privilégios: leitura apenas; nenhuma escrita direta para usuários da API
 -- ---------------------------------------------------------------------------
-revoke all on all tables in schema public from anon, authenticated;
+-- Só as tabelas deste app: o projeto pode conter tabelas de outros sistemas.
+revoke all on table
+  public.filiais, public.comerciais, public.clientes, public.produtos, public.locais, public.perfis,
+  public.perfil_filiais, public.permissoes, public.papel_permissoes, public.perfil_permissoes, public.convites,
+  public.configuracoes, public.metas_diarias, public.embarques, public.embarque_financeiro, public.embarque_dados_origem,
+  public.posicoes_diarias, public.historico_alteracoes, public.links_cliente, public.importacoes
+from anon, authenticated;
 revoke all on all functions in schema private from public, anon;
 grant usage on schema private to authenticated;
 grant execute on all functions in schema private to authenticated;

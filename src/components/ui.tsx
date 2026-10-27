@@ -39,10 +39,9 @@ export function Icone({ nome, tam = 20 }: { nome: keyof typeof caminhos | string
 export function Logo({ tam = 30 }: { tam?: number }) {
   return (
     <svg width={tam} height={tam} viewBox="0 0 32 32" aria-hidden="true">
-      <rect width="32" height="32" rx="7" fill="#2563eb" />
-      <path d="M6 20h13v-8h4l3 4v4h-2" stroke="#fff" strokeWidth="2.2" fill="none" strokeLinejoin="round" />
-      <circle cx="10.5" cy="22" r="2" fill="#fff" />
-      <circle cx="22.5" cy="22" r="2" fill="#fff" />
+      <rect width="32" height="32" rx="8" fill="#3a0a12" />
+      <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="7.25" fill="none" stroke="#c6a044" strokeWidth="1.5" />
+      <path d="M9 10h14M16 10v13" stroke="#e3c579" strokeWidth="2.6" strokeLinecap="round" />
     </svg>
   );
 }
