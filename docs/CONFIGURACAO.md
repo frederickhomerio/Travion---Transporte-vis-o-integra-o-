@@ -1,0 +1,110 @@
+# Frete IQ — Configuração e implantação
+
+Este guia leva o app da prévia local para produção com banco de dados real.
+
+> **Situação atual:** o banco (estrutura, permissões, funções e testes) foi validado em PostgreSQL 16 local, com uma simulação mínima da autenticação do Supabase. **Ainda não foi executado num projeto Supabase real**, porque o projeto e as credenciais não foram fornecidos. Os passos abaixo devem ser seguidos e conferidos na primeira instalação.
+
+## 1. O que você precisa
+
+| Item | Para quê | Quem fornece |
+|---|---|---|
+| Projeto no Supabase (plano gratuito serve para testes) | Banco PostgreSQL, login, tempo real | Transpanorama (conta própria) |
+| URL do projeto e chave **anon** (pública) | Ligar o app ao banco | Supabase → Project Settings → API |
+| Hospedagem de site estático (Vercel, Netlify, Cloudflare Pages ou similar) | Publicar o app | Transpanorama |
+| Node.js 20 ou mais novo | Gerar a versão de produção | Máquina de quem implanta |
+
+**Nunca** use a chave `service_role` no app nem a envie por chat ou e-mail. Ela ignora todas as regras de acesso.
+
+## 2. Criar o banco
+
+1. Crie o projeto no Supabase (região São Paulo, `sa-east-1`, de preferência).
+2. Abra **SQL Editor** e execute, **nesta ordem**, o conteúdo de cada arquivo:
+   1. `supabase/migrations/20261026000100_estrutura.sql`
+   2. `supabase/migrations/20261026000200_permissoes.sql`
+   3. `supabase/migrations/20261026000300_funcoes.sql`
+   4. `supabase/migrations/20261026000400_importacao_realtime.sql`
+   5. `supabase/migrations/20261026000500_dados_demo.sql`
+
+   Alternativa: com a [Supabase CLI](https://supabase.com/docs/guides/cli), `supabase link --project-ref SEU_PROJETO` e depois `supabase db push`.
+3. **Não execute** nada da pasta `supabase/tests/`. Aqueles arquivos simulam o Supabase e servem só para testes locais.
+4. Confira em **Database → Publications → supabase_realtime** se as tabelas `embarques`, `posicoes_diarias`, `embarque_financeiro`, `configuracoes`, `metas_diarias` e `clientes` estão marcadas. A migração 4 as adiciona; se a publicação não existir no seu projeto, marque-as manualmente.
+5. Em **Project Settings → API → Exposed schemas**, mantenha apenas `public` (o padrão). O schema `private` guarda funções internas e **não** deve ser exposto.
+
+## 3. Login
+
+Em **Authentication**:
+
+- **Sign In / Providers → Email:** habilitado. Recomendado manter “Confirm email” ligado.
+- **URL Configuration → Site URL:** o endereço onde o app será publicado (ex.: `https://frete-iq.transpanorama.com.br`).
+- **URL Configuration → Redirect URLs:** acrescente o mesmo endereço (e `http://localhost:5173` se for rodar localmente).
+- **Novos cadastros:** o botão “Solicitar acesso” do app usa o cadastro do Supabase. A conta nasce **aguardando aprovação**, sem acesso a nenhum dado, até um administrador aprovar. Se preferir só convites, desligue “Allow new users to sign up”. Nesse caso, quem foi convidado precisa ser criado em Authentication → Users → Add user, com o mesmo e-mail do convite.
+- **E-mails:** o envio padrão do Supabase tem limite baixo por hora. Para uso real, configure um SMTP próprio em Authentication → Emails → SMTP Settings.
+
+## 4. Primeiro administrador
+
+1. Abra o app (passo 6) e use **Solicitar acesso** com o seu e-mail. Confirme o e-mail se o Supabase pedir.
+2. No **SQL Editor** do Supabase, execute:
+
+   ```sql
+   select private.promover_administrador('seu.email@transpanorama.com.br');
+   ```
+
+3. Entre no app. A partir daí, os demais usuários são aprovados ou convidados em **Administração → Usuários e convites**.
+
+Essa função só pode ser executada no SQL Editor (por quem administra o projeto Supabase); ela não fica disponível para usuários do app.
+
+## 5. Variáveis do app
+
+Copie `.env.example` para `.env.local` e preencha:
+
+```
+VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+VITE_SUPABASE_ANON_KEY=chave-anon-do-projeto
+```
+
+Sem essas variáveis, o app abre em **PRÉVIA LOCAL**: dados fictícios guardados só no navegador, com uma faixa amarela fixa avisando. A prévia nunca grava no banco.
+
+## 6. Rodar e publicar
+
+```bash
+npm install --legacy-peer-deps   # a opção contorna um problema conhecido do npm com estas dependências
+npm run dev                      # desenvolvimento em http://localhost:5173
+npm run build                    # gera a pasta dist/
+```
+
+Publique a pasta `dist/` em qualquer hospedagem de site estático. O app usa rotas com `#` (ex.: `/#/dashboard`), então não é preciso configurar redirecionamento no servidor. Defina as duas variáveis do passo 5 também no painel da hospedagem antes do build.
+
+## 7. Carga inicial de dados
+
+1. **Administração → Cadastros:** confira filiais, comerciais e produtos (ou deixe a importação criar).
+2. **Administração → Importação:** envie a planilha `.xlsx`, escolha a aba **Lista de Fretes** e a aba **Clientes**, revise o mapeamento de colunas, **informe a data operacional** e gere a prévia. Só depois de conferir, confirme.
+3. **Administração → Configurações:** confirme 40 t por veículo e meta de 2 veículos por lote.
+4. Para cada embarque com frete, confirme a **unidade do frete** (R$/t, R$/viagem…) na aba Financeiro dos detalhes. Enquanto ela estiver “não confirmada”, o Dashboard não apresenta faturamento e margem como válidos.
+5. **Administração → Metas diárias:** cadastre as metas financeiras do dia, se houver.
+
+### Dados demonstrativos
+
+Em **Administração → Dados demonstrativos** (só administrador) é possível carregar um conjunto fictício marcado como `[DEMO]`. Ele fica separado dos dados reais: só aparece com o “Modo demonstração” ligado e nunca entra nos indicadores reais. O mesmo botão permite apagá-lo.
+
+## 8. Testes
+
+```bash
+npm test                                           # regras de cálculo e leitura da planilha (Vitest)
+PLANILHA_REFERENCIA=/caminho/lista.xlsx npm test   # inclui a conferência com a planilha original
+npm run test:db                                    # critérios de aceite no banco (precisa de PostgreSQL 16 local)
+```
+
+O `test:db` recria um banco chamado `freteiq_test`, aplica uma simulação mínima do Supabase (`supabase/tests/00_stub_supabase.sql`), as cinco migrações e os testes. Não aponte esse script para o banco de produção.
+
+## 9. Segurança: o que já está feito e o que falta
+
+Feito:
+- Toda leitura passa pelo RLS (Row Level Security) do PostgreSQL, por filial, carteira e permissão.
+- Nenhuma tabela aceita gravação direta do app. Toda gravação passa por funções do servidor que conferem a permissão de cada campo, a versão do registro e gravam o histórico.
+- Valores financeiros ficam numa tabela separada, legível só por quem tem “Ver financeiro”.
+- O link do cliente usa um código aleatório de 256 bits. O banco guarda só o resumo criptográfico (hash), nunca o código.
+
+Pendente (ver `REGRAS_DE_NEGOCIO.md`, seção 9):
+- Limite de tentativas por IP na consulta pública. Hoje depende só do limite geral do Supabase.
+- Backup e retenção: configurar no plano do Supabase (Point-in-Time Recovery está nos planos pagos).
+- Revisão de segurança por terceiro antes de abrir o link do cliente em larga escala.
