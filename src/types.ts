@@ -29,7 +29,11 @@ export interface Cliente {
   telefone_cadastro?: string | null; telefone_comercial?: string | null; telefone_financeiro?: string | null;
   logo_url?: string | null; dados_consultados_em?: string | null;
 }
-export interface Produto { id: string; nome: string; valor_pauta_kg?: number | null; valor_pauta_data?: string | null; ativo: boolean; is_demo: boolean }
+export interface Produto {
+  id: string; nome: string; valor_pauta_kg?: number | null; valor_pauta_data?: string | null; ativo: boolean; is_demo: boolean;
+  /** Nome do produto na tabela da CNA (atualizado todo dia às 15h) e de onde veio o preço. */
+  cna_produto?: string | null; preco_fonte?: string | null;
+}
 export type UsoCidade = 'origem' | 'destino' | 'ambos';
 export interface Cidade { id: string; nome: string; uf: string | null; uso?: UsoCidade; ativo: boolean; is_demo: boolean }
 

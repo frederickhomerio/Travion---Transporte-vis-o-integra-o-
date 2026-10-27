@@ -77,3 +77,28 @@ do $$ begin
   begin perform obter_local('X', 'Y', 'GO', 'coleta');
     assert false, 'consulta não cria local'; exception when insufficient_privilege then null; end;
 end $$;
+
+-- Preços da CNA: Goiás primeiro, conversão de unidade, produto novo cadastrado e existente atualizado.
+reset role;
+do $$
+declare r jsonb;
+begin
+  r := private.cna_aplicar('[
+    {"NOME_PRODUTO":"SORGO","TITULO":"R$ / SACA 60 KG","UF":"MT","PRACA":"SORRISO","DATA":"26/10/2026","VALOR":"40.00"},
+    {"NOME_PRODUTO":"SORGO","TITULO":"R$ / SACA 60 KG","UF":"GO","PRACA":"RIO VERDE","DATA":"26/10/2026","VALOR":"48.00"},
+    {"NOME_PRODUTO":"SORGO","TITULO":"R$ / SACA 60 KG","UF":"GO","PRACA":"JATAI","DATA":"26/10/2026","VALOR":"60.00"},
+    {"NOME_PRODUTO":"BOI GORDO","TITULO":"R$ / @","UF":"MG","PRACA":"TRIANGULO","DATA":"26/10/2026","VALOR":"1.500,00"},
+    {"NOME_PRODUTO":"ETANOL ANIDRO","TITULO":"R$ / L","UF":"GO","PRACA":"GOIAS","DATA":"26/10/2026","VALOR":"2.94"},
+    {"NOME_PRODUTO":"TRIGO - TIPO PÃO","TITULO":"R$ / TON","UF":"PR","PRACA":"NORTE","DATA":"26/10/2026","VALOR":"1571.95"}
+  ]'::jsonb);
+  assert (select valor_pauta_kg from produtos where cna_produto = 'SORGO' and not is_demo) = 0.9, 'média de GO (54/60) e não MT';
+  assert (select valor_pauta_data from produtos where cna_produto = 'SORGO' and not is_demo) = '2026-10-26', 'data da cotação';
+  assert (select count(*) from produtos where nome_busca = private.normalizar('sorgo') and not is_demo) = 1, 'produto existente reaproveitado';
+  assert (select valor_pauta_kg from produtos where cna_produto = 'BOI GORDO') = 100, 'arroba = 15 kg e valor com vírgula';
+  assert (select preco_fonte from produtos where cna_produto = 'BOI GORDO') like '%sem cotação em GO%', 'fonte avisa estado de fora';
+  assert (select valor_pauta_kg from produtos where cna_produto = 'ETANOL ANIDRO') is null, 'litro sem conversão';
+  assert (select nome from produtos where cna_produto = 'TRIGO - TIPO PÃO') = 'Trigo tipo pão', 'nome amigável';
+  assert (select valor_pauta_kg from produtos where cna_produto = 'TRIGO - TIPO PÃO') = 1.5720, 'tonelada';
+  perform private.cna_aplicar('[{"NOME_PRODUTO":"SORGO","TITULO":"R$ / SACA 60 KG","UF":"GO","PRACA":"RIO VERDE","DATA":"27/10/2026","VALOR":"66.00"}]'::jsonb);
+  assert (select valor_pauta_kg from produtos where cna_produto = 'SORGO' and not is_demo) = 1.1, 'atualização do dia seguinte';
+end $$;

@@ -124,11 +124,12 @@ export function Cadastros() {
               </>
             ) : (
               <>
-                <thead><tr>{def.campos.map((c) => <th key={c.campo}>{c.rotulo}</th>)}<th /></tr></thead>
+                <thead><tr>{def.campos.map((c) => <th key={c.campo}>{c.rotulo}</th>)}{tipo === 'produto' && <th>Fonte do preço</th>}<th /></tr></thead>
                 <tbody>
                   {lista.map((r) => (
                     <tr key={r.id} style={r.ativo ? undefined : { opacity: 0.6 }}>
                       {def.campos.map((c) => <td key={c.campo}>{exibir(r, c)}</td>)}
+                      {tipo === 'produto' && <td className="pequeno">{(r.preco_fonte as string) || <span className="suave">Manual</span>}</td>}
                       <td className="td-acao"><button className="btn peq" onClick={() => setEditar(r)}>Editar</button></td>
                     </tr>
                   ))}
@@ -244,8 +245,10 @@ function PrecoCna({ nome: produto, valorKg, aoUsar }: { nome: string; valorKg: n
     try { setRes(await api.precoCna(produto)); } catch (e) { setErro(mensagemErro(e)); } finally { setBuscando(false); }
   }
 
-  const conv = res?.cotacoes.filter((c) => c.valor_kg !== null) ?? [];
-  const go = conv.filter((c) => c.uf === 'GO');
+  // Sempre o preço de Goiás; sem cotação em GO, o estado vizinho mais próximo (a lista já vem nessa ordem).
+  const uf = res?.cotacoes[0]?.uf ?? 'GO';
+  const doUf = res?.cotacoes.filter((c) => c.uf === uf) ?? [];
+  const go = doUf.filter((c) => c.valor_kg !== null);
   const mediaGo = go.length > 1 ? Math.round((go.reduce((a, c) => a + c.valor_kg!, 0) / go.length) * 10000) / 10000 : null;
 
   return (
@@ -258,6 +261,7 @@ function PrecoCna({ nome: produto, valorKg, aoUsar }: { nome: string; valorKg: n
       {res && res.cotacoes.length === 0 && (
         <Alerta tipo="aviso">"{produto}" não aparece na tabela da CNA hoje. Produtos disponíveis: {res.produtos.join(', ')}. Ajuste o nome ou informe o valor manualmente.</Alerta>
       )}
+      {res && res.cotacoes.length > 0 && uf !== 'GO' && <Alerta tipo="aviso">A CNA não publica este produto para Goiás. Mostrando {uf}, o estado vizinho com cotação.</Alerta>}
       {res && res.cotacoes.length > 0 && (
         <div className="cartao rolagem-x" style={{ maxHeight: 300, overflowY: 'auto' }}>
           <table className="tabela">
@@ -265,13 +269,13 @@ function PrecoCna({ nome: produto, valorKg, aoUsar }: { nome: string; valorKg: n
             <tbody>
               {mediaGo !== null && (
                 <tr>
-                  <td><strong>Média de Goiás</strong><div className="pequeno suave">{go.length} praças</div></td>
+                  <td><strong>Média {uf === 'GO' ? 'de Goiás' : `de ${uf}`}</strong><div className="pequeno suave">{go.length} praças</div></td>
                   <td>—</td>
                   <td className="num"><strong>{fmtReais(mediaGo, 4)}</strong></td>
                   <td className="td-acao"><button type="button" className="btn peq primario" onClick={() => aoUsar(mediaGo, dataIso(go[0].data))}>Usar</button></td>
                 </tr>
               )}
-              {res.cotacoes.map((c, i) => (
+              {doUf.map((c, i) => (
                 <tr key={i}>
                   <td>{c.praca}/{c.uf}{new Set(res.cotacoes.map((x) => x.produto)).size > 1 && <div className="pequeno suave">{c.produto}</div>}</td>
                   <td className="num">{fmtReais(c.valor)}<div className="pequeno suave">{c.unidade}</div></td>
@@ -283,7 +287,7 @@ function PrecoCna({ nome: produto, valorKg, aoUsar }: { nome: string; valorKg: n
           </table>
         </div>
       )}
-      <small className="suave">Fonte: CNA, Preços das Commodities (atualizado diariamente). O valor por kg é calculado a partir da unidade da cotação (saca, tonelada ou arroba).</small>
+      <small className="suave">Fonte: CNA, Preços das Commodities. Os produtos da CNA são atualizados sozinhos todo dia às 15h com o preço de Goiás. O valor por kg é calculado a partir da unidade da cotação (saca, tonelada ou arroba).</small>
     </div>
   );
 }

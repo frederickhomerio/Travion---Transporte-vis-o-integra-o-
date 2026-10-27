@@ -106,7 +106,7 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
         todos((a, b) => sb.from('filiais').select('id,nome,codigo,supervisor,centro_custo_id,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
         todos((a, b) => sb.from('comerciais').select('id,nome,email,telefone,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
         todos((a, b) => sb.from('clientes').select(COLUNAS_CLIENTE).eq('is_demo', demo).order('nome').range(a, b)),
-        todos((a, b) => sb.from('produtos').select('id,nome,valor_pauta_kg,valor_pauta_data,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
+        todos((a, b) => sb.from('produtos').select('id,nome,valor_pauta_kg,valor_pauta_data,cna_produto,preco_fonte,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
         todos((a, b) => sb.from('locais').select('id,nome,cidade,uf,tipo,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
         todos((a, b) => sb.from('cidades').select('id,nome,uf,uso,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
         todos((a, b) => sb.from('centros_custo').select('id,nome,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
