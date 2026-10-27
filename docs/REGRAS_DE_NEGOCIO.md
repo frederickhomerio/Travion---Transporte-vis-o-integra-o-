@@ -96,6 +96,7 @@ As permissões são conferidas **no banco**, inclusive em exportações, indicad
 | Operação | Suas filiais: ver, abrir posições, contadores, observação operacional. Sem financeiro, permissões ou carteira. |
 | Comercial | Própria carteira: ver, financeiro (ver e editar), cadência, observação para o cliente, histórico, compartilhamento. Contadores só com permissão extra. |
 | Consulta | Somente leitura no seu escopo. |
+| Apoio Operacional | Fila de documentação de todas as filiais do seu escopo: assumir, registrar lote, pedir ajuste, anexar emitidos e liberar. |
 | Cliente externo | Apenas o link protegido do próprio cliente. |
 
 Novos usuários entram por convite ou pedem acesso e aguardam aprovação. Até lá, não veem nenhum dado.
@@ -142,6 +143,22 @@ As duas telas leem a mesma tabela de posições diárias. Os supervisores gravam
 - **Encerramento automático:** suspenso há mais de 7 dias sem reativação é encerrado pelo banco (`private.encerrar_suspensos_vencidos`, pg_cron de hora em hora), autor "Sistema", motivo "Suspenso há mais de 7 dias sem reativação".
 - **Encerrar** (só Gestor e Administrador, permissão `embarques.encerrar`): arquiva com data, autor e motivo opcional. Um gatilho no banco impede qualquer alteração ou reativação depois disso. O histórico fica.
 - A Posição do Cliente continua mostrando embarques suspensos com o alerta que já existia (decisão a confirmar).
+
+### 7.3 Apoio Operacional: emissão e criação de lote — desde 27/10/2026
+
+- **Quem pede:** o comercial (Comercial de Fretes, antigo Embarcador; Coordenador Comercial; Supervisor; Gestor), em Lista de Fretes → Detalhes do embarque → **Documentação**. O botão muda conforme a situação: **Gerar lote e emissão** (sem lote e sem pedido aberto), **Acompanhar solicitação** (pedido inicial em andamento) e **Emitir documentação** (lote já registrado; próximos veículos).
+- **Primeira nota:** um só envio com tudo que o apoio precisa para gerar o lote e emitir o CT-e: placa, NF(s), frete empresa e motorista (R$/t ou R$/viagem, pré-preenchidos do financeiro), tipo de operação, evidência do frete, pagamento (Cheque ou Pagbem), pedágio, observação no CT-e (só exigida quando "Sim") e um CT-e por NF. Os dados do embarque vão automaticamente e ficam congelados na solicitação.
+- **Próximos veículos:** o mesmo formulário sem tipo de operação e sem evidência (herda o tipo do lote). Placa repetida em 48 h ou NF com o mesmo nome no embarque geram aviso e pedem "Enviar mesmo assim".
+- **Status:** Enviado, Em atendimento, Aguardando informação, Documentação disponível e Cancelado. Não existe status "Em emissão no ERP".
+- **Fila do Apoio Operacional:** atalhos Todas em aberto, Novas, Minhas em atendimento, Aguardando informação e Concluídas; busca por placa, lote, cliente, nome do arquivo da NF ou número; filtros por filial, centro de custo e responsável. Atualiza sozinha (tempo real e consulta a cada 15 s).
+- **Assumir é atômico no servidor:** se duas pessoas clicarem juntas, só uma fica com a demanda e a outra é avisada.
+- **Lote:** o responsável informa o "Número do lote gerado no ERP". A solicitação inicial continua em atendimento até a emissão da primeira nota. Corrigir o número fica no histórico.
+- **Conclusão:** anexar documentos emitidos (CT-e, MDF-e, outro) não conclui. É preciso marcar **Documentação disponível** depois de conferir; na solicitação inicial também é preciso ter o lote registrado. O comercial só vê os documentos emitidos depois dessa liberação.
+- **Pendências:** o apoio pede ajuste com texto obrigatório; o comercial responde (com arquivo de correção opcional) e a solicitação volta para Em atendimento. Tudo fica no histórico.
+- **Notificações internas** (sino no topo): ajuste solicitado e documentação disponível vão para quem pediu; resposta vai para o responsável do apoio. Não há mensagens externas (WhatsApp, e-mail).
+- **Cancelar:** com motivo; quem tem `documentacao.cancelar` (Apoio, Gestor) ou o próprio solicitante enquanto ninguém assumiu. Não cancela pedido com lote já registrado.
+- **Permissões padrão** (todas ajustáveis em Administração → Permissões): `documentacao.ver` (todos os papéis internos, exceto Consulta), `documentacao.solicitar` (Gestor, Supervisor, Comercial de Fretes, Coordenador Comercial), `apoio.pagina` (Apoio e Gestor), `apoio.atender` (Apoio), `documentacao.cancelar` (Apoio e Gestor). O banco confere tudo, inclusive o acesso aos arquivos no Storage.
+- **Fora do escopo:** integração com o ERP, envio externo e controle de pagamento.
 
 ## 8. Importação da planilha
 

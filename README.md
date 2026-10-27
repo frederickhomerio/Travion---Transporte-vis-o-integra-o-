@@ -2,7 +2,7 @@
 
 App interno da Transpanorama para acompanhar embarques rodoviários. Substitui a planilha operacional compartilhada.
 
-**Módulos:** 1. Lista de Fretes · 2. Dashboard Operacional · 3. Posições de Embarque (supervisores atualizam porta, trânsito e carregados) · 4. Posição do Cliente (mesa comercial e quadro enviado ao cliente) · Administração (usuários, permissões, cadastros, importação da planilha, configurações). O módulo Análise está reservado (“Em breve”).
+**Módulos:** 1. Lista de Fretes · 2. Dashboard Operacional · 3. Posições de Embarque (supervisores atualizam porta, trânsito e carregados) · 4. Posição do Cliente (mesa comercial e quadro enviado ao cliente) · 5. Apoio Operacional (fila de emissão de documentos e criação de lote no ERP, pedida pelo comercial em Detalhes do embarque → Documentação) · Administração (usuários, permissões, cadastros, importação da planilha, configurações). O módulo Análise está reservado (“Em breve”).
 
 **Tecnologia:** React 18 + TypeScript + Vite no navegador. Supabase (PostgreSQL com RLS, login e tempo real) no servidor. Toda regra de acesso e toda gravação são conferidas no banco.
 

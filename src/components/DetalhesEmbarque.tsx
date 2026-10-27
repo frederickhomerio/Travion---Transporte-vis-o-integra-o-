@@ -7,19 +7,21 @@ import { fmtData, fmtDataAsHora, fmtDataHora, fmtNum, fmtReais, fmtT, ROTULO_CAD
 import type { Embarque, Historico } from '../types';
 import { AbrirPosicoes } from './AbrirPosicoes';
 import { Contador } from './Contador';
+import { DocumentacaoEmbarque } from './doc/DocumentacaoEmbarque';
 import { FormVersionado, type DefCampo } from './FormVersionado';
 import { Alerta, BadgeStatus, Carregando, Gaveta } from './ui';
 
-type Aba = 'resumo' | 'posicao' | 'cadastro' | 'financeiro' | 'historico' | 'origem';
+type Aba = 'resumo' | 'posicao' | 'documentacao' | 'cadastro' | 'financeiro' | 'historico' | 'origem';
 
-export function DetalhesEmbarque({ embarqueId, aoFechar }: { embarqueId: string; aoFechar: () => void }) {
+export function DetalhesEmbarque({ embarqueId, aoFechar, solicitacaoDoc }: { embarqueId: string; aoFechar: () => void; solicitacaoDoc?: string | null }) {
   const { estado, pode } = useApp();
   const idx = useIndices();
   const e = estado.embarques[embarqueId];
   const posicao = useMemo(() => Object.values(estado.posicoes).find((p) => p.embarque_id === embarqueId && p.data_operacional === estado.data) ?? null,
     [estado.posicoes, embarqueId, estado.data]);
   const fin = estado.financeiro[embarqueId] ?? null;
-  const [aba, setAba] = useState<Aba>('resumo');
+  const [aba, setAba] = useState<Aba>(solicitacaoDoc ? 'documentacao' : 'resumo');
+  useEffect(() => { if (solicitacaoDoc) setAba('documentacao'); }, [solicitacaoDoc]);
   const [abrir, setAbrir] = useState(false);
 
   if (!e) return <Gaveta titulo="Embarque" aoFechar={aoFechar}><Alerta tipo="aviso">Embarque não encontrado ou fora do seu escopo.</Alerta></Gaveta>;
@@ -27,6 +29,7 @@ export function DetalhesEmbarque({ embarqueId, aoFechar }: { embarqueId: string;
   const abas: Array<[Aba, string, boolean]> = [
     ['resumo', 'Resumo', true],
     ['posicao', `Posição ${fmtData(estado.data).slice(0, 5)}`, true],
+    ['documentacao', 'Documentação', pode('documentacao.ver')],
     ['cadastro', 'Cadastro', true],
     ['financeiro', 'Financeiro', pode('financeiro.ver')],
     ['historico', 'Histórico', pode('historico.ver')],
@@ -59,6 +62,7 @@ export function DetalhesEmbarque({ embarqueId, aoFechar }: { embarqueId: string;
           {pode('posicoes.abrir') && e.situacao === 'ativo' && <button className="btn primario" onClick={() => setAbrir(true)}>Abrir posição</button>}
         </div>
       ))}
+      {aba === 'documentacao' && <DocumentacaoEmbarque embarque={e} solicitacaoInicial={solicitacaoDoc} />}
       {aba === 'cadastro' && <Cadastro e={e} idx={idx} />}
       {aba === 'financeiro' && <FinanceiroAba embarqueId={e.id} existe={!!fin} />}
       {aba === 'historico' && <HistoricoAba embarqueId={e.id} idx={idx} />}

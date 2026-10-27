@@ -12,9 +12,10 @@ import {
   type Financeiro, type Historico, type LinkCliente, type Local, type MetaDiaria, type Papel, type Perfil,
   type Permissao, type Posicao, type PosicaoPublica, type Produto, type Sessao,
 } from '../types';
+import { criarDocLocal } from './docLocal';
 import type { Api, Convite, EventoTempoReal, MatrizPermissoes, RelatorioImportacao, UsuarioAdmin } from './api';
 
-const CHAVE = 'travion-previa-v5';
+const CHAVE = 'travion-previa-v6';
 const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
@@ -41,6 +42,11 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['cadastros.gerenciar', 'Administração', 'Gerenciar clientes, filiais, comerciais, produtos e locais'],
   ['usuarios.gerenciar', 'Administração', 'Gerenciar usuários, convites e matriz de permissões'],
   ['configuracoes.gerenciar', 'Administração', 'Alterar configurações gerais (capacidade padrão, meta padrão etc.)'],
+  ['documentacao.ver', 'Documentação', 'Consultar a documentação dos embarques (solicitações, pendências e documentos emitidos)'],
+  ['documentacao.solicitar', 'Documentação', 'Pedir geração de lote e emissão de documentos e responder pendências do apoio'],
+  ['documentacao.cancelar', 'Documentação', 'Cancelar solicitações de documentação (com motivo)'],
+  ['apoio.pagina', 'Documentação', 'Acessar a aba Apoio Operacional (fila de demandas)'],
+  ['apoio.atender', 'Documentação', 'Assumir e atender demandas: registrar lote, pedir ajuste, anexar e liberar documentos'],
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
 
 /** Mesma matriz inicial de supabase/migrations/20261026000200_permissoes.sql */
@@ -48,17 +54,19 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
   gestor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
-    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina'],
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
+    'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
-    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina'],
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar'],
   embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
-    'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar'],
-  operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional'],
+    'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar'],
+  apoio: ['embarques.ver', 'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar'],
+  operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional', 'documentacao.ver'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
-    'posicoes.pagina', 'posicoes.editar_contadores'],
+    'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar'],
   consulta: ['embarques.ver'],
 };
 
@@ -120,9 +128,10 @@ function semear(): Banco {
   const perfis: Perfil[] = [
     ['Administrador (prévia)', 'administrador'], ['Gestor Rio Verde (prévia)', 'gestor'], ['Operação Rio Verde (prévia)', 'operacao'],
     ['Coordenador Comercial Ana (prévia)', 'comercial'], ['Consulta interna (prévia)', 'consulta'],
-    ['Supervisor Jataí (prévia)', 'supervisor'], ['Embarcador Montividiu (prévia)', 'embarcador'],
+    ['Supervisor Jataí (prévia)', 'supervisor'], ['Comercial de Fretes Montividiu (prévia)', 'embarcador'],
+    ['Lúcia · Apoio Operacional (prévia)', 'apoio'], ['Paulo · Apoio Operacional (prévia)', 'apoio'],
   ].map(([nome, papel], i) => ({
-    id: `perfil-${i}`, nome, email: `${papel}@previa.local`, papel: papel as Papel, status: 'ativo',
+    id: `perfil-${i}`, nome, email: i === 8 ? 'apoio2@previa.local' : `${papel}@previa.local`, papel: papel as Papel, status: 'ativo',
     comercial_id: papel === 'comercial' ? comerciais[0].id : null, criado_em: agora(),
   }));
   const perfilFiliais = [
@@ -130,6 +139,7 @@ function semear(): Banco {
     { perfil_id: 'perfil-2', filial_id: filiais[0].id }, { perfil_id: 'perfil-4', filial_id: filiais[0].id },
     { perfil_id: 'perfil-4', filial_id: filiais[1].id }, { perfil_id: 'perfil-5', filial_id: filiais[1].id },
     { perfil_id: 'perfil-5', filial_id: filiais[2].id }, { perfil_id: 'perfil-6', filial_id: filiais[3].id },
+    ...['perfil-7', 'perfil-8'].flatMap((perfil_id) => filiais.map((f) => ({ perfil_id, filial_id: f.id }))),
   ];
   const papelPermissoes = Object.entries(MATRIZ_INICIAL).flatMap(([papel, ps]) => ps.map((chave) => ({ papel: papel as Papel, chave })));
 
@@ -385,8 +395,24 @@ export function criarLocalApi(): Api {
     return { criadas, ja_existiam: ja, sem_posicao_anterior: semAnt };
   }
 
+  const doc = criarDocLocal({
+    perfil, tem, veEmbarque,
+    embarques: () => db.embarques,
+    retrato: (e) => {
+      const n = <T extends { id: string; nome: string }>(xs: T[] | undefined, id: string | null | undefined) => (id ? xs?.find((x) => x.id === id)?.nome ?? null : null);
+      const filial = db.filiais.find((f) => f.id === e.filial_id);
+      return {
+        codigo: e.codigo, cliente: n(db.clientes, e.cliente_id), carteira: n(db.comerciais, e.comercial_id), filial: filial?.nome ?? null,
+        centro_custo: n(db.centros_custo, filial?.centro_custo_id), origem_cidade: e.origem_cidade, origem_uf: e.origem_uf,
+        coleta: n(db.locais, e.local_coleta_id), destino_cidade: e.destino_cidade, destino_uf: e.destino_uf, entrega: n(db.locais, e.local_entrega_id),
+        produto: n(db.produtos, e.produto_id), filial_id: e.filial_id, centro_custo_id: filial?.centro_custo_id ?? null, cliente_id: e.cliente_id,
+      };
+    },
+  });
+
   const api: Api = {
     modo: 'local',
+    doc,
 
     async sessaoAtual() {
       const p = perfil();
@@ -896,7 +922,9 @@ export const PERFIS_PREVIA = [
   { email: 'administrador@previa.local', rotulo: 'Administrador', descricao: 'Acesso completo' },
   { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra, suspende e encerra embarques, com financeiro' },
   { email: 'supervisor@previa.local', rotulo: 'Supervisor', descricao: 'Filiais Jataí e Itumbiara: posições de embarque e cadastro de embarques' },
-  { email: 'embarcador@previa.local', rotulo: 'Embarcador', descricao: 'Filial Montividiu: cadastra embarques, vê frete motorista e margem, anuncia' },
+  { email: 'embarcador@previa.local', rotulo: 'Comercial de Fretes', descricao: 'Filial Montividiu: cadastra embarques, pede lote e emissão, vê frete motorista e margem' },
+  { email: 'apoio@previa.local', rotulo: 'Apoio Operacional (Lúcia)', descricao: 'Todas as filiais: fila de demandas, lote e emissão' },
+  { email: 'apoio2@previa.local', rotulo: 'Apoio Operacional (Paulo)', descricao: 'Todas as filiais: outro atendente, para testar quem assume primeiro' },
   { email: 'operacao@previa.local', rotulo: 'Operação', descricao: 'Filial Rio Verde: contadores e observação operacional' },
   { email: 'comercial@previa.local', rotulo: 'Coordenador Comercial', descricao: 'Carteira [DEMO] Ana: cadastra embarques e suspende fretes' },
   { email: 'consulta@previa.local', rotulo: 'Consulta interna', descricao: 'Somente leitura nas filiais Rio Verde e Jataí' },

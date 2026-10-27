@@ -4,6 +4,7 @@ import { PERFIS_PREVIA } from '../data/localApi';
 import { useApp } from '../data/store';
 import { ROTULO_PAPEL } from '../lib/formato';
 import { NovaVersao } from './NovaVersao';
+import { Sino } from './doc/Sino';
 import { Icone, Logo } from './ui';
 
 const ROTULO_CONEXAO = {
@@ -28,6 +29,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
           <NavLink to="/dashboard"><Icone nome="painel" />Dashboard Operacional</NavLink>
           {pode('posicoes.pagina') && <NavLink to="/posicoes"><Icone nome="caminhao" />Posições de Embarque</NavLink>}
           {pode('compartilhamento.preparar') && <NavLink to="/posicao-cliente"><Icone nome="cliente" />Posição do Cliente</NavLink>}
+          {pode('apoio.pagina') && <NavLink to="/apoio"><Icone nome="lista" />Apoio Operacional</NavLink>}
           <div className="grupo">Em breve</div>
           <span className="em-breve" aria-disabled="true"><span style={{ display: 'flex', gap: 10 }}><Icone nome="analise" />Análise</span><span className="badge info">Em breve</span></span>
           {admin && <><div className="grupo">Gestão</div><NavLink to="/admin"><Icone nome="config" />Administração</NavLink></>}
@@ -53,6 +55,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
         <header className="topo">
           <span className="so-celular"><Logo tam={26} /></span>
           {aoLadoTitulo ? <div className="topo-titulo"><h1>{titulo}</h1>{aoLadoTitulo}</div> : <h1>{titulo}</h1>}
+          <Sino />
           <span className={`conexao ${estado.conexao}`} title="Estado da conexão com o servidor">{ROTULO_CONEXAO[estado.conexao]}</span>
           {acoes}
         </header>
@@ -68,6 +71,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
         <NavLink to="/" end><Icone nome="lista" />Fretes</NavLink>
         <NavLink to="/dashboard"><Icone nome="painel" />Dashboard</NavLink>
         {pode('posicoes.pagina') && <NavLink to="/posicoes"><Icone nome="caminhao" />Posições</NavLink>}
+        {pode('apoio.pagina') && <NavLink to="/apoio"><Icone nome="lista" />Apoio</NavLink>}
         <NavLink to="/mais"><Icone nome="config" />Mais</NavLink>
       </nav>
     </div>

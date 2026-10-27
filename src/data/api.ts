@@ -4,6 +4,7 @@
 
 import type { Cadastros } from '../lib/cadastros';
 import type {
+  AnexoDoc, CategoriaAnexo, DadosSolicitacaoDoc, LoteErp, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
   Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
@@ -50,8 +51,39 @@ export interface CotacaoCna {
 
 export type TipoCadastro = 'filial' | 'centro_custo' | 'comercial' | 'produto' | 'local' | 'cidade' | 'cliente';
 
+export interface ArquivoDoc { caminho: string; nome: string; categoria: CategoriaAnexo }
+export interface ResultadoDoc {
+  status: 'ok' | 'inicial_aberta' | 'ja_assumida' | 'indisponivel' | 'sem_alteracao';
+  registro: SolicitacaoDoc; lote?: LoteErp; repetido?: boolean;
+}
+export type EventoDoc = { tabela: 'solicitacoes' | 'lotes' | 'notificacoes' | 'detalhe'; id?: string };
+
+/** Documentação / Apoio Operacional. Toda regra é conferida no servidor (migração 1610). */
+export interface ApiDoc {
+  /** Solicitações e lotes visíveis. `desde`: só o que mudou a partir desse instante (ISO). */
+  listar(desde: string | null): Promise<{ solicitacoes: SolicitacaoDoc[]; lotes: LoteErp[] }>;
+  listarDoEmbarque(embarqueId: string): Promise<{ solicitacoes: SolicitacaoDoc[]; lotes: LoteErp[] }>;
+  /** Mensagens e anexos da solicitação (Emissão traz também as evidências da solicitação que abriu o lote). */
+  detalhe(id: string): Promise<{ mensagens: MensagemDoc[]; anexos: AnexoDoc[] }>;
+  enviarArquivo(arquivo: File): Promise<{ caminho: string; nome: string }>;
+  baixar(caminho: string): Promise<Blob>;
+  criar(embarqueId: string, dados: DadosSolicitacaoDoc, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
+  assumir(id: string): Promise<ResultadoDoc>;
+  registrarLote(id: string, numero: string): Promise<ResultadoDoc>;
+  solicitarAjuste(id: string, texto: string, referencia: string | null): Promise<ResultadoDoc>;
+  responder(id: string, texto: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
+  anexarEmitidos(id: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
+  concluir(id: string): Promise<ResultadoDoc>;
+  cancelar(id: string, motivo: string): Promise<ResultadoDoc>;
+  notificacoes(): Promise<NotificacaoApp[]>;
+  marcarLidas(ids: string[] | null): Promise<void>;
+  /** Tempo real; `aoEstado(true)` só depois da confirmação da assinatura. */
+  assinar(aoEvento: (e: EventoDoc) => void, aoEstado: (ativo: boolean) => void): () => void;
+}
+
 export interface Api {
   readonly modo: 'supabase' | 'local';
+  readonly doc: ApiDoc;
 
   // Autenticação
   sessaoAtual(): Promise<Sessao | null>;
