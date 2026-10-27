@@ -91,7 +91,8 @@ export function ModalDivulgacao({ titulo, desenhar, texto, arquivoNome, tipo = '
   const compartilhar = async () => {
     try {
       const f = await arquivo();
-      if (navigator.canShare?.({ files: [f] })) { await navigator.share({ files: [f] }); return; // só a imagem; o texto vai pelo "Copiar texto" }
+      // Compartilha só a imagem; o texto vai pelo "Copiar texto".
+      if (navigator.canShare?.({ files: [f] })) { await navigator.share({ files: [f] }); return; }
       baixar(f);
     } catch (e) { if ((e as Error).name !== 'AbortError') avisar('erro', (e as Error).message); }
   };
