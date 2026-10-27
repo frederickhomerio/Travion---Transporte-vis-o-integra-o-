@@ -46,6 +46,8 @@ export interface DadosCnpj {
 }
 export interface Local {
   id: string; nome: string; cidade: string | null; uf: string | null; tipo: TipoLocal; ativo: boolean; is_demo: boolean;
+  /** Link do Google Maps do local (vai no anúncio de frete). */
+  link_mapa?: string | null;
 }
 
 export interface Perfil {

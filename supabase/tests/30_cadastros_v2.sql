@@ -107,3 +107,22 @@ begin
   perform private.cna_aplicar('[{"NOME_PRODUTO":"SORGO","TITULO":"R$ / SACA 60 KG","UF":"GO","PRACA":"RIO VERDE","DATA":"27/10/2026","VALOR":"66.00"}]'::jsonb);
   assert (select valor_pauta_kg from produtos where cna_produto = 'SORGO' and not is_demo) = 1.1, 'atualização do dia seguinte';
 end $$;
+
+-- Link do Google Maps no local (migração 1200)
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+do $$
+declare v jsonb; l uuid;
+begin
+  v := public.salvar_cadastro('local', null, '{"nome":"Fazenda Link","cidade":"Rio Verde","uf":"GO","tipo":"coleta","link_mapa":" https://maps.app.goo.gl/abc "}'::jsonb, false);
+  l := (v ->> 'id')::uuid;
+  assert (select link_mapa from public.locais where id = l) = 'https://maps.app.goo.gl/abc', 'link_mapa salvo sem espaços';
+  perform public.salvar_cadastro('local', l, '{"link_mapa":""}'::jsonb, false);
+  assert (select link_mapa from public.locais where id = l) is null, 'link vazio vira nulo';
+  begin
+    perform public.salvar_cadastro('local', l, '{"link_mapa":"javascript:alert(1)"}'::jsonb, false);
+    raise exception 'deveria recusar link sem https';
+  exception when sqlstate '22023' then null;
+  end;
+end $$;
+reset role;

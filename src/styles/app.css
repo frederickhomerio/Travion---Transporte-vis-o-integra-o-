@@ -337,3 +337,22 @@ textarea.entrada { min-height: 80px; resize: vertical; }
 
 /* Aviso de versão nova publicada */
 .faixa-versao { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 20px; background: var(--vinho); color: #fff; font-weight: 600; }
+
+/* Lista de Fretes (vitrine de fretes liberados) */
+.ponto-rota .cidade { font-weight: 800; font-style: italic; letter-spacing: 0.01em; color: var(--vinho); }
+.ponto-rota .local { font-size: 0.8rem; font-weight: 700; font-style: italic; color: var(--dourado-escuro); }
+.tabela-fretes th.n-frete, .tabela-fretes td.n-frete { text-align: right; white-space: nowrap; }
+.frete-valor { font-weight: 800; font-variant-numeric: tabular-nums; }
+.frete-valor small { font-weight: 500; color: var(--texto-suave); }
+.botoes-anuncio { flex-wrap: nowrap; justify-content: flex-end; }
+.btn-whats { background: #1f8f4e; border-color: #1f8f4e; color: #fff; }
+.btn-whats:hover { background: #18733e; }
+.cartao-frete .rota-anuncio { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; row-gap: 6px; align-items: baseline; margin-bottom: 8px; }
+.rot-rota { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cinza-500); }
+.cartao-frete .botoes-anuncio { margin-top: 10px; justify-content: stretch; }
+.cartao-frete .botoes-anuncio .btn { flex: 1; justify-content: center; }
+.detalhes-rapidos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.detalhes-rapidos .cont-box { background: var(--cinza-50); border: 1px solid var(--cinza-200); border-radius: 10px; padding: 10px; text-align: center; }
+.detalhes-rapidos .rot { font-size: 0.72rem; font-weight: 700; color: var(--cinza-600); text-transform: uppercase; }
+.detalhes-rapidos .grande { font-size: 1.6rem; font-weight: 800; }
+.anuncio-canvas { display: block; width: 100%; max-width: 320px; height: auto; margin: 0 auto; border-radius: 10px; box-shadow: var(--sombra); }

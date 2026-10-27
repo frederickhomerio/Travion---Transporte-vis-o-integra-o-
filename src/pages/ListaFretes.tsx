@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
 import { BarraFiltros } from '../components/Filtros';
-import { Contador } from '../components/Contador';
 import { Layout } from '../components/Layout';
 import { AbrirPosicoes } from '../components/AbrirPosicoes';
+import { ImagemAnuncio, copiarTextoWhatsApp } from '../components/AnuncioFrete';
 import { DetalhesEmbarque } from '../components/DetalhesEmbarque';
 import { NovoEmbarque } from '../components/NovoEmbarque';
-import { Alerta, BadgeStatus, Carregando, EstadoVazio, Icone, Segmentado } from '../components/ui';
+import { Alerta, Carregando, EstadoVazio, Icone, Modal, Segmentado, useAviso } from '../components/ui';
 import { useApp, useIndices, useLinhas } from '../data/store';
-import { type Indices, cidadeUF, codigoEmbarque, nome } from '../lib/cadastros';
+import { type DadosAnuncio, cidadeAnuncio, semDemo, textoWhatsApp, valorFrete, UNIDADE_ANUNCIO } from '../lib/anuncio';
+import { type Indices, codigoEmbarque, nome } from '../lib/cadastros';
 import { resumir } from '../lib/calculos';
 import { aplicarFiltros } from '../lib/filtros';
-import { fmtData, fmtT } from '../lib/formato';
-import type { LinhaFrete } from '../types';
+import { fmtT } from '../lib/formato';
+import type { Financeiro, LinhaFrete } from '../types';
 
 type Agrupar = 'nenhum' | 'cliente' | 'filial';
 const CHAVE_AGRUPAR = 'travion-agrupar';
@@ -20,16 +21,30 @@ export function ListaFretes() {
   const { estado, pode } = useApp();
   const idx = useIndices();
   const todas = useLinhas();
-  const linhas = useMemo(() => aplicarFiltros(todas, estado.filtros, idx), [todas, estado.filtros, idx]);
+  // Vitrine para a equipe de campo: só fretes liberados e ativos.
+  const linhas = useMemo(() => aplicarFiltros(todas, estado.filtros, idx).filter((l) => l.embarque.status_liberacao === 'liberado' && l.embarque.situacao === 'ativo'),
+    [todas, estado.filtros, idx]);
   const [agrupar, setAgrupar] = useState<Agrupar>(() => { try { return (localStorage.getItem(CHAVE_AGRUPAR) as Agrupar) || 'nenhum'; } catch { return 'nenhum'; } });
   const [detalhe, setDetalhe] = useState<string | null>(null);
   const [abrir, setAbrir] = useState(false);
   const [novo, setNovo] = useState(false);
+  const [rapido, setRapido] = useState<string | null>(null);
+  const [imagem, setImagem] = useState<DadosAnuncio | null>(null);
+  const [textoManual, setTextoManual] = useState<string | null>(null);
+  const avisar = useAviso();
 
-  const semPosicao = todas.filter((l) => !l.posicao && l.embarque.situacao === 'ativo').length;
-  const comPosicao = todas.filter((l) => l.posicao).length;
   const r = useMemo(() => resumir(linhas, estado.config, false), [linhas, estado.config]);
-  const podeEditar = pode('posicoes.editar_contadores');
+  const dadosAnuncio = (l: LinhaFrete): DadosAnuncio => anuncioDe(l, idx, estado.financeiro[l.embarque.id] ?? null);
+  const acoesLinha: AcoesLinha = {
+    detalhes: (id) => setRapido(id),
+    imagem: (l) => setImagem(dadosAnuncio(l)),
+    whatsapp: async (l) => {
+      const d = dadosAnuncio(l);
+      if (await copiarTextoWhatsApp(d)) avisar('ok', 'Texto do anúncio copiado. Cole na conversa do WhatsApp.');
+      else setTextoManual(textoWhatsApp(d));
+    },
+  };
+  const verFrete = pode('financeiro.ver');
 
   const grupos = useMemo(() => {
     if (agrupar === 'nenhum') return [{ chave: '', titulo: '', linhas }];
@@ -70,21 +85,8 @@ export function ListaFretes() {
 
       {estado.erro && <Alerta tipo="erro"><span><strong>Erro ao carregar:</strong> {estado.erro}</span></Alerta>}
 
-      {semPosicao > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <Alerta tipo={comPosicao === 0 ? 'aviso' : 'info'}>
-            <span style={{ flex: 1 }}>
-              {comPosicao === 0
-                ? <><strong>Nenhuma posição aberta em {fmtData(estado.data)}.</strong> Os contadores não são copiados automaticamente de um dia para o outro.</>
-                : <>{semPosicao} embarque(s) ativo(s) sem posição em {fmtData(estado.data)}.</>}
-            </span>
-            {pode('posicoes.abrir') && <button className="btn peq" onClick={() => setAbrir(true)}>Abrir posições…</button>}
-          </Alerta>
-        </div>
-      )}
-
       <div className="resumo-linha" aria-live="polite">
-        <span><strong>{linhas.length}</strong> embarque(s) listado(s)</span>
+        <span><strong>{linhas.length}</strong> frete(s) liberado(s)</span>
         <span>Porta <strong className="num">{r.porta}</strong> · {fmtT(r.porta_t)}</span>
         <span>Trânsito <strong className="num">{r.transito}</strong> · {fmtT(r.transito_t)}</span>
         <span>Carregados <strong className="num">{r.carregados}</strong> · {fmtT(r.carregado_t)}</span>
@@ -93,19 +95,19 @@ export function ListaFretes() {
       </div>
 
       {estado.carregando && Object.keys(estado.embarques).length === 0 ? <Carregando /> : linhas.length === 0 ? (
-        <div className="cartao"><EstadoVazio titulo={todas.length === 0 ? 'Nenhum embarque cadastrado' : 'Nenhum embarque com estes filtros'}>
-          <p>{todas.length === 0 ? (pode('embarques.criar') ? 'Cadastre um embarque ou importe a planilha em Administração.' : 'Ainda não há embarques no seu escopo.') : 'Ajuste ou limpe os filtros.'}</p>
+        <div className="cartao"><EstadoVazio titulo={todas.length === 0 ? 'Nenhum embarque cadastrado' : 'Nenhum frete liberado'}>
+          <p>{todas.length === 0 ? (pode('embarques.criar') ? 'Cadastre um embarque ou importe a planilha em Administração.' : 'Ainda não há embarques no seu escopo.') : 'Nenhum frete liberado com estes filtros. Embarques suspensos ou sem liberação aparecem em Posições de Embarque.'}</p>
         </EstadoVazio></div>
       ) : (
         <>
           <div className="cartao tabela-fretes-wrap">
             <table className="tabela-fretes">
               <thead>
-                <tr><th>Origem</th><th>Destino</th><th className="n">Porta</th><th className="n">Trânsito</th><th className="n">Carregados</th><th className="td-acao"><span className="sr">Ações</span></th></tr>
+                <tr><th>Origem</th><th>Destino</th><th>Produto</th>{verFrete && <th className="n-frete">Frete motorista</th>}<th className="td-acao"><span className="sr">Ações</span></th></tr>
               </thead>
               <tbody>
                 {grupos.map((g) => (
-                  <GrupoTabela key={g.chave} g={g} agrupar={agrupar} idx={idx} podeEditar={podeEditar} aoDetalhe={setDetalhe} />
+                  <GrupoTabela key={g.chave} g={g} agrupar={agrupar} idx={idx} verFrete={verFrete} acoes={acoesLinha} />
                 ))}
               </tbody>
             </table>
@@ -114,13 +116,21 @@ export function ListaFretes() {
             {grupos.map((g) => (
               <div key={g.chave} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {g.titulo && <TituloGrupo titulo={g.titulo} linhas={g.linhas} idx={idx} agrupar={agrupar} />}
-                {g.linhas.map((l) => <CartaoFrete key={l.embarque.id} l={l} idx={idx} podeEditar={podeEditar} aoDetalhe={setDetalhe} />)}
+                {g.linhas.map((l) => <CartaoFrete key={l.embarque.id} l={l} idx={idx} verFrete={verFrete} acoes={acoesLinha} />)}
               </div>
             ))}
           </div>
         </>
       )}
 
+      {rapido && <DetalhesRapidos embarqueId={rapido} aoFechar={() => setRapido(null)} aoFichaCompleta={() => { setDetalhe(rapido); setRapido(null); }} />}
+      {imagem && <ImagemAnuncio dados={imagem} aoFechar={() => setImagem(null)} />}
+      {textoManual !== null && (
+        <Modal titulo="Texto para WhatsApp" aoFechar={() => setTextoManual(null)} rodape={<button className="btn primario" onClick={() => setTextoManual(null)}>Fechar</button>}>
+          <p className="pequeno suave" style={{ marginTop: 0 }}>O navegador não deixou copiar sozinho. Selecione o texto abaixo e copie.</p>
+          <textarea readOnly value={textoManual} rows={7} style={{ width: '100%' }} onFocus={(e) => e.currentTarget.select()} />
+        </Modal>
+      )}
       {detalhe && <DetalhesEmbarque embarqueId={detalhe} aoFechar={() => setDetalhe(null)} />}
       {abrir && <AbrirPosicoes aoFechar={() => setAbrir(false)} />}
       {novo && <NovoEmbarque aoFechar={(id) => { setNovo(false); if (id) setDetalhe(id); }} />}
@@ -138,44 +148,64 @@ function TituloGrupo({ titulo, linhas, idx, agrupar }: { titulo: string; linhas:
   return <div className="grupo-titulo"><span>{titulo}</span><span className="pequeno suave" style={{ fontWeight: 500 }}>{subtituloGrupo(linhas, idx, agrupar)}</span></div>;
 }
 
-function GrupoTabela({ g, agrupar, idx, podeEditar, aoDetalhe }: {
-  g: { chave: string; titulo: string; linhas: LinhaFrete[] }; agrupar: Agrupar; idx: Indices; podeEditar: boolean; aoDetalhe: (id: string) => void;
+type AcoesLinha = { detalhes: (id: string) => void; imagem: (l: LinhaFrete) => void; whatsapp: (l: LinhaFrete) => void };
+
+function anuncioDe(l: LinhaFrete, idx: Indices, fin: Financeiro | null): DadosAnuncio {
+  const e = l.embarque;
+  return {
+    origem_cidade: e.origem_cidade, origem_uf: e.origem_uf, coleta: e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null,
+    destino_cidade: e.destino_cidade, destino_uf: e.destino_uf, entrega: e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null,
+    produto: e.produto_id ? nome(idx.produto, e.produto_id) : null,
+    link_mapa: (e.local_coleta_id && idx.local.get(e.local_coleta_id)?.link_mapa) || null,
+    frete: fin ? { frete_motorista: fin.frete_motorista, unidade_frete: fin.unidade_frete } : null,
+  };
+}
+
+/** Cidade em destaque e o local entre parênteses, como no anúncio ("MONTIVIDIU-GO (FAZ. SEGREDO)"). */
+function PontoRota({ cidade, uf, local }: { cidade: string; uf: string | null; local: string | null }) {
+  return (
+    <div className="ponto-rota">
+      <div className="cidade">{cidadeAnuncio(cidade, uf).toUpperCase()}</div>
+      <div className="local">{local ? `(${semDemo(local).toUpperCase()})` : '(local a informar)'}</div>
+    </div>
+  );
+}
+
+function FreteMotorista({ fin }: { fin: Financeiro | null | undefined }) {
+  const v = valorFrete(fin ?? null);
+  if (!v) return <span className="suave pequeno">A combinar</span>;
+  const u = fin ? UNIDADE_ANUNCIO[fin.unidade_frete] : '';
+  return <span className="frete-valor">{v}{u && <small> {u}</small>}</span>;
+}
+
+function BotoesAnuncio({ l, acoes }: { l: LinhaFrete; acoes: AcoesLinha }) {
+  return (
+    <div className="grupo-btn botoes-anuncio">
+      <button className="btn peq" onClick={() => acoes.detalhes(l.embarque.id)}>Detalhes</button>
+      <button className="btn peq" onClick={() => acoes.imagem(l)} title="Gerar imagem de divulgação"><Icone nome="baixar" tam={16} />Imagem</button>
+      <button className="btn peq btn-whats" onClick={() => acoes.whatsapp(l)} title="Copiar texto do anúncio para o WhatsApp">WhatsApp</button>
+    </div>
+  );
+}
+
+function GrupoTabela({ g, agrupar, idx, verFrete, acoes }: {
+  g: { chave: string; titulo: string; linhas: LinhaFrete[] }; agrupar: Agrupar; idx: Indices; verFrete: boolean; acoes: AcoesLinha;
 }) {
+  const { estado } = useApp();
   return (
     <>
       {g.titulo && (
-        <tr className="grupo-cab"><td colSpan={6}>{g.titulo}<span className="totais">{subtituloGrupo(g.linhas, idx, agrupar)}</span></td></tr>
+        <tr className="grupo-cab"><td colSpan={verFrete ? 5 : 4}>{g.titulo}<span className="totais">{subtituloGrupo(g.linhas, idx, agrupar)}</span></td></tr>
       )}
       {g.linhas.map((l) => {
         const e = l.embarque;
         return (
-          <tr key={e.id} className={`${e.status_liberacao === 'suspenso' ? 'suspenso' : ''} ${l.posicao ? '' : 'sem-posicao'}`}>
-            <td>
-              <div className="local-cidade">{cidadeUF(e.origem_cidade, e.origem_uf)}</div>
-              <div className="local-ponto">{nome(idx.local, e.local_coleta_id, 'Coleta não informada')}</div>
-              {(e.status_liberacao === 'suspenso' || e.situacao === 'arquivado') && (
-                <div style={{ marginTop: 3, display: 'flex', gap: 4 }}>
-                  {e.status_liberacao === 'suspenso' && <BadgeStatus status="suspenso" />}
-                  {e.situacao === 'arquivado' && <span className="badge arquivado">Arquivado</span>}
-                </div>
-              )}
-            </td>
-            <td>
-              <div className="local-cidade">{cidadeUF(e.destino_cidade, e.destino_uf)}</div>
-              <div className="local-ponto">{nome(idx.local, e.local_entrega_id, 'Entrega não informada')}</div>
-            </td>
-            {l.posicao ? (
-              <>
-                <td><Contador posicao={l.posicao} campo="porta" podeEditar={podeEditar && e.situacao === 'ativo'} /></td>
-                <td><Contador posicao={l.posicao} campo="transito" podeEditar={podeEditar && e.situacao === 'ativo'} /></td>
-                <td><Contador posicao={l.posicao} campo="carregados" podeEditar={podeEditar && e.situacao === 'ativo'} /></td>
-              </>
-            ) : (
-              <td colSpan={3} className="suave pequeno" style={{ textAlign: 'center' }}>Sem posição nesta data</td>
-            )}
-            <td className="td-acao">
-              <button className="btn peq" onClick={() => aoDetalhe(e.id)} aria-label={`Detalhes de ${codigoEmbarque(e.codigo)}`}>Detalhes</button>
-            </td>
+          <tr key={e.id}>
+            <td><PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} /></td>
+            <td><PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></td>
+            <td>{semDemo(nome(idx.produto, e.produto_id))}</td>
+            {verFrete && <td className="n-frete"><FreteMotorista fin={estado.financeiro[e.id]} /></td>}
+            <td className="td-acao"><BotoesAnuncio l={l} acoes={acoes} /></td>
           </tr>
         );
       })}
@@ -183,43 +213,51 @@ function GrupoTabela({ g, agrupar, idx, podeEditar, aoDetalhe }: {
   );
 }
 
-function CartaoFrete({ l, idx, podeEditar, aoDetalhe }: { l: LinhaFrete; idx: Indices; podeEditar: boolean; aoDetalhe: (id: string) => void }) {
+function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaFrete; idx: Indices; verFrete: boolean; acoes: AcoesLinha }) {
+  const { estado } = useApp();
   const e = l.embarque;
-  const editar = podeEditar && e.situacao === 'ativo';
   return (
-    <article className="cartao cartao-frete" style={e.status_liberacao === 'suspenso' ? { borderLeft: '4px solid var(--vermelho-700)' } : undefined}>
-      <div className="rota">
-        <div>
-          <div className="local-cidade">{cidadeUF(e.origem_cidade, e.origem_uf)}</div>
-          <div className="local-ponto">{nome(idx.local, e.local_coleta_id, 'Coleta não informada')}</div>
-        </div>
-        <span className="seta"><Icone nome="seta" tam={18} /></span>
-        <div>
-          <div className="local-cidade">{cidadeUF(e.destino_cidade, e.destino_uf)}</div>
-          <div className="local-ponto">{nome(idx.local, e.local_entrega_id, 'Entrega não informada')}</div>
-        </div>
+    <article className="cartao cartao-frete">
+      <div className="rota-anuncio">
+        <span className="rot-rota">Origem</span>
+        <PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} />
+        <span className="rot-rota">Destino</span>
+        <PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} />
       </div>
-      {l.posicao ? (
-        <div className="contadores">
-          {(['porta', 'transito', 'carregados'] as const).map((c) => (
-            <div key={c} className="cont-box">
-              <div className="rot">{c === 'porta' ? 'Porta' : c === 'transito' ? 'Trânsito' : 'Carregados'}</div>
-              <Contador posicao={l.posicao!} campo={c} podeEditar={editar} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="suave pequeno">Sem posição nesta data.</div>
-      )}
       <div className="rodape">
-        <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', minWidth: 0 }}>
-          {e.status_liberacao === 'suspenso' && <BadgeStatus status="suspenso" />}
-          {e.situacao === 'arquivado' && <span className="badge arquivado">Arquivado</span>}
-          <span className="pequeno suave" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nome(idx.cliente, e.cliente_id)}</span>
-        </span>
-        <button className="btn peq" onClick={() => aoDetalhe(e.id)}>Detalhes</button>
+        <span className="pequeno suave">{semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))}</span>
+        {verFrete && <FreteMotorista fin={estado.financeiro[e.id]} />}
       </div>
+      <BotoesAnuncio l={l} acoes={acoes} />
     </article>
+  );
+}
+
+/** Detalhes rápidos para a equipe de campo: veículos na porta, em trânsito e observações. */
+function DetalhesRapidos({ embarqueId, aoFechar, aoFichaCompleta }: { embarqueId: string; aoFechar: () => void; aoFichaCompleta: () => void }) {
+  const { estado } = useApp();
+  const idx = useIndices();
+  const e = estado.embarques[embarqueId];
+  const p = Object.values(estado.posicoes).find((x) => x.embarque_id === embarqueId && x.data_operacional === estado.data) ?? null;
+  if (!e) return null;
+  const cap = p?.toneladas_por_veiculo ?? e.toneladas_por_veiculo;
+  const box = (rot: string, v: number | null | undefined) => (
+    <div className="cont-box"><div className="rot">{rot}</div><div className="num grande">{v ?? '—'}</div><div className="pequeno suave">{v ? fmtT(v * cap) : ''}</div></div>
+  );
+  const obs = [e.observacao_interna, p?.obs_operacional].filter(Boolean) as string[];
+  return (
+    <Modal titulo={`${cidadeAnuncio(e.origem_cidade, e.origem_uf)} ➜ ${cidadeAnuncio(e.destino_cidade, e.destino_uf)}`} aoFechar={aoFechar} rodape={
+      <><button className="btn" onClick={aoFichaCompleta}>Ficha completa</button><button className="btn primario" onClick={aoFechar}>Fechar</button></>
+    }>
+      <div className="pequeno suave" style={{ marginBottom: 10 }}>
+        {codigoEmbarque(e.codigo)} · {semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))} · {semDemo(nome(idx.cliente, e.cliente_id))}
+      </div>
+      {p ? (
+        <div className="detalhes-rapidos">{box('Na porta', p.porta)}{box('Em trânsito', p.transito)}{box('Carregados', p.carregados)}</div>
+      ) : <Alerta tipo="info">Sem posição aberta nesta data: ainda não há contagem de veículos.</Alerta>}
+      <h3 className="pequeno" style={{ margin: '14px 0 4px' }}>Observação do embarque</h3>
+      {obs.length ? obs.map((o) => <p key={o} style={{ margin: '0 0 6px', whiteSpace: 'pre-wrap' }}>{o}</p>) : <p className="suave" style={{ margin: 0 }}>Sem observação.</p>}
+    </Modal>
   );
 }
 

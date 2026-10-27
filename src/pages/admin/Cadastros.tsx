@@ -45,6 +45,7 @@ const DEF: Record<TipoCadastro, { rotulo: string; lista: Lista; campos: DefCampo
   local: { rotulo: 'Locais de coleta/entrega', lista: 'locais', nota: 'Armazéns, fazendas e terminais. São criados ao digitar no novo embarque; aqui você corrige nomes ou desativa.', campos: [
     { campo: 'nome', rotulo: 'Nome', obrigatorio: true }, { campo: 'cidade', rotulo: 'Cidade' }, { campo: 'uf', rotulo: 'UF', tipo: 'uf' },
     { campo: 'tipo', rotulo: 'Uso', tipo: 'select', opcoes: [{ v: 'ambos', r: 'Coleta e entrega' }, { v: 'coleta', r: 'Coleta' }, { v: 'entrega', r: 'Entrega' }] },
+    { campo: 'link_mapa', rotulo: 'Link do Google Maps (vai no anúncio)' },
     { campo: 'ativo', rotulo: 'Ativo', tipo: 'bool' },
   ] },
 };

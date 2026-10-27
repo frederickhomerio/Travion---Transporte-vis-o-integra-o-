@@ -102,7 +102,7 @@ function semear(): Banco {
   const loc = (nome: string, cidade: string, uf: string, tipo: Local['tipo']): Local => ({ id: uid(), nome, cidade, uf, tipo, ativo: true, is_demo: true });
   const locais = [
     loc('[DEMO] Armazém Norte', 'Rio Verde', 'GO', 'coleta'), loc('[DEMO] Fazenda Boa Vista', 'Jataí', 'GO', 'coleta'),
-    loc('[DEMO] Silo Central', 'Itumbiara', 'GO', 'coleta'), loc('[DEMO] Fazenda Serra', 'Montividiu', 'GO', 'coleta'),
+    loc('[DEMO] Silo Central', 'Itumbiara', 'GO', 'coleta'), { ...loc('[DEMO] Fazenda Serra', 'Montividiu', 'GO', 'coleta'), link_mapa: 'https://maps.app.goo.gl/a4n1Z1LzwwtDoMaZ7' },
     loc('[DEMO] Terminal Porto', 'Santos', 'SP', 'entrega'), loc('[DEMO] Indústria Sul', 'Uberaba', 'MG', 'entrega'),
     loc('[DEMO] Ferrovia Leste', 'Araguari', 'MG', 'entrega'), loc('[DEMO] Usina Oeste', 'Quirinópolis', 'GO', 'entrega'),
   ];
@@ -142,7 +142,7 @@ function semear(): Banco {
       id, codigo: i + 1, cliente_id: clientes[l[0]].id, comercial_id: clientes[l[0]].comercial_id, filial_id: filiais[l[1]].id,
       produto_id: produtos[l[2]].id, origem_cidade: l[3], origem_uf: 'GO', local_coleta_id: locais[l[4]].id,
       destino_cidade: l[5], destino_uf: l[6], local_entrega_id: locais[l[7]].id, status_liberacao: l[8], data_liberacao: null,
-      cadencia_valor: l[9], cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: 40, observacao_interna: null,
+      cadencia_valor: l[9], cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: 40, observacao_interna: i === 6 ? 'Carregamento das 7h às 17h. Levar lona e EPI.' : null,
       situacao: 'ativo', is_demo: true, chave_importacao: null, versao: 1, atualizado_em: agora(), atualizado_por_nome: 'Demonstração',
     });
     financeiro.push({ embarque_id: id, frete_empresa: l[10], frete_motorista: l[11], unidade_frete: 'rs_tonelada',
