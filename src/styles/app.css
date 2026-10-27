@@ -345,7 +345,11 @@ textarea.entrada { min-height: 80px; resize: vertical; }
 .frete-valor { font-weight: 800; font-variant-numeric: tabular-nums; }
 .frete-valor small { font-weight: 500; color: var(--texto-suave); }
 .botoes-anuncio { flex-wrap: nowrap; justify-content: flex-end; }
-.cartao-frete .rota-anuncio { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; row-gap: 6px; align-items: baseline; margin-bottom: 8px; }
+.cartao-frete .rota-anuncio { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); column-gap: 8px; align-items: center; margin-bottom: 8px; }
+.cartao-frete .rota-anuncio .seta { color: var(--dourado-escuro); font-size: 0.9rem; }
+.cartao-frete .rota-anuncio .rot-rota { display: block; margin-bottom: 2px; }
+.cartao-frete .ponto-rota .cidade { font-size: 0.8rem; white-space: normal; overflow-wrap: anywhere; }
+.cartao-frete .ponto-rota .local { font-size: 0.68rem; }
 .rot-rota { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cinza-500); }
 .cartao-frete .botoes-anuncio { margin-top: 10px; justify-content: stretch; }
 .cartao-frete .botoes-anuncio .btn { flex: 1; justify-content: center; }

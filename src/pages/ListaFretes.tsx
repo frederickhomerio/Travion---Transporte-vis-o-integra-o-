@@ -286,10 +286,11 @@ function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaFrete; idx: Indices;
   return (
     <article className="cartao cartao-frete">
       <div className="rota-anuncio">
-        <span className="rot-rota">Origem</span>
-        <PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} />
-        <span className="rot-rota">Destino</span>
-        <PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} />
+        <div><span className="rot-rota">Origem</span>
+          <PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} /></div>
+        <span className="seta" aria-hidden="true">➜</span>
+        <div><span className="rot-rota">Destino</span>
+          <PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></div>
       </div>
       <div className="rodape">
         <span className="pequeno suave">{semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))}</span>
