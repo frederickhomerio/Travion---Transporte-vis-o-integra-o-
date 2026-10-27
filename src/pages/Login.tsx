@@ -60,7 +60,7 @@ export function Login() {
               {PERFIS_PREVIA.map((p) => (
                 <button key={p.email} className="btn" style={{ justifyContent: 'space-between', height: 'auto', padding: '10px 14px' }}
                   onClick={() => void api.entrar(p.email, '').then(() => nav('/'))}>
-                  <span style={{ textAlign: 'left' }}><strong>{p.rotulo}</strong><br /><span className="suave pequeno" style={{ fontWeight: 400 }}>{p.descricao}</span></span>
+                  <span style={{ textAlign: 'left', whiteSpace: 'normal', minWidth: 0 }}><strong>{p.rotulo}</strong><br /><span className="suave pequeno" style={{ fontWeight: 400 }}>{p.descricao}</span></span>
                   <span aria-hidden="true">→</span>
                 </button>
               ))}
