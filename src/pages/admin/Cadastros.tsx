@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
 import { Alerta, EstadoVazio, Modal, Segmentado, useAviso } from '../../components/ui';
-import { mensagemErro, type TipoCadastro } from '../../data/api';
+import { mensagemErro, type LogoCandidata, type TipoCadastro } from '../../data/api';
 import { useApp, useIndices } from '../../data/store';
 import { cnpjValido, formatarCnpj, formatarTelefone, mascaraCnpj, nome } from '../../lib/cadastros';
-import { dominioDoEmail, reduzirImagem, urlLogoDoSite } from '../../lib/cnpj';
+import { dominioDoEmail, reduzirDataUrl, reduzirImagem } from '../../lib/cnpj';
 import { fmtData, fmtDataHora, fmtReais, hojeSP } from '../../lib/formato';
 import { contem, parseNumeroBR } from '../../lib/texto';
 import type { Cliente, DadosCnpj } from '../../types';
@@ -81,7 +81,7 @@ export function Cadastros() {
                 <tbody>
                   {(lista as unknown as Cliente[]).map((r) => (
                     <tr key={r.id} style={r.ativo ? undefined : { opacity: 0.6 }}>
-                      <td style={{ width: 44 }}><LogoCliente url={r.logo_url} nome={r.nome} /></td>
+                      <td style={{ width: 84 }}><LogoCliente url={r.logo_url} nome={r.nome} /></td>
                       <td><strong>{r.nome}</strong>{r.razao_social && r.razao_social !== r.nome && <div className="pequeno suave">{r.razao_social}</div>}</td>
                       <td className="num">{r.documento ? formatarCnpj(r.documento) : <span className="suave">Pendente</span>}</td>
                       <td>{nome(idx.comercial, r.comercial_id, 'Sem comercial')}</td>
@@ -116,11 +116,12 @@ export function Cadastros() {
   );
 }
 
-function LogoCliente({ url, nome: n, tam = 36 }: { url?: string | null; nome: string; tam?: number }) {
+function LogoCliente({ url, nome: n, tam = 36, larg }: { url?: string | null; nome: string; tam?: number; larg?: number }) {
   const [falhou, setFalhou] = useState(false);
   if (url && !falhou) {
-    return <img src={url} alt={`Logo ${n}`} width={tam} height={tam} onError={() => setFalhou(true)}
-      style={{ objectFit: 'contain', borderRadius: 8, background: '#fff', border: '1px solid var(--borda)' }} />;
+    // Logo inteira, sem corte: caixa retangular com a imagem contida.
+    return <img src={url} alt={`Logo ${n}`} width={larg ?? tam * 2} height={tam} onError={() => setFalhou(true)}
+      style={{ objectFit: 'contain', borderRadius: 8, background: '#fff', border: '1px solid var(--borda)', padding: 3 }} />;
   }
   const iniciais = n.replace(/\[[^\]]*\]/g, '').split(/\s+/).filter((p) => /^[\p{L}\d]/u.test(p)).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || '?';
   return (
@@ -259,6 +260,8 @@ function EditarCliente({ registro, aoFechar }: { registro: Cliente | null; aoFec
   const [dadosReceita, setDadosReceita] = useState<DadosCnpj | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [site, setSite] = useState(() => dominioDoEmail(registro?.email) ?? '');
+  const [logos, setLogos] = useState<LogoCandidata[] | null>(null);
+  const [buscandoLogo, setBuscandoLogo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -301,11 +304,14 @@ function EditarCliente({ registro, aoFechar }: { registro: Cliente | null; aoFec
     try { set('logo_url', await reduzirImagem(f)); } catch (e) { setErro(mensagemErro(e)); }
   }
 
-  function buscarLogo() {
-    const url = urlLogoDoSite(site);
-    if (!url) { setErro('Informe o site da empresa (ex.: empresa.com.br) para buscar a logo.'); return; }
-    setErro(null);
-    set('logo_url', url);
+  async function buscarLogo() {
+    if (!/^[\w.-]+\.[a-z]{2,}/i.test(site.trim().replace(/^https?:\/\//, ''))) { setErro('Informe o site da empresa (ex.: empresa.com.br) para buscar a logo.'); return; }
+    setErro(null); setLogos(null); setBuscandoLogo(true);
+    try { setLogos(await api.buscarLogos(site)); } catch (e) { setErro(mensagemErro(e)); } finally { setBuscandoLogo(false); }
+  }
+
+  async function escolherLogo(c: LogoCandidata) {
+    try { set('logo_url', await reduzirDataUrl(c.dataUrl)); setLogos(null); } catch (e) { setErro(mensagemErro(e)); }
   }
 
   async function salvar() {
@@ -403,20 +409,35 @@ function EditarCliente({ registro, aoFechar }: { registro: Cliente | null; aoFec
 
       <h3 className="titulo-secao-form">4. Logo</h3>
       <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-        <LogoCliente key={String(d.logo_url)} url={d.logo_url as string} nome={String(d.nome || '?')} tam={72} />
+        <LogoCliente key={String(d.logo_url)} url={d.logo_url as string} nome={String(d.nome || '?')} tam={72} larg={180} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 260px' }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <input className="entrada" style={{ flex: '1 1 180px' }} placeholder="site da empresa (ex.: empresa.com.br)" value={site} onChange={(e) => setSite(e.target.value)} />
-            <button type="button" className="btn secundario" onClick={buscarLogo}>Buscar logo pelo site</button>
+            <button type="button" className="btn secundario" disabled={buscandoLogo} onClick={buscarLogo}>{buscandoLogo ? 'Procurando…' : 'Buscar logo no site'}</button>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button type="button" className="btn terciario" onClick={() => arquivo.current?.click()}>Enviar imagem</button>
             {d.logo_url ? <button type="button" className="btn sutil" onClick={() => set('logo_url', '')}>Remover logo</button> : null}
             <input ref={arquivo} type="file" accept="image/*" hidden onChange={(e) => void enviarLogo(e.target.files?.[0])} />
           </div>
-          <small className="suave">A busca usa o ícone oficial publicado no site da empresa. Se não ficar bom, envie a imagem.</small>
+          <small className="suave">A busca abre o site da empresa e traz as imagens de logo que ele publica. Escolha a que estiver completa; se nenhuma servir, envie a imagem.</small>
         </div>
       </div>
+      {logos && (
+        <div>
+          <p className="pequeno" style={{ margin: '4px 0 8px' }}><strong>Escolha a logo ({logos.length} encontrada{logos.length > 1 ? 's' : ''}):</strong></p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+            {logos.map((c) => (
+              <button key={c.url} type="button" onClick={() => void escolherLogo(c)} title={c.url}
+                style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', padding: 8, borderRadius: 10, border: '1px solid var(--borda)', background: '#fff', cursor: 'pointer', minHeight: 44 }}>
+                <img src={c.dataUrl} alt="" style={{ width: '100%', height: 70, objectFit: 'contain' }} />
+                <span className="pequeno suave">{c.origem}</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn sutil peq" onClick={() => setLogos(null)}>Fechar opções</button>
+        </div>
+      )}
 
       {erro && <Alerta tipo="erro">{erro}</Alerta>}
     </Modal>

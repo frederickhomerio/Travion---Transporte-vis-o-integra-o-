@@ -44,31 +44,37 @@ export function dominioDoEmail(email: string | null | undefined): string | null 
   return dom;
 }
 
-/** Ícone oficial publicado pelo site da empresa (serviço público do Google). */
-export function urlLogoDoSite(site: string): string | null {
-  const dom = site.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
-  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(dom)) return null;
-  return `https://www.google.com/s2/favicons?domain=${dom}&sz=256`;
+/**
+ * Reduz a imagem para no máximo `max` px no lado maior, mantendo a proporção (sem cortar),
+ * e devolve em data URL pequena o bastante para ficar no cadastro.
+ */
+export function reduzirDataUrl(dataUrl: string, max = 480): Promise<string> {
+  return new Promise((ok, falha) => {
+    const img = new Image();
+    img.onerror = () => falha(new Error('Arquivo de imagem inválido.'));
+    img.onload = () => {
+      // SVG sem tamanho declarado chega com 0 px: usa um tamanho de referência.
+      const w0 = img.naturalWidth || 400;
+      const h0 = img.naturalHeight || 200;
+      const k = Math.min(1, max / Math.max(w0, h0));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w0 * k));
+      c.height = Math.max(1, Math.round(h0 * k));
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+      let saida = c.toDataURL('image/png');
+      if (saida.length > 280000) saida = c.toDataURL('image/webp', 0.85);
+      if (saida.length > 280000) saida = c.toDataURL('image/jpeg', 0.8);
+      ok(saida);
+    };
+    img.src = dataUrl;
+  });
 }
 
-/** Reduz a imagem enviada para no máximo 240 px e devolve em data URL (cabe no cadastro). */
-export function reduzirImagem(arquivo: File, max = 240): Promise<string> {
+export function reduzirImagem(arquivo: File, max = 480): Promise<string> {
   return new Promise((ok, falha) => {
     const leitor = new FileReader();
     leitor.onerror = () => falha(new Error('Não foi possível ler a imagem.'));
-    leitor.onload = () => {
-      const img = new Image();
-      img.onerror = () => falha(new Error('Arquivo de imagem inválido.'));
-      img.onload = () => {
-        const k = Math.min(1, max / Math.max(img.width, img.height));
-        const c = document.createElement('canvas');
-        c.width = Math.max(1, Math.round(img.width * k));
-        c.height = Math.max(1, Math.round(img.height * k));
-        c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-        ok(c.toDataURL('image/png'));
-      };
-      img.src = String(leitor.result);
-    };
+    leitor.onload = () => { reduzirDataUrl(String(leitor.result), max).then(ok, falha); };
     leitor.readAsDataURL(arquivo);
   });
 }

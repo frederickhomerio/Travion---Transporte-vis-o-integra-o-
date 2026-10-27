@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Cadastros } from '../lib/cadastros';
 import { consultarCnpjBrasilApi } from '../lib/cnpj';
 import { CONFIG_PADRAO, type Configuracoes, type DadosCnpj, type Perfil, type Permissao, type Sessao } from '../types';
-import type { Api, EstadoConexao, EventoTempoReal } from './api';
+import type { Api, EstadoConexao, EventoTempoReal, LogoCandidata } from './api';
 
 const COLUNAS_EMBARQUE =
   'id,codigo,cliente_id,comercial_id,filial_id,produto_id,origem_cidade,origem_uf,local_coleta_id,destino_cidade,destino_uf,' +
@@ -164,6 +164,12 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
     obterLocal: (nome, cidade, uf, tipo, demo) =>
       rpc('obter_local', { p_nome: nome, p_cidade: cidade, p_uf: uf, p_tipo: tipo, p_is_demo: demo }),
     obterCidade: (nome, uf, demo) => rpc('obter_cidade', { p_nome: nome, p_uf: uf, p_is_demo: demo }),
+    async buscarLogos(site) {
+      const { data, error } = await sb.functions.invoke('buscar-logo', { body: { site } });
+      if (!error) return (data as { candidatas: LogoCandidata[] }).candidatas;
+      const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
+      throw new Error(corpo?.erro ?? 'A busca de logo não respondeu. Tente de novo ou envie a imagem.');
+    },
     async consultarCnpj(cnpj) {
       const { data, error } = await sb.functions.invoke('consulta-cnpj', { body: { cnpj } });
       if (!error) return data as DadosCnpj;

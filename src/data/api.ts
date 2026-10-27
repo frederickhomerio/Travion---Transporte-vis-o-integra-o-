@@ -39,6 +39,8 @@ export interface RelatorioImportacao {
 
 export interface ResultadoAbertura { criadas: number; ja_existiam: number; sem_posicao_anterior: number }
 
+export interface LogoCandidata { url: string; origem: string; dataUrl: string }
+
 export type TipoCadastro = 'filial' | 'comercial' | 'produto' | 'local' | 'cidade' | 'cliente';
 
 export interface Api {
@@ -77,6 +79,8 @@ export interface Api {
   obterCidade(nome: string, uf: string | null, demo: boolean): Promise<string | null>;
   /** Consulta dados públicos do CNPJ (Receita Federal e inscrição estadual). */
   consultarCnpj(cnpj: string): Promise<DadosCnpj>;
+  /** Procura a logo no site da empresa e devolve as imagens candidatas já baixadas. */
+  buscarLogos(site: string): Promise<LogoCandidata[]>;
   salvarConfiguracao(chave: keyof Configuracoes, valor: unknown): Promise<void>;
   salvarMeta(meta: MetaDiaria): Promise<void>;
 
