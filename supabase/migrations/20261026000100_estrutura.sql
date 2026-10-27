@@ -1,4 +1,4 @@
--- Frete IQ — estrutura de dados
+-- Travion — estrutura de dados
 -- Cadastro do embarque (lote), posição operacional diária e histórico ficam em tabelas separadas.
 -- Valores financeiros ficam em tabela própria para que o RLS controle quem pode vê-los.
 

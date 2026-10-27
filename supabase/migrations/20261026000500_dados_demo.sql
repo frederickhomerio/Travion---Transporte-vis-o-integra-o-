@@ -1,4 +1,4 @@
--- Frete IQ — dados demonstrativos
+-- Travion — dados demonstrativos
 -- Ficam separados dos dados de produção pela coluna is_demo = true e têm o prefixo [DEMO] nos nomes.
 -- O app só mostra esses dados quando o usuário liga o "Modo demonstração", com faixa de aviso na tela.
 

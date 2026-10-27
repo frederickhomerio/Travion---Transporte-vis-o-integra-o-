@@ -1,4 +1,4 @@
-# Frete IQ — Configuração e implantação
+# Travion — Configuração e implantação
 
 Este guia leva o app da prévia local para produção com banco de dados real.
 
@@ -35,7 +35,7 @@ Este guia leva o app da prévia local para produção com banco de dados real.
 Em **Authentication**:
 
 - **Sign In / Providers → Email:** habilitado. Recomendado manter “Confirm email” ligado.
-- **URL Configuration → Site URL:** o endereço onde o app será publicado (ex.: `https://frete-iq.transpanorama.com.br`).
+- **URL Configuration → Site URL:** o endereço onde o app será publicado (ex.: `https://travion.transpanorama.com.br`).
 - **URL Configuration → Redirect URLs:** acrescente o mesmo endereço (e `http://localhost:5173` se for rodar localmente).
 - **Novos cadastros:** o botão “Solicitar acesso” do app usa o cadastro do Supabase. A conta nasce **aguardando aprovação**, sem acesso a nenhum dado, até um administrador aprovar. Se preferir só convites, desligue “Allow new users to sign up”. Nesse caso, quem foi convidado precisa ser criado em Authentication → Users → Add user, com o mesmo e-mail do convite.
 - **E-mails:** o envio padrão do Supabase tem limite baixo por hora. Para uso real, configure um SMTP próprio em Authentication → Emails → SMTP Settings.

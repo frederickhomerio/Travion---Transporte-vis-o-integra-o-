@@ -1,4 +1,4 @@
--- Frete IQ — funções do servidor (gravações, auditoria, concorrência, compartilhamento, importação)
+-- Travion — funções do servidor (gravações, auditoria, concorrência, compartilhamento, importação)
 --
 -- Todas as gravações passam por estas funções. Cada uma:
 --   1. confere se o usuário está ativo, tem a permissão do campo e o registro está no seu escopo;

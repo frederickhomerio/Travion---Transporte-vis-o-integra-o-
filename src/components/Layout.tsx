@@ -21,7 +21,7 @@ export function Layout({ titulo, acoes, children }: { titulo: string; acoes?: Re
   return (
     <div className="app">
       <aside className="lateral">
-        <div className="marca"><Logo /><div>Frete IQ<small>Transpanorama</small></div></div>
+        <div className="marca"><Logo /><div>Travion<small>Transpanorama</small></div></div>
         <nav className="nav" aria-label="Principal">
           <NavLink to="/" end><Icone nome="lista" />Lista de Fretes</NavLink>
           <NavLink to="/dashboard"><Icone nome="painel" />Dashboard Operacional</NavLink>

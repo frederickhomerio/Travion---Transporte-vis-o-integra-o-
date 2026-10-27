@@ -27,7 +27,7 @@ export interface Estado {
   filtros: Filtros;
 }
 
-const CHAVE_DEMO = 'frete-iq-modo-demo';
+const CHAVE_DEMO = 'travion-modo-demo';
 const lerDemo = () => { try { return localStorage.getItem(CHAVE_DEMO) === '1'; } catch { return false; } };
 
 class Store {

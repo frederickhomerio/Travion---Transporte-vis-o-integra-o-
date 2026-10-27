@@ -1,4 +1,4 @@
-// Regras de cálculo do Frete IQ (fonte única para Lista de Fretes, Dashboard e Posições de Embarque).
+// Regras de cálculo do Travion (fonte única para Lista de Fretes, Dashboard e Posições de Embarque).
 // Ver docs/REGRAS_DE_NEGOCIO.md para a origem de cada fórmula na planilha.
 
 import type { Configuracoes, Embarque, Financeiro, LinhaFrete, Posicao, UnidadeCadencia } from '../types';

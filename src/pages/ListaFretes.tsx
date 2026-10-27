@@ -14,7 +14,7 @@ import { fmtData, fmtT } from '../lib/formato';
 import type { LinhaFrete } from '../types';
 
 type Agrupar = 'nenhum' | 'cliente' | 'filial';
-const CHAVE_AGRUPAR = 'frete-iq-agrupar';
+const CHAVE_AGRUPAR = 'travion-agrupar';
 
 export function ListaFretes() {
   const { estado, pode } = useApp();

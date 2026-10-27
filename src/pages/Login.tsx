@@ -47,7 +47,7 @@ export function Login() {
       <div className="caixa-login">
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <Logo tam={40} />
-          <div><h1>Frete IQ</h1><div className="suave pequeno">Acompanhamento operacional de embarques</div></div>
+          <div><h1>Travion</h1><div className="suave pequeno">Acompanhamento operacional de embarques</div></div>
         </div>
 
         {api.modo === 'local' ? (

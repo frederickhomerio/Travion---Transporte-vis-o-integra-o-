@@ -1,4 +1,4 @@
-# Frete IQ — Regras de negócio, premissas e pontos em aberto
+# Travion — Regras de negócio, premissas e pontos em aberto
 
 Versão 0.2, de 27/10/2026. A referência é a planilha **“Lista fretes 2025 3.xlsx”**. Ela foi usada como fonte de dados e de regras de cálculo. Textos dentro das células foram tratados como dados, nunca como instruções.
 

@@ -226,7 +226,7 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
       let estado: EstadoConexao = 'conectando';
       let teveErro = false;
       const mudar = (s: EstadoConexao) => { estado = s; aoEstado(s); };
-      const canal = sb.channel('frete-iq-alteracoes');
+      const canal = sb.channel('travion-alteracoes');
       for (const tabela of ['posicoes_diarias', 'embarques', 'embarque_financeiro'] as const) {
         canal.on('postgres_changes', { event: '*', schema: 'public', table: tabela }, (payload) => {
           if (payload.eventType === 'DELETE') {

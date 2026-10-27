@@ -1,4 +1,4 @@
--- Frete IQ — permissões, escopo e políticas de acesso (RLS)
+-- Travion — permissões, escopo e políticas de acesso (RLS)
 --
 -- Princípio: usuários autenticados só LEEM tabelas (via RLS). Toda gravação passa por funções
 -- do servidor (SECURITY DEFINER) que verificam permissão campo a campo. Assim, ocultar um botão

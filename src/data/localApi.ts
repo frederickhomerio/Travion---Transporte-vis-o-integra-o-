@@ -13,8 +13,8 @@ import {
 } from '../types';
 import type { Api, Convite, EventoTempoReal, MatrizPermissoes, RelatorioImportacao, UsuarioAdmin } from './api';
 
-const CHAVE = 'frete-iq-previa-v1';
-const CHAVE_SESSAO = 'frete-iq-previa-sessao';
+const CHAVE = 'travion-previa-v1';
+const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['embarques.ver', 'Embarques', 'Consultar embarques e posições no escopo autorizado'],
