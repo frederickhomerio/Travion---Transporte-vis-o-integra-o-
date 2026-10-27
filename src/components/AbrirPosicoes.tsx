@@ -5,10 +5,10 @@ import { fmtData, hojeSP, somarDias } from '../lib/formato';
 import { Alerta, Modal, useAviso } from './ui';
 
 /** Abertura explícita de posições para uma data. Nunca transporta saldos sem escolha do usuário. */
-export function AbrirPosicoes({ aoFechar, embarqueIds }: { aoFechar: () => void; embarqueIds?: string[] }) {
+export function AbrirPosicoes({ aoFechar, embarqueIds, dataInicial }: { aoFechar: () => void; embarqueIds?: string[]; dataInicial?: string }) {
   const { api, estado, recarregar, definirData } = useApp();
   const avisar = useAviso();
-  const [data, setData] = useState(estado.data);
+  const [data, setData] = useState(dataInicial ?? estado.data);
   const [transportar, setTransportar] = useState<'sim' | 'nao' | ''>('');
   const [anterior, setAnterior] = useState<string | null | undefined>(undefined);
   const [enviando, setEnviando] = useState(false);

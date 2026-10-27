@@ -14,7 +14,7 @@ import {
 } from '../types';
 import type { Api, Convite, EventoTempoReal, MatrizPermissoes, RelatorioImportacao, UsuarioAdmin } from './api';
 
-const CHAVE = 'travion-previa-v2';
+const CHAVE = 'travion-previa-v3';
 const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
@@ -111,6 +111,8 @@ function semear(): Banco {
     loc('[DEMO] Silo Central', 'Itumbiara', 'GO', 'coleta'), { ...loc('[DEMO] Fazenda Serra', 'Montividiu', 'GO', 'coleta'), link_mapa: 'https://maps.app.goo.gl/a4n1Z1LzwwtDoMaZ7' },
     loc('[DEMO] Terminal Porto', 'Santos', 'SP', 'entrega'), loc('[DEMO] Indústria Sul', 'Uberaba', 'MG', 'entrega'),
     loc('[DEMO] Ferrovia Leste', 'Araguari', 'MG', 'entrega'), loc('[DEMO] Usina Oeste', 'Quirinópolis', 'GO', 'entrega'),
+    loc('[DEMO] Fazenda Santa Rita', 'Mineiros', 'GO', 'coleta'), loc('[DEMO] Porto Seco', 'Paranaguá', 'PR', 'entrega'),
+    loc('[DEMO] Esmagadora Centro', 'Rondonópolis', 'MT', 'entrega'), loc('[DEMO] Armazém Catalão', 'Catalão', 'GO', 'entrega'),
   ];
   const perfis: Perfil[] = [
     ['Administrador (prévia)', 'administrador'], ['Gestor Rio Verde (prévia)', 'gestor'], ['Operação Rio Verde (prévia)', 'operacao'],
@@ -124,7 +126,7 @@ function semear(): Banco {
     { perfil_id: 'perfil-1', filial_id: filiais[0].id }, { perfil_id: 'perfil-1', filial_id: filiais[3].id },
     { perfil_id: 'perfil-2', filial_id: filiais[0].id }, { perfil_id: 'perfil-4', filial_id: filiais[0].id },
     { perfil_id: 'perfil-4', filial_id: filiais[1].id }, { perfil_id: 'perfil-5', filial_id: filiais[1].id },
-    { perfil_id: 'perfil-6', filial_id: filiais[3].id },
+    { perfil_id: 'perfil-5', filial_id: filiais[2].id }, { perfil_id: 'perfil-6', filial_id: filiais[3].id },
   ];
   const papelPermissoes = Object.entries(MATRIZ_INICIAL).flatMap(([papel, ps]) => ps.map((chave) => ({ papel: papel as Papel, chave })));
 
@@ -140,7 +142,20 @@ function semear(): Banco {
     [4, 3, 0, 'Montividiu', 3, 'Quirinópolis', 'GO', 7, 'liberado', null, 65, 60, 2, 2, 9],
     [5, 0, 4, 'Rio Verde', 0, 'Quirinópolis', 'GO', 7, 'liberado', null, 113, 103, 1, 1, 0],
     [3, 3, 3, 'Montividiu', 3, 'Santos', 'SP', 4, 'suspenso', null, 700, 540, 0, 0, 0],
+    [0, 1, 1, 'Mineiros', 8, 'Paranaguá', 'PR', 9, 'liberado', null, 210, 190, 2, 3, 1],
+    [0, 1, 1, 'Jataí', 1, 'Rondonópolis', 'MT', 10, 'liberado', null, 120, 108, 1, 2, 0],
+    [0, 0, 0, 'Rio Verde', 0, 'Catalão', 'GO', 11, 'liberado', null, 98, 90, 0, 1, 3],
+    [0, 0, 0, 'Rio Verde', 0, 'Uberaba', 'MG', 5, 'suspenso', null, 140, 128, 0, 0, 0],
+    [1, 1, 2, 'Mineiros', 8, 'Uberaba', 'MG', 5, 'liberado', null, 230, 180, 1, 0, 2],
+    [3, 2, 1, 'Itumbiara', 2, 'Araguari', 'MG', 6, 'liberado', null, 85, 79, 0, 2, 1],
   ];
+  // Confirmações fictícias de hoje: recente, com mais de 2 horas e nunca confirmada (para o relatório por filial).
+  const minutos = (m: number) => new Date(Date.now() - m * 60e3).toISOString();
+  const confirmacao = (i: number, d: number) => d > 0
+    ? { confirmado_em: `${somarDias(hoje, -d)}T20:30:00.000Z`, confirmado_por_nome: '[DEMO] Carlos Silva' }
+    : [{ confirmado_em: minutos(25 + i), confirmado_por_nome: '[DEMO] Carlos Silva' },
+      { confirmado_em: minutos(190 + i), confirmado_por_nome: '[DEMO] Marta Lima' },
+      { confirmado_em: null, confirmado_por_nome: null }][i % 3];
   const embarques: Embarque[] = [];
   const financeiro: Financeiro[] = [];
   const posicoes: Posicao[] = [];
@@ -159,8 +174,9 @@ function semear(): Banco {
       posicoes.push({
         id: uid(), embarque_id: id, data_operacional: somarDias(hoje, -d), porta: Math.max(l[12] - d, 0), transito: l[13],
         carregados: Math.max(l[14] - 2 * d, 0), toneladas_por_veiculo: 40, meta_valor: l[9], meta_unidade: 'veiculos_dia',
-        obs_operacional: null, obs_cliente: l[8] === 'suspenso' ? 'Aguardando liberação de cota pelo cliente' : null,
-        is_demo: true, origem: 'abertura', versao: 1, atualizado_em: agora(), atualizado_por_nome: 'Demonstração',
+        obs_operacional: null,
+        obs_cliente: l[8] === 'suspenso' ? 'Aguardando liberação de cota pelo cliente' : i === 0 ? 'Fila de 2 horas na balança da coleta' : null,
+        is_demo: true, origem: 'abertura', versao: 1, atualizado_em: agora(), atualizado_por_nome: 'Demonstração', ...confirmacao(i, d),
       });
     }
   });
@@ -176,7 +192,10 @@ export function criarLocalApi(): Api {
   let db: Banco = (() => {
     const s = lerStorage(CHAVE);
     if (s) { try { return JSON.parse(s) as Banco; } catch { /* recria */ } }
-    return semear();
+    // Grava a semente já: outras abas da prévia passam a ver os mesmos registros (mesmos identificadores).
+    const novo = semear();
+    gravarStorage(CHAVE, JSON.stringify(novo));
+    return novo;
   })();
   // Bancos da prévia gravados antes do cadastro de cidades: deriva as cidades das rotas existentes.
   if (!db.cidades) {
@@ -376,7 +395,7 @@ export function criarLocalApi(): Api {
       const f = <T extends { is_demo: boolean; nome: string }>(xs: T[]) => clone(xs.filter((x) => x.is_demo === demo)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
       return { filiais: f(db.filiais), comerciais: f(db.comerciais), clientes: f(db.clientes.filter(veCliente)), produtos: f(db.produtos), locais: f(db.locais), cidades: f(db.cidades!), centros_custo: f(db.centros_custo!) } as Cadastros;
     },
-    async carregarConfiguracoes() { return clone(db.config); },
+    async carregarConfiguracoes() { return { ...CONFIG_PADRAO, ...clone(db.config) }; },
     async carregarEmbarques(demo) { return clone(db.embarques.filter((e) => e.is_demo === demo && veEmbarque(e))); },
     async carregarPosicoes(demo, inicio, fim) {
       const vis = new Set(db.embarques.filter(veEmbarque).map((e) => e.id));
@@ -414,10 +433,44 @@ export function criarLocalApi(): Api {
         registrar({ entidade: 'posicao', registro_id: p.id, embarque_id: e.id, posicao_id: p.id, cliente_id: e.cliente_id,
           data_operacional: p.data_operacional, campo: k, valor_anterior: txt((p as never)[k]), valor_novo: txt(v) });
       }
-      Object.assign(p, novo, { versao: p.versao + 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario() });
+      const contador = ['porta', 'transito', 'carregados'].some((k) => k in novo);
+      Object.assign(p, novo, { versao: p.versao + 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario() },
+        contador ? { confirmado_em: agora(), confirmado_por_nome: nomeUsuario() } : {});
       salvar();
       return { status: 'ok', registro: clone(p) };
     },
+    async confirmarPosicao(id, valores, base) {
+      // Mesmas regras de public.confirmar_posicao (migração 1400). Sem rede, nada é confirmado.
+      if (!navigator.onLine) erro('Failed to fetch');
+      exigir('posicoes.editar_contadores');
+      const p = db.posicoes.find((x) => x.id === id);
+      const e = p && db.embarques.find((x) => x.id === p.embarque_id);
+      if (!p || !e || !veEmbarque(e)) erro('Posição não encontrada ou fora do seu escopo.');
+      if (e.situacao === 'arquivado') erro('Embarque arquivado: reative o cadastro para atualizar a posição.');
+      if (p.data_operacional !== hojeSP()) erro('Só é possível confirmar a posição da data operacional de hoje.');
+      const rot = { porta: 'na porta', transito: 'em trânsito', carregados: 'carregados hoje' } as const;
+      const novo: Partial<Posicao> = {};
+      const conflitos: Conflito[] = [];
+      for (const k of ['porta', 'transito', 'carregados'] as const) {
+        const v = (valores as unknown as Record<string, unknown>)[k];
+        if (v === null || v === undefined) erro(`Informe o número de ${rot[k]} (zero é válido).`);
+        if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > 100000) erro('Use somente números inteiros maiores ou iguais a zero.');
+        if (!(k in base)) erro('Valor de referência ausente.');
+        if ((base[k] ?? null) !== p[k]) conflitos.push({ campo: k, rotulo: rot[k], valor_base: base[k] ?? null, valor_atual: p[k], valor_proposto: v });
+        if (p[k] !== v) novo[k] = v;
+      }
+      if (conflitos.length) return { status: 'conflito', conflitos, registro: clone(p) };
+      for (const [k, v] of Object.entries(novo)) {
+        registrar({ entidade: 'posicao', registro_id: p.id, embarque_id: e.id, posicao_id: p.id, cliente_id: e.cliente_id,
+          data_operacional: p.data_operacional, campo: k, valor_anterior: txt((p as never)[k]), valor_novo: txt(v) });
+      }
+      Object.assign(p, novo, { versao: p.versao + 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario(), confirmado_em: agora(), confirmado_por_nome: nomeUsuario() });
+      registrar({ entidade: 'posicao', registro_id: p.id, embarque_id: e.id, posicao_id: p.id, cliente_id: e.cliente_id, data_operacional: p.data_operacional,
+        campo: 'confirmacao', valor_novo: `${Object.keys(novo).length ? 'Posição salva' : 'Confirmada sem alteração'}: na porta ${p.porta}, em trânsito ${p.transito}, carregados hoje ${p.carregados}` });
+      salvar();
+      return { status: 'ok', registro: clone(p) };
+    },
+    async agoraServidor() { return agora(); },
     async atualizarEmbarque(id, alt, base, forcar = false) {
       if (!ativo()) erro('Seu acesso ainda não foi aprovado ou está bloqueado.');
       const e = db.embarques.find((x) => x.id === id);
@@ -579,8 +632,11 @@ export function criarLocalApi(): Api {
     },
     async salvarConfiguracao(chave, valor) {
       exigir('configuracoes.gerenciar');
+      if (chave === 'logo_empresa' && valor !== null && (typeof valor !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(valor) || valor.length > 300000)) {
+        erro('Envie a logo como imagem PNG, JPEG ou WebP de até 200 KB.');
+      }
       (db.config as unknown as Record<string, unknown>)[chave] = valor;
-      registrar({ entidade: 'configuracao', campo: chave, valor_novo: JSON.stringify(valor) });
+      registrar({ entidade: 'configuracao', campo: chave, valor_novo: chave === 'logo_empresa' ? (valor ? 'imagem nova' : null) : JSON.stringify(valor) });
       salvar();
     },
     async salvarMeta(m) {
@@ -804,7 +860,7 @@ export function criarLocalApi(): Api {
 export const PERFIS_PREVIA = [
   { email: 'administrador@previa.local', rotulo: 'Administrador', descricao: 'Acesso completo' },
   { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra embarques, com financeiro' },
-  { email: 'supervisor@previa.local', rotulo: 'Supervisor', descricao: 'Filial Jataí: cadastra embarques' },
+  { email: 'supervisor@previa.local', rotulo: 'Supervisor', descricao: 'Filiais Jataí e Itumbiara: posições de embarque e cadastro de embarques' },
   { email: 'embarcador@previa.local', rotulo: 'Embarcador', descricao: 'Filial Montividiu: cadastra embarques, vê frete motorista e margem, anuncia' },
   { email: 'operacao@previa.local', rotulo: 'Operação', descricao: 'Filial Rio Verde: contadores e observação operacional' },
   { email: 'comercial@previa.local', rotulo: 'Comercial', descricao: 'Carteira [DEMO] Ana: cadastra embarques' },

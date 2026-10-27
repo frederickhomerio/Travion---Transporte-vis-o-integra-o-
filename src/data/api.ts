@@ -8,6 +8,8 @@ import type {
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
 
+export interface ContadoresPosicao { porta: number; transito: number; carregados: number }
+
 export type EstadoConexao = 'conectando' | 'conectado' | 'reconectando' | 'offline';
 
 export type EventoTempoReal =
@@ -73,6 +75,10 @@ export interface Api {
 
   // Gravação (funções do servidor; conferem permissão e versão)
   atualizarPosicao(id: string, alteracoes: Partial<Posicao>, base: Partial<Posicao>, forcar?: boolean): Promise<ResultadoGravacao<Posicao>>;
+  /** Salva os três contadores de hoje numa só operação (ou confirma sem alteração). Conflito se algum mudou desde `base`. */
+  confirmarPosicao(id: string, valores: ContadoresPosicao, base: Partial<Record<keyof ContadoresPosicao, number | null>>): Promise<ResultadoGravacao<Posicao>>;
+  /** Horário do servidor (ISO), referência da janela de duas horas. */
+  agoraServidor(): Promise<string>;
   atualizarEmbarque(id: string, alteracoes: Partial<Embarque>, base: Partial<Embarque>, forcar?: boolean): Promise<ResultadoGravacao<Embarque> & { posicoes_atualizadas?: number }>;
   atualizarFinanceiro(embarqueId: string, alteracoes: Partial<Financeiro>, base: Partial<Financeiro>, forcar?: boolean): Promise<ResultadoGravacao<Financeiro>>;
   criarEmbarque(dados: Record<string, unknown>, demo: boolean): Promise<Embarque>;

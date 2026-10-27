@@ -151,6 +151,9 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
 
     atualizarPosicao: (id, alteracoes, base, forcar = false) =>
       rpc('atualizar_posicao', { p_posicao_id: id, p_alteracoes: alteracoes, p_base: base, p_forcar: forcar }),
+    confirmarPosicao: (id, valores, base) =>
+      rpc('confirmar_posicao', { p_posicao_id: id, p_valores: valores, p_base: base }),
+    agoraServidor: () => rpc<string>('agora_servidor', {}),
     atualizarEmbarque: (id, alteracoes, base, forcar = false) =>
       rpc('atualizar_embarque', { p_embarque_id: id, p_alteracoes: alteracoes, p_base: base, p_forcar: forcar }),
     atualizarFinanceiro: (id, alteracoes, base, forcar = false) =>

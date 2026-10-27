@@ -80,6 +80,8 @@ export interface Posicao {
   obs_operacional: string | null; obs_cliente: string | null; is_demo: boolean;
   origem: 'app' | 'abertura' | 'importacao'; versao: number;
   atualizado_em: string; atualizado_por_nome: string | null;
+  /** Última conferência explícita dos contadores (salvar ou confirmar sem alteração). Abertura e importação não contam. */
+  confirmado_em?: string | null; confirmado_por_nome?: string | null;
 }
 
 export interface Historico {
@@ -106,6 +108,8 @@ export interface Configuracoes {
   cadencia_unidade_padrao: UnidadeCadencia;
   ticket_inclui_frete_zero: boolean;
   link_validade_padrao_horas: number;
+  /** Logo da Transpanorama (data:image/...) no quadro enviado ao cliente. */
+  logo_empresa: string | null;
 }
 
 export const CONFIG_PADRAO: Configuracoes = {
@@ -114,6 +118,7 @@ export const CONFIG_PADRAO: Configuracoes = {
   cadencia_unidade_padrao: 'veiculos_dia',
   ticket_inclui_frete_zero: true,
   link_validade_padrao_horas: 72,
+  logo_empresa: null,
 };
 
 export interface Conflito {

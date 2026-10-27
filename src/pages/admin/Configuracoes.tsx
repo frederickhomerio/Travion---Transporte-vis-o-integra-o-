@@ -3,6 +3,7 @@ import { Alerta, Modal, useAviso } from '../../components/ui';
 import { mensagemErro } from '../../data/api';
 import { useApp } from '../../data/store';
 import { fmtData, fmtReais, fmtT, hojeSP } from '../../lib/formato';
+import { reduzirImagem } from '../../lib/cnpj';
 import { parseNumeroBR } from '../../lib/texto';
 import type { Configuracoes as Config, MetaDiaria } from '../../types';
 
@@ -44,6 +45,7 @@ export function Configuracoes() {
   }
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
     <div className="cartao" style={{ maxWidth: 760 }}>
       <div className="cartao-cab"><h3 style={{ margin: 0 }}>Parâmetros de cálculo</h3></div>
       <div className="cartao-corpo" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -70,6 +72,57 @@ export function Configuracoes() {
         <p className="pequeno suave" style={{ margin: 0 }}>Valores atuais: {fmtT(c.capacidade_padrao_t)} por veículo · meta {c.meta_veiculos_lote_padrao} veículos/lote ({fmtT(c.capacidade_padrao_t * c.meta_veiculos_lote_padrao)}). Toda alteração fica no histórico.</p>
         {erro && <Alerta tipo="erro">{erro}</Alerta>}
         <div><button className="btn primario" disabled={salvando} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar configurações'}</button></div>
+      </div>
+    </div>
+    <LogoEmpresa />
+    </div>
+  );
+}
+
+/** Logo da TP no quadro de posição enviado ao cliente. Use o arquivo oficial (PNG com fundo transparente, de preferência). */
+function LogoEmpresa() {
+  const { api, estado, recarregar } = useApp();
+  const avisar = useAviso();
+  const atual = estado.config.logo_empresa;
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  async function gravar(valor: string | null) {
+    setErro(null);
+    setSalvando(true);
+    try {
+      await api.salvarConfiguracao('logo_empresa', valor);
+      await recarregar();
+      avisar('ok', valor ? 'Logo da TP salva.' : 'Logo da TP removida.');
+    } catch (e) {
+      setErro(mensagemErro(e));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="cartao" style={{ maxWidth: 760 }}>
+      <div className="cartao-cab"><h3 style={{ margin: 0 }}>Logo da TP no quadro do cliente</h3></div>
+      <div className="cartao-corpo" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="logo-empresa-previa">
+          {atual ? <img src={atual} alt="Logo TP atual" /> : <span className="qp-logo-vazio">Logo TP não cadastrada</span>}
+        </div>
+        <p className="pequeno suave" style={{ margin: 0 }}>Aparece no lado direito da faixa vinho, na Posição do Cliente e na imagem enviada. Envie o arquivo oficial; a proporção é mantida.</p>
+        <div className="grupo-btn">
+          <label className={`btn ${salvando ? 'desabilitado' : ''}`}>
+            {salvando ? 'Salvando…' : atual ? 'Trocar logo' : 'Enviar logo'}
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden disabled={salvando}
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (!f) return;
+                try { await gravar(await reduzirImagem(f, 600)); } catch (err) { setErro(mensagemErro(err)); }
+              }} />
+          </label>
+          {atual && <button className="btn sutil" disabled={salvando} onClick={() => void gravar(null)}>Remover logo</button>}
+        </div>
+        {erro && <Alerta tipo="erro">{erro}</Alerta>}
       </div>
     </div>
   );

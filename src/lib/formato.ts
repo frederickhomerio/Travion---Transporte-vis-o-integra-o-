@@ -44,6 +44,13 @@ export function fmtDataHora(iso: string | null | undefined): string {
   return fmtDataHoraSP.format(new Date(iso)).replace(',', '');
 }
 
+/** "27/10/2026 às 14:22" (horário de Brasília). */
+export function fmtDataAsHora(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return `${fmtData(hojeSP(d))} às ${fmtHoraSP.format(d)}`;
+}
+
 export function fmtNum(n: number | null | undefined, casas = 0): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—';
   return n.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });

@@ -108,6 +108,32 @@ Novos usuários entram por convite ou pedem acesso e aguardam aprovação. Até 
 - Imagem e PDF são um retrato do momento e levam o horário impresso. O link mostra a posição atualizada.
 - **Link do cliente:** código imprevisível de 256 bits, com validade de 1 a 720 h (padrão 72 h). Pode ser revogado, serve a um único cliente e é somente leitura. Mostra a posição mais recente até hoje. **Nunca** expõe valores financeiros, observações internas, status de liberação ou nomes de usuários.
 
+### 7.1 Posições de Embarque (supervisores) e Posição do Cliente — desde 27/10/2026
+
+As duas telas leem a mesma tabela de posições diárias. Os supervisores gravam; a mesa comercial só consulta. O antigo resumo com texto de WhatsApp, PDF, e-mail e link foi substituído pela Posição do Cliente, que copia o quadro como imagem. Links já criados continuam abrindo (`#/consulta/...`), mas não há mais tela para criar novos.
+
+**Posições de Embarque (`#/posicoes`)**
+- Mostra as posições de **hoje** (America/Sao_Paulo) dos embarques ativos do escopo. Embarque sem posição aberta não entra; a tela avisa e oferece “Abrir posições de hoje” (mesmo processo da Lista de Fretes, sem transporte automático de saldos).
+- Filtros na ordem Centro de Custo → Filial → Cidade. **Cidade é a cidade de origem.** Não há filtro de cliente.
+- **Centro de custo × filial:** o embarque tem filial; o centro de custo do embarque é o centro de custo cadastrado na filial (Administração → Cadastros → Filiais). São campos distintos no filtro, mas o vínculo do centro de custo vem da filial. Filial sem centro de custo aparece como “Sem centro de custo”. Se algum dia um embarque precisar de centro de custo diferente do da filial, será preciso um campo próprio no embarque.
+- Só Na porta, Em trânsito e Carregados hoje são editáveis. Os três são gravados juntos por “Salvar posição”. Vazio não vira zero; negativo, fração e texto são recusados na tela e no banco.
+- **Confirmação:** salvar (ou “Confirmar sem alteração”, quando os números continuam os mesmos) grava quem confirmou e o horário do servidor. Abertura do dia, importação e edição de observação **não** contam como confirmação. Alterar um contador pela Lista de Fretes conta.
+- Conflito: se qualquer um dos três números mudou desde que a pessoa começou a editar, nada é gravado e a tela mostra os valores atuais e os digitados para a pessoa escolher.
+- Rascunhos ficam guardados na aba do navegador ao trocar de cartão, de filtro ou de tela, e o app avisa ao sair com alterações não salvas.
+- Acesso: o mesmo escopo do resto do app (filiais concedidas ao usuário em Administração → Usuários, ou a própria carteira). Sem concessão, nada aparece. O banco confere em cada leitura, gravação e evento de tempo real.
+
+**Posição do Cliente (`#/posicao-cliente`)** — perfis com “Preparar posição para o cliente”
+- Filtros Carteira → Cliente → Filial, na data operacional selecionada. O quadro é de **um** cliente; cada embarque com posição na data é uma linha (nada é agrupado por rota). O código do embarque não aparece.
+- Indicadores: Embarques (embarques distintos), Veiculos Porta, Veiculos Transito, Veiculos Carregados (somas do recorte).
+- **Volume previsto = (na porta + em trânsito + carregados hoje) × 40 t**, por destino (cidade/UF) e total. É uma estimativa com média fixa de 40 t/veículo aprovada para esta apresentação. **Inclui trânsito**, diferente do “volume projetado” do Dashboard (porta + carregados, com a capacidade de cada embarque). Os dois indicadores convivem e não foram alterados.
+- Visão do cliente: só origem/coleta, destino/entrega, contadores, observação para o cliente, totais, volumes e logos. Mesa comercial: acrescenta status de liberação, horário da última confirmação e o aviso “Desatualizada” (sem confirmação nas últimas 2 horas).
+- Relatório por filial (só mesa): janela móvel das últimas 2 horas pelo relógio do servidor, limitada à data consultada; conta embarques distintos; nunca confirmadas contam como pendentes.
+- “Preparar envio ao cliente” gera o PNG da visão do cliente (layout de computador, todas as linhas e colunas) e copia para a área de transferência. Se o navegador não deixar, mostra a imagem com “Copiar imagem” e “Baixar PNG”. Nada é enviado pelo app.
+- Logos: a do cliente vem do cadastro do cliente; a da TP é enviada em Administração → Configurações. Logo que faltar não sai na imagem.
+- Não existe portal de cliente: a visão do cliente é usada pela mesa para preparar a imagem. Um acesso do próprio cliente exigiria login de cliente ou o link protegido já existente.
+
+**Pendências:** (1) enviar o arquivo oficial da logo da TP; (2) cadastrar as logos dos clientes; (3) confirmar que o centro de custo do embarque é sempre o da filial; (4) a observação para o cliente continua sendo editada na Lista de Fretes (detalhes do embarque), já que a página dos supervisores só edita os três contadores.
+
 ## 8. Importação da planilha
 
 - Fluxo: arquivo → aba → mapeamento de colunas → **data operacional obrigatória** → prévia com inconsistências → confirmação → relatório. O nome do arquivo não comprova a data.

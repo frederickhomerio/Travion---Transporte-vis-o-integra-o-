@@ -13,7 +13,7 @@ const ROTULO_CONEXAO = {
   offline: 'Sem conexão',
 };
 
-export function Layout({ titulo, acoes, children }: { titulo: string; acoes?: ReactNode; children: ReactNode }) {
+export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: string; aoLadoTitulo?: ReactNode; acoes?: ReactNode; children: ReactNode }) {
   const { api, estado, pode, definirDemo } = useApp();
   const nav = useNavigate();
   const s = estado.sessao!;
@@ -26,10 +26,10 @@ export function Layout({ titulo, acoes, children }: { titulo: string; acoes?: Re
         <nav className="nav" aria-label="Principal">
           <NavLink to="/" end><Icone nome="lista" />Lista de Fretes</NavLink>
           <NavLink to="/dashboard"><Icone nome="painel" />Dashboard Operacional</NavLink>
-          <NavLink to="/posicoes"><Icone nome="cliente" />Posições de Embarque</NavLink>
+          <NavLink to="/posicoes"><Icone nome="caminhao" />Posições de Embarque</NavLink>
+          {pode('compartilhamento.preparar') && <NavLink to="/posicao-cliente"><Icone nome="cliente" />Posição do Cliente</NavLink>}
           <div className="grupo">Em breve</div>
           <span className="em-breve" aria-disabled="true"><span style={{ display: 'flex', gap: 10 }}><Icone nome="analise" />Análise</span><span className="badge info">Em breve</span></span>
-          <span className="em-breve" aria-disabled="true"><span style={{ display: 'flex', gap: 10 }}><Icone nome="posicao" />Posição</span><span className="badge info">Em breve</span></span>
           {admin && <><div className="grupo">Gestão</div><NavLink to="/admin"><Icone nome="config" />Administração</NavLink></>}
         </nav>
         <div className="lateral-rodape">
@@ -52,7 +52,7 @@ export function Layout({ titulo, acoes, children }: { titulo: string; acoes?: Re
         )}
         <header className="topo">
           <span className="so-celular"><Logo tam={26} /></span>
-          <h1>{titulo}</h1>
+          {aoLadoTitulo ? <div className="topo-titulo"><h1>{titulo}</h1>{aoLadoTitulo}</div> : <h1>{titulo}</h1>}
           <span className={`conexao ${estado.conexao}`} title="Estado da conexão com o servidor">{ROTULO_CONEXAO[estado.conexao]}</span>
           {acoes}
         </header>
@@ -67,7 +67,7 @@ export function Layout({ titulo, acoes, children }: { titulo: string; acoes?: Re
       <nav className="navinf" aria-label="Principal (celular)">
         <NavLink to="/" end><Icone nome="lista" />Fretes</NavLink>
         <NavLink to="/dashboard"><Icone nome="painel" />Dashboard</NavLink>
-        <NavLink to="/posicoes"><Icone nome="cliente" />Posições</NavLink>
+        <NavLink to="/posicoes"><Icone nome="caminhao" />Posições</NavLink>
         <NavLink to="/mais"><Icone nome="config" />Mais</NavLink>
       </nav>
     </div>
