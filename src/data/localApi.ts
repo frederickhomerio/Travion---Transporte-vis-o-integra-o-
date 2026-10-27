@@ -46,7 +46,7 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
   gestor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
-    'compartilhamento.links'],
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
@@ -797,7 +797,7 @@ export function criarLocalApi(): Api {
 
 export const PERFIS_PREVIA = [
   { email: 'administrador@previa.local', rotulo: 'Administrador', descricao: 'Acesso completo' },
-  { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra embarques' },
+  { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra embarques, com financeiro' },
   { email: 'supervisor@previa.local', rotulo: 'Supervisor', descricao: 'Filial Jataí: cadastra embarques' },
   { email: 'embarcador@previa.local', rotulo: 'Embarcador', descricao: 'Filial Montividiu: cadastra embarques, vê frete motorista e margem, anuncia' },
   { email: 'operacao@previa.local', rotulo: 'Operação', descricao: 'Filial Rio Verde: contadores e observação operacional' },

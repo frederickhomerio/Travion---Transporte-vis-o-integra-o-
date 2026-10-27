@@ -359,3 +359,4 @@ textarea.entrada { min-height: 80px; resize: vertical; }
 .margem { font-weight: 700; color: var(--verde-700); font-variant-numeric: tabular-nums; }
 .margem small { font-weight: 500; color: var(--texto-suave); }
 .margem.negativa { color: var(--vermelho-700); }
+.tabela-fretes td.td-produto { min-width: 110px; }

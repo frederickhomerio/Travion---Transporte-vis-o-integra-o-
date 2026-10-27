@@ -9,13 +9,14 @@ import { Alerta, Carregando, EstadoVazio, Icone, Modal, Segmentado, useAviso } f
 import { useApp, useIndices, useLinhas } from '../data/store';
 import { type DadosAnuncio, cidadeAnuncio, semDemo, textoWhatsApp, valorFrete, UNIDADE_ANUNCIO } from '../lib/anuncio';
 import { type Indices, codigoEmbarque, nome } from '../lib/cadastros';
-import { resumir } from '../lib/calculos';
 import { aplicarFiltros } from '../lib/filtros';
 import { fmtPct, fmtReais, fmtT } from '../lib/formato';
+import { type ItemLista, baixarListaJpeg, baixarListaPdf } from '../lib/listaExport';
 import type { Financeiro, LinhaFrete } from '../types';
 
-type Agrupar = 'nenhum' | 'cliente' | 'filial';
-const CHAVE_AGRUPAR = 'travion-agrupar';
+type Agrupar = 'nenhum' | 'origem' | 'destino' | 'filial' | 'produto';
+const CHAVE_AGRUPAR = 'travion-agrupar-v2';
+const AGRUPAMENTOS: Agrupar[] = ['nenhum', 'origem', 'destino', 'filial', 'produto'];
 
 export function ListaFretes() {
   const { estado, pode } = useApp();
@@ -24,7 +25,10 @@ export function ListaFretes() {
   // Vitrine para a equipe de campo: só fretes liberados e ativos.
   const linhas = useMemo(() => aplicarFiltros(todas, estado.filtros, idx).filter((l) => l.embarque.status_liberacao === 'liberado' && l.embarque.situacao === 'ativo'),
     [todas, estado.filtros, idx]);
-  const [agrupar, setAgrupar] = useState<Agrupar>(() => { try { return (localStorage.getItem(CHAVE_AGRUPAR) as Agrupar) || 'nenhum'; } catch { return 'nenhum'; } });
+  const [agrupar, setAgrupar] = useState<Agrupar>(() => {
+    try { const v = localStorage.getItem(CHAVE_AGRUPAR) as Agrupar; return AGRUPAMENTOS.includes(v) ? v : 'nenhum'; } catch { return 'nenhum'; }
+  });
+  const [gerando, setGerando] = useState<'' | 'jpeg' | 'pdf'>('');
   const [detalhe, setDetalhe] = useState<string | null>(null);
   const [abrir, setAbrir] = useState(false);
   const [novo, setNovo] = useState(false);
@@ -34,7 +38,6 @@ export function ListaFretes() {
   const [textoManual, setTextoManual] = useState<string | null>(null);
   const avisar = useAviso();
 
-  const r = useMemo(() => resumir(linhas, estado.config, false), [linhas, estado.config]);
   const dadosAnuncio = (l: LinhaFrete): DadosAnuncio => anuncioDe(l, idx, estado.financeiro[l.embarque.id] ?? null);
   const acoesLinha: AcoesLinha = {
     detalhes: (id) => setRapido(id),
@@ -51,16 +54,38 @@ export function ListaFretes() {
     if (agrupar === 'nenhum') return [{ chave: '', titulo: '', linhas }];
     const m = new Map<string, LinhaFrete[]>();
     for (const l of linhas) {
-      const k = agrupar === 'cliente' ? l.embarque.cliente_id : l.embarque.filial_id;
+      const k = chaveGrupo(l, agrupar, idx);
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push(l);
     }
     return [...m.entries()]
-      .map(([k, ls]) => ({ chave: k, titulo: agrupar === 'cliente' ? nome(idx.cliente, k) : nome(idx.filial, k), linhas: ls }))
+      .map(([k, ls]) => ({ chave: k, titulo: k, linhas: ls }))
       .sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));
   }, [linhas, agrupar, idx]);
 
   const mudarAgrupar = (a: Agrupar) => { setAgrupar(a); try { localStorage.setItem(CHAVE_AGRUPAR, a); } catch { /* preferência local */ } };
+
+  // Lista para divulgar, na mesma ordem e agrupamento da tela.
+  const itensLista = (): ItemLista[] => grupos.flatMap((g) => g.linhas.map((l) => {
+    const d = anuncioDe(l, idx, estado.financeiro[l.embarque.id] ?? null);
+    const v = valorFrete(d.frete);
+    return { grupo: g.titulo, cliente: nome(idx.cliente, l.embarque.cliente_id), origem_cidade: d.origem_cidade, origem_uf: d.origem_uf, coleta: d.coleta,
+      destino_cidade: d.destino_cidade, destino_uf: d.destino_uf, entrega: d.entrega, produto: d.produto, frete: v };
+  }));
+  const gerar = async (tipo: 'jpeg' | 'pdf') => {
+    setGerando(tipo);
+    try {
+      if (tipo === 'jpeg') await baixarListaJpeg(itensLista(), estado.data, verFrete);
+      else await baixarListaPdf(itensLista(), estado.data, verFrete);
+    } catch (e) { avisar('erro', (e as Error).message); } finally { setGerando(''); }
+  };
+  const botoesExportar = (
+    <>
+      <button className="btn" disabled={!linhas.length || !!gerando} onClick={() => gerar('jpeg')}><Icone nome="baixar" tam={18} />{gerando === 'jpeg' ? 'Gerando…' : 'Lista de fretes (JPEG)'}</button>
+      <button className="btn" disabled={!linhas.length || !!gerando} onClick={() => gerar('pdf')}><Icone nome="baixar" tam={18} />{gerando === 'pdf' ? 'Gerando…' : 'Exportar PDF'}</button>
+      <button className="btn" disabled={!linhas.length} onClick={() => exportarCSV(linhas, idx, estado.data)}><Icone nome="baixar" tam={18} />CSV</button>
+    </>
+  );
 
   const acoes = (
     <div className="grupo-btn esconder-celular">
@@ -74,25 +99,21 @@ export function ListaFretes() {
       <BarraFiltros linhas={todas} extra={
         <div className="campo"><span>Agrupar por</span>
           <Segmentado rotulo="Agrupar por" valor={agrupar} aoMudar={mudarAgrupar}
-            opcoes={[{ valor: 'nenhum', rotulo: 'Nenhum' }, { valor: 'cliente', rotulo: 'Cliente' }, { valor: 'filial', rotulo: 'Filial' }]} />
+            opcoes={[{ valor: 'nenhum', rotulo: 'Nenhum' }, { valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
+              { valor: 'filial', rotulo: 'Filial' }, { valor: 'produto', rotulo: 'Produto' }]} />
         </div>
       } />
 
       <div className="grupo-btn so-celular" style={{ marginBottom: 12 }}>
         {pode('posicoes.abrir') && <button className="btn" onClick={() => setAbrir(true)}>Abrir posições</button>}
         {pode('embarques.criar') && <button className="btn primario" onClick={() => setNovo(true)}><Icone nome="mais" tam={18} />Novo embarque</button>}
-        <button className="btn" onClick={() => exportarCSV(linhas, idx, estado.data)}><Icone nome="baixar" tam={18} />CSV</button>
       </div>
 
       {estado.erro && <Alerta tipo="erro"><span><strong>Erro ao carregar:</strong> {estado.erro}</span></Alerta>}
 
       <div className="resumo-linha" aria-live="polite">
         <span><strong>{linhas.length}</strong> frete(s) liberado(s)</span>
-        <span>Porta <strong className="num">{r.porta}</strong> · {fmtT(r.porta_t)}</span>
-        <span>Trânsito <strong className="num">{r.transito}</strong> · {fmtT(r.transito_t)}</span>
-        <span>Carregados <strong className="num">{r.carregados}</strong> · {fmtT(r.carregado_t)}</span>
-        <span>Projetado (porta + carregados) <strong>{fmtT(r.projetado_t)}</strong></span>
-        <button className="btn sutil peq esconder-celular" onClick={() => exportarCSV(linhas, idx, estado.data)}><Icone nome="baixar" tam={16} />Exportar CSV</button>
+        <div className="grupo-btn" style={{ marginLeft: 'auto' }}>{botoesExportar}</div>
       </div>
 
       {estado.carregando && Object.keys(estado.embarques).length === 0 ? <Carregando /> : linhas.length === 0 ? (
@@ -108,7 +129,7 @@ export function ListaFretes() {
               </thead>
               <tbody>
                 {grupos.map((g) => (
-                  <GrupoTabela key={g.chave} g={g} agrupar={agrupar} idx={idx} verFrete={verFrete} acoes={acoesLinha} />
+                  <GrupoTabela key={g.chave} g={g} idx={idx} verFrete={verFrete} acoes={acoesLinha} />
                 ))}
               </tbody>
             </table>
@@ -116,7 +137,7 @@ export function ListaFretes() {
           <div className="cartoes-fretes">
             {grupos.map((g) => (
               <div key={g.chave} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {g.titulo && <TituloGrupo titulo={g.titulo} linhas={g.linhas} idx={idx} agrupar={agrupar} />}
+                {g.titulo && <TituloGrupo titulo={g.titulo} linhas={g.linhas} />}
                 {g.linhas.map((l) => <CartaoFrete key={l.embarque.id} l={l} idx={idx} verFrete={verFrete} acoes={acoesLinha} />)}
               </div>
             ))}
@@ -143,14 +164,21 @@ export function ListaFretes() {
   );
 }
 
-function subtituloGrupo(linhas: LinhaFrete[], idx: Indices, agrupar: Agrupar) {
-  const t = linhas.reduce((a, l) => ({ p: a.p + (l.posicao?.porta ?? 0), t: a.t + (l.posicao?.transito ?? 0), c: a.c + (l.posicao?.carregados ?? 0) }), { p: 0, t: 0, c: 0 });
-  const carteira = agrupar === 'cliente' ? nome(idx.comercial, linhas[0]?.embarque.comercial_id, 'sem carteira') : null;
-  return `${carteira ? `Carteira ${carteira} · ` : ''}${linhas.length} lote(s) · Porta ${t.p} · Trânsito ${t.t} · Carregados ${t.c}`;
+function chaveGrupo(l: LinhaFrete, agrupar: Agrupar, idx: Indices): string {
+  const e = l.embarque;
+  if (agrupar === 'origem') return cidadeAnuncio(e.origem_cidade, e.origem_uf).toUpperCase();
+  if (agrupar === 'destino') return cidadeAnuncio(e.destino_cidade, e.destino_uf).toUpperCase();
+  if (agrupar === 'filial') return semDemo(nome(idx.filial, e.filial_id));
+  if (agrupar === 'produto') return semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'));
+  return '';
 }
 
-function TituloGrupo({ titulo, linhas, idx, agrupar }: { titulo: string; linhas: LinhaFrete[]; idx: Indices; agrupar: Agrupar }) {
-  return <div className="grupo-titulo"><span>{titulo}</span><span className="pequeno suave" style={{ fontWeight: 500 }}>{subtituloGrupo(linhas, idx, agrupar)}</span></div>;
+function subtituloGrupo(linhas: LinhaFrete[]) {
+  return `${linhas.length} frete(s)`;
+}
+
+function TituloGrupo({ titulo, linhas }: { titulo: string; linhas: LinhaFrete[] }) {
+  return <div className="grupo-titulo"><span>{titulo}</span><span className="pequeno suave" style={{ fontWeight: 500 }}>{subtituloGrupo(linhas)}</span></div>;
 }
 
 type AcoesLinha = { detalhes: (id: string) => void; imagem: (l: LinhaFrete) => void; whatsapp: (l: LinhaFrete) => void };
@@ -206,14 +234,14 @@ function BotoesAnuncio({ l, acoes }: { l: LinhaFrete; acoes: AcoesLinha }) {
   );
 }
 
-function GrupoTabela({ g, agrupar, idx, verFrete, acoes }: {
-  g: { chave: string; titulo: string; linhas: LinhaFrete[] }; agrupar: Agrupar; idx: Indices; verFrete: boolean; acoes: AcoesLinha;
+function GrupoTabela({ g, idx, verFrete, acoes }: {
+  g: { chave: string; titulo: string; linhas: LinhaFrete[] }; idx: Indices; verFrete: boolean; acoes: AcoesLinha;
 }) {
   const { estado } = useApp();
   return (
     <>
       {g.titulo && (
-        <tr className="grupo-cab"><td colSpan={verFrete ? 6 : 4}>{g.titulo}<span className="totais">{subtituloGrupo(g.linhas, idx, agrupar)}</span></td></tr>
+        <tr className="grupo-cab"><td colSpan={verFrete ? 6 : 4}>{g.titulo}<span className="totais">{subtituloGrupo(g.linhas)}</span></td></tr>
       )}
       {g.linhas.map((l) => {
         const e = l.embarque;
@@ -221,7 +249,7 @@ function GrupoTabela({ g, agrupar, idx, verFrete, acoes }: {
           <tr key={e.id}>
             <td><PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} /></td>
             <td><PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></td>
-            <td>{semDemo(nome(idx.produto, e.produto_id))}</td>
+            <td className="td-produto">{semDemo(nome(idx.produto, e.produto_id))}</td>
             {verFrete && <><td className="n-frete"><FreteMotorista fin={estado.financeiro[e.id]} /></td><td className="n-frete"><Margem fin={estado.financeiro[e.id]} /></td></>}
             <td className="td-acao"><BotoesAnuncio l={l} acoes={acoes} /></td>
           </tr>
