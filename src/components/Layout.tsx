@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { PERFIS_PREVIA } from '../data/localApi';
 import { useApp } from '../data/store';
 import { ROTULO_PAPEL } from '../lib/formato';
+import { NovaVersao } from './NovaVersao';
 import { Icone, Logo } from './ui';
 
 const ROTULO_CONEXAO = {
@@ -41,6 +42,7 @@ export function Layout({ titulo, acoes, children }: { titulo: string; acoes?: Re
       </aside>
 
       <div className="principal">
+        <NovaVersao />
         {api.modo === 'local' && <FaixaPrevia />}
         {api.modo === 'supabase' && estado.demo && (
           <div className="faixa-demo" role="status">

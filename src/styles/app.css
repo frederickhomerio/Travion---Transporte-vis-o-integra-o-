@@ -334,3 +334,6 @@ textarea.entrada { min-height: 80px; resize: vertical; }
 /* Títulos de seção dentro de formulários longos (ex.: cadastro de cliente) */
 .titulo-secao-form { font-family: var(--fonte-titulo); font-size: .95rem; color: var(--vinho); margin: 8px 0 0; padding-top: 10px; border-top: 1px solid var(--borda); }
 .titulo-secao-form:first-of-type { border-top: 0; padding-top: 0; }
+
+/* Aviso de versão nova publicada */
+.faixa-versao { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 20px; background: var(--vinho); color: #fff; font-weight: 600; }
