@@ -1,4 +1,4 @@
-// Administração: usuários, permissões, cadastros, configurações, metas, importação e dados demonstrativos.
+// Administração: usuários, permissões, cadastros, configurações, importação e dados demonstrativos.
 // Cada aba aparece só para quem tem a permissão correspondente; o servidor confere de novo em cada gravação.
 
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
@@ -7,7 +7,7 @@ import { AcessoNegado } from '../../components/ui';
 import { useApp } from '../../data/store';
 import type { Permissao } from '../../types';
 import { Cadastros } from './Cadastros';
-import { Configuracoes, DadosDemo, MetasDiarias } from './Configuracoes';
+import { Configuracoes, DadosDemo } from './Configuracoes';
 import { Importacao } from './Importacao';
 import { Permissoes } from './Permissoes';
 import { Usuarios } from './Usuarios';
@@ -18,7 +18,6 @@ const ABAS: Array<{ rota: string; rotulo: string; exige: Permissao; somenteAdmin
   { rota: 'cadastros', rotulo: 'Cadastros', exige: 'cadastros.gerenciar', el: () => <Cadastros /> },
   { rota: 'importacao', rotulo: 'Importação', exige: 'importacao.executar', el: () => <Importacao /> },
   { rota: 'configuracoes', rotulo: 'Configurações', exige: 'configuracoes.gerenciar', el: () => <Configuracoes /> },
-  { rota: 'metas', rotulo: 'Metas diárias', exige: 'financeiro.editar', el: () => <MetasDiarias /> },
   { rota: 'demo', rotulo: 'Dados demonstrativos', exige: 'usuarios.gerenciar', somenteAdmin: true, el: () => <DadosDemo /> },
 ];
 
