@@ -80,7 +80,7 @@ export interface Api {
   /** Consulta dados públicos do CNPJ (Receita Federal e inscrição estadual). */
   consultarCnpj(cnpj: string): Promise<DadosCnpj>;
   /** Procura a logo no site da empresa e devolve as imagens candidatas já baixadas. */
-  buscarLogos(site: string): Promise<LogoCandidata[]>;
+  buscarLogos(site: string, nome?: string): Promise<LogoCandidata[]>;
   salvarConfiguracao(chave: keyof Configuracoes, valor: unknown): Promise<void>;
   salvarMeta(meta: MetaDiaria): Promise<void>;
 

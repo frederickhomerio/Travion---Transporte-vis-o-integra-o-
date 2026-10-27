@@ -304,10 +304,35 @@ function EditarCliente({ registro, aoFechar }: { registro: Cliente | null; aoFec
     try { set('logo_url', await reduzirImagem(f)); } catch (e) { setErro(mensagemErro(e)); }
   }
 
+  const nomeEmpresa = String(d.nome || d.razao_social || '').replace(/\[DEMO\]/gi, '').trim();
+
   async function buscarLogo() {
-    if (!/^[\w.-]+\.[a-z]{2,}/i.test(site.trim().replace(/^https?:\/\//, ''))) { setErro('Informe o site da empresa (ex.: empresa.com.br) para buscar a logo.'); return; }
+    const temSite = /^[\w.-]+\.[a-z]{2,}/i.test(site.trim().replace(/^https?:\/\//, ''));
+    if (!temSite && nomeEmpresa.length < 2) { setErro('Informe o site ou o nome da empresa para buscar a logo.'); return; }
     setErro(null); setLogos(null); setBuscandoLogo(true);
-    try { setLogos(await api.buscarLogos(site)); } catch (e) { setErro(mensagemErro(e)); } finally { setBuscandoLogo(false); }
+    try { setLogos(await api.buscarLogos(temSite ? site : '', nomeEmpresa)); } catch (e) { setErro(mensagemErro(e)); } finally { setBuscandoLogo(false); }
+  }
+
+  // Imagem copiada (ex.: "Copiar imagem" no Google Imagens) colada com Ctrl+V ou pelo botão "Colar imagem".
+  async function colarLogo(e?: React.ClipboardEvent) {
+    try {
+      if (e) {
+        const f = [...e.clipboardData.files].find((x) => x.type.startsWith('image/'));
+        if (!f) return;
+        e.preventDefault();
+        set('logo_url', await reduzirImagem(f)); setLogos(null); setErro(null);
+        return;
+      }
+      if (!navigator.clipboard?.read) { setErro('Este navegador não deixa colar pelo botão. Use Ctrl+V nesta área ou "Enviar imagem".'); return; }
+      for (const item of await navigator.clipboard.read()) {
+        const tipo = item.types.find((t) => t.startsWith('image/'));
+        if (!tipo) continue;
+        const blob = await item.getType(tipo);
+        set('logo_url', await reduzirImagem(new File([blob], 'logo', { type: tipo }))); setLogos(null); setErro(null);
+        return;
+      }
+      setErro('Não há imagem copiada. No Google Imagens, abra a imagem, use "Copiar imagem" e tente de novo.');
+    } catch (err) { setErro(mensagemErro(err)); }
   }
 
   async function escolherLogo(c: LogoCandidata) {
@@ -408,19 +433,23 @@ function EditarCliente({ registro, aoFechar }: { registro: Cliente | null; aoFec
       </div>
 
       <h3 className="titulo-secao-form">4. Logo</h3>
-      <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }} onPaste={(e) => void colarLogo(e)}>
         <LogoCliente key={String(d.logo_url)} url={d.logo_url as string} nome={String(d.nome || '?')} tam={72} larg={180} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 260px' }}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <input className="entrada" style={{ flex: '1 1 180px' }} placeholder="site da empresa (ex.: empresa.com.br)" value={site} onChange={(e) => setSite(e.target.value)} />
-            <button type="button" className="btn secundario" disabled={buscandoLogo} onClick={buscarLogo}>{buscandoLogo ? 'Procurando…' : 'Buscar logo no site'}</button>
+            <button type="button" className="btn secundario" disabled={buscandoLogo} onClick={buscarLogo}>{buscandoLogo ? 'Procurando…' : 'Buscar logo'}</button>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <a className="btn terciario" target="_blank" rel="noopener noreferrer"
+              href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${nomeEmpresa || site} logo png`)}`}
+              onClick={(e) => { if (!nomeEmpresa && !site.trim()) { e.preventDefault(); setErro('Informe o nome ou o site da empresa.'); } }}>Ver no Google Imagens ↗</a>
+            <button type="button" className="btn terciario" onClick={() => void colarLogo()}>Colar imagem</button>
             <button type="button" className="btn terciario" onClick={() => arquivo.current?.click()}>Enviar imagem</button>
             {d.logo_url ? <button type="button" className="btn sutil" onClick={() => set('logo_url', '')}>Remover logo</button> : null}
             <input ref={arquivo} type="file" accept="image/*" hidden onChange={(e) => void enviarLogo(e.target.files?.[0])} />
           </div>
-          <small className="suave">A busca abre o site da empresa e traz as imagens de logo que ele publica. Escolha a que estiver completa; se nenhuma servir, envie a imagem.</small>
+          <small className="suave">"Buscar logo" lê o site da empresa e a logo oficial registrada na Wikimedia; escolha a que estiver completa. Se nenhuma servir, abra o Google Imagens, use "Copiar imagem" e cole aqui (Ctrl+V ou "Colar imagem"), ou envie o arquivo.</small>
         </div>
       </div>
       {logos && (
