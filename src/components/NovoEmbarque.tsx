@@ -104,13 +104,15 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
   );
 
   const cidadesAtivas = c.cidades.filter((x) => x.ativo);
+  // Sugestões separadas: cidades cadastradas como origem, como destino ou para os dois usos.
+  const cidadesDo = (lado: 'origem' | 'destino') => cidadesAtivas.filter((x) => !x.uso || x.uso === 'ambos' || x.uso === lado);
   // Campo de cidade com sugestões do cadastro; escolher "Rio Verde/GO" preenche a UF.
   const cidade = (lado: 'origem' | 'destino', rot: string) => {
     const kC = `${lado}_cidade` as const;
     const kU = `${lado}_uf` as const;
     return (
       <label className="campo"><span>{rot}</span>
-        <input className="entrada" list="lista-cidades" autoComplete="off" value={d[kC]} placeholder="Digite e escolha"
+        <input className="entrada" list={`lista-cidades-${lado}`} autoComplete="off" value={d[kC]} placeholder="Digite e escolha"
           onChange={(e) => {
             const v = e.target.value;
             const sug = cidadesAtivas.find((x) => x.uf && `${x.nome}/${x.uf}` === v);
@@ -142,7 +144,9 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
       <button className="btn primario" disabled={enviando} onClick={salvar}>{enviando ? 'Salvando…' : 'Cadastrar embarque'}</button>
     </>}>
       {estado.demo && <Alerta tipo="aviso">Modo demonstração: este embarque será criado como dado demonstrativo.</Alerta>}
-      <datalist id="lista-cidades">{cidadesAtivas.map((x) => <option key={x.id} value={x.uf ? `${x.nome}/${x.uf}` : x.nome} />)}</datalist>
+      {(['origem', 'destino'] as const).map((lado) => (
+        <datalist key={lado} id={`lista-cidades-${lado}`}>{cidadesDo(lado).map((x) => <option key={x.id} value={x.uf ? `${x.nome}/${x.uf}` : x.nome} />)}</datalist>
+      ))}
       <div className="grade-campos">
         <label className="campo"><span>Cliente *</span>
           <select className="entrada" value={d.cliente_id} onChange={(e) => {

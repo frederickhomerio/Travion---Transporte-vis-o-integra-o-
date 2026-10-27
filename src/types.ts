@@ -17,7 +17,8 @@ export type Permissao =
   | 'compartilhamento.preparar' | 'compartilhamento.links'
   | 'importacao.executar' | 'cadastros.gerenciar' | 'usuarios.gerenciar' | 'configuracoes.gerenciar';
 
-export interface Filial { id: string; nome: string; codigo: string | null; supervisor?: string | null; ativo: boolean; is_demo: boolean }
+export interface Filial { id: string; nome: string; codigo: string | null; supervisor?: string | null; centro_custo_id?: string | null; ativo: boolean; is_demo: boolean }
+export interface CentroCusto { id: string; nome: string; ativo: boolean; is_demo: boolean }
 export interface Comercial { id: string; nome: string; email: string | null; telefone?: string | null; ativo: boolean; is_demo: boolean }
 export interface Cliente {
   id: string; nome: string; documento: string | null; comercial_id: string | null;
@@ -29,7 +30,8 @@ export interface Cliente {
   logo_url?: string | null; dados_consultados_em?: string | null;
 }
 export interface Produto { id: string; nome: string; valor_pauta_kg?: number | null; valor_pauta_data?: string | null; ativo: boolean; is_demo: boolean }
-export interface Cidade { id: string; nome: string; uf: string | null; ativo: boolean; is_demo: boolean }
+export type UsoCidade = 'origem' | 'destino' | 'ambos';
+export interface Cidade { id: string; nome: string; uf: string | null; uso?: UsoCidade; ativo: boolean; is_demo: boolean }
 
 /** Dados de CNPJ devolvidos pela consulta às bases públicas da Receita. */
 export interface DadosCnpj {

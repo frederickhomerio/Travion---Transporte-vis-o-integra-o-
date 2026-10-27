@@ -41,7 +41,7 @@ export interface ResultadoAbertura { criadas: number; ja_existiam: number; sem_p
 
 export interface LogoCandidata { url: string; origem: string; dataUrl: string }
 
-export type TipoCadastro = 'filial' | 'comercial' | 'produto' | 'local' | 'cidade' | 'cliente';
+export type TipoCadastro = 'filial' | 'centro_custo' | 'comercial' | 'produto' | 'local' | 'cidade' | 'cliente';
 
 export interface Api {
   readonly modo: 'supabase' | 'local';

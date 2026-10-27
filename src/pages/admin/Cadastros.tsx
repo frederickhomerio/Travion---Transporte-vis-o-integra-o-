@@ -2,22 +2,30 @@ import { useMemo, useRef, useState } from 'react';
 import { Alerta, EstadoVazio, Modal, Segmentado, useAviso } from '../../components/ui';
 import { mensagemErro, type LogoCandidata, type TipoCadastro } from '../../data/api';
 import { useApp, useIndices } from '../../data/store';
-import { cnpjValido, formatarCnpj, formatarTelefone, mascaraCnpj, nome } from '../../lib/cadastros';
+import { cnpjValido, formatarCnpj, formatarTelefone, mascaraCnpj, naoCarregar, nome } from '../../lib/cadastros';
 import { dominioDoEmail, reduzirDataUrl, reduzirImagem } from '../../lib/cnpj';
 import { fmtData, fmtDataHora, fmtReais, hojeSP } from '../../lib/formato';
 import { contem, parseNumeroBR } from '../../lib/texto';
 import type { Cliente, DadosCnpj } from '../../types';
 
 type TipoCampo = 'texto' | 'uf' | 'select' | 'bool' | 'telefone' | 'decimal' | 'data';
-interface DefCampoCad { campo: string; rotulo: string; tipo?: TipoCampo; opcoes?: Array<{ v: string; r: string }>; obrigatorio?: boolean; ajuda?: string; naTabela?: boolean }
-type Lista = 'filiais' | 'comerciais' | 'clientes' | 'produtos' | 'locais' | 'cidades';
+interface DefCampoCad {
+  campo: string; rotulo: string; tipo?: TipoCampo; opcoes?: Array<{ v: string; r: string }>; obrigatorio?: boolean; ajuda?: string; naTabela?: boolean;
+  /** Opções do select vindas de outro cadastro (ex.: centro de custo da filial). */
+  opcoesDe?: Lista;
+}
+type Lista = 'filiais' | 'comerciais' | 'clientes' | 'produtos' | 'locais' | 'cidades' | 'centros_custo';
 type Registro = Record<string, unknown> & { id: string; nome: string; ativo: boolean };
 
 const DEF: Record<TipoCadastro, { rotulo: string; lista: Lista; campos: DefCampoCad[]; nota?: string }> = {
   cliente: { rotulo: 'Clientes', lista: 'clientes', campos: [] },
   filial: { rotulo: 'Filiais', lista: 'filiais', campos: [
     { campo: 'nome', rotulo: 'Nome', obrigatorio: true }, { campo: 'codigo', rotulo: 'Código' },
+    { campo: 'centro_custo_id', rotulo: 'Centro de custo', tipo: 'select', opcoesDe: 'centros_custo', obrigatorio: true },
     { campo: 'supervisor', rotulo: 'Supervisor responsável' }, { campo: 'ativo', rotulo: 'Ativa', tipo: 'bool' },
+  ] },
+  centro_custo: { rotulo: 'Centros de custo', lista: 'centros_custo', nota: 'Cada filial fica vinculada a um centro de custo (escolha na aba Filiais).', campos: [
+    { campo: 'nome', rotulo: 'Nome', obrigatorio: true }, { campo: 'ativo', rotulo: 'Ativo', tipo: 'bool' },
   ] },
   comercial: { rotulo: 'Comerciais', lista: 'comerciais', campos: [
     { campo: 'nome', rotulo: 'Nome', obrigatorio: true }, { campo: 'telefone', rotulo: 'Telefone', tipo: 'telefone' },
@@ -30,7 +38,9 @@ const DEF: Record<TipoCadastro, { rotulo: string; lista: Lista; campos: DefCampo
     { campo: 'ativo', rotulo: 'Ativo', tipo: 'bool' },
   ] },
   cidade: { rotulo: 'Cidades', lista: 'cidades', nota: 'Cidades de origem e destino. Também são gravadas automaticamente quando digitadas em um novo embarque.', campos: [
-    { campo: 'nome', rotulo: 'Cidade', obrigatorio: true }, { campo: 'uf', rotulo: 'UF', tipo: 'uf' }, { campo: 'ativo', rotulo: 'Ativa', tipo: 'bool' },
+    { campo: 'nome', rotulo: 'Cidade', obrigatorio: true }, { campo: 'uf', rotulo: 'UF', tipo: 'uf' },
+    { campo: 'uso', rotulo: 'Uso', tipo: 'select', opcoes: [{ v: 'ambos', r: 'Origem e destino' }, { v: 'origem', r: 'Origem' }, { v: 'destino', r: 'Destino' }] },
+    { campo: 'ativo', rotulo: 'Ativa', tipo: 'bool' },
   ] },
   local: { rotulo: 'Locais de coleta/entrega', lista: 'locais', nota: 'Armazéns, fazendas e terminais. São criados ao digitar no novo embarque; aqui você corrige nomes ou desativa.', campos: [
     { campo: 'nome', rotulo: 'Nome', obrigatorio: true }, { campo: 'cidade', rotulo: 'Cidade' }, { campo: 'uf', rotulo: 'UF', tipo: 'uf' },
@@ -38,23 +48,33 @@ const DEF: Record<TipoCadastro, { rotulo: string; lista: Lista; campos: DefCampo
     { campo: 'ativo', rotulo: 'Ativo', tipo: 'bool' },
   ] },
 };
-const ORDEM: TipoCadastro[] = ['cliente', 'filial', 'comercial', 'produto', 'cidade', 'local'];
+const ORDEM: TipoCadastro[] = ['cliente', 'filial', 'centro_custo', 'comercial', 'produto', 'cidade', 'local'];
+
+/** Opções de um select: fixas ou vindas de outro cadastro (ativos, mais o valor atual). */
+function opcoesCampo(c: DefCampoCad, cad: Record<string, unknown>, atual?: unknown): Array<{ v: string; r: string }> {
+  if (!c.opcoesDe) return c.opcoes ?? [];
+  const xs = (cad[c.opcoesDe] ?? []) as Array<{ id: string; nome: string; ativo: boolean }>;
+  return xs.filter((x) => x.ativo || x.id === atual).map((x) => ({ v: x.id, r: x.nome }));
+}
 
 export function Cadastros() {
   const { estado } = useApp();
   const idx = useIndices();
   const [tipo, setTipo] = useState<TipoCadastro>('cliente');
   const [busca, setBusca] = useState('');
+  const [filtroCli, setFiltroCli] = useState<'todos' | 'pendentes' | 'nao_carregar'>('todos');
   const [editar, setEditar] = useState<Registro | 'novo' | null>(null);
   const def = DEF[tipo];
   const lista = ((estado.cadastros[def.lista] ?? []) as unknown as Registro[])
     .filter((r) => !busca || contem(r.nome, busca) || (tipo === 'cliente' && String(r.documento ?? '').includes(busca.replace(/\D/g, '') || '§')))
+    .filter((r) => tipo !== 'cliente' || filtroCli === 'todos'
+      || (filtroCli === 'nao_carregar' ? naoCarregar(r.restricao_comercial as string) : !r.documento || !r.telefone_comercial))
     .sort((a, b) => Number(b.ativo) - Number(a.ativo) || a.nome.localeCompare(b.nome, 'pt-BR'));
 
   const exibir = (r: Registro, c: DefCampoCad) => {
     const v = r[c.campo];
     if (c.tipo === 'bool') return v ? 'Sim' : 'Não';
-    if (c.tipo === 'select') return c.opcoes?.find((o) => o.v === v)?.r ?? '—';
+    if (c.tipo === 'select') return opcoesCampo(c, estado.cadastros as unknown as Record<string, unknown>, v).find((o) => o.v === (v ?? c.opcoes?.[0]?.v))?.r ?? (c.opcoesDe ? 'Pendente' : '—');
     if (c.tipo === 'decimal') return v === null || v === undefined ? '—' : `${fmtReais(Number(v), 4)}/kg`;
     if (c.tipo === 'data') return fmtData(v as string);
     return (v as string) || '—';
@@ -66,6 +86,14 @@ export function Cadastros() {
         <Segmentado rotulo="Tipo de cadastro" valor={tipo} aoMudar={(t) => { setTipo(t); setBusca(''); }}
           opcoes={ORDEM.map((t) => ({ valor: t, rotulo: DEF[t].rotulo }))} />
         <input className="entrada" style={{ maxWidth: 280 }} placeholder={tipo === 'cliente' ? 'Buscar por nome ou CNPJ' : 'Buscar pelo nome'} value={busca} onChange={(e) => setBusca(e.target.value)} />
+        {tipo === 'cliente' && (
+          <select className="entrada" style={{ maxWidth: 220 }} aria-label="Filtrar clientes" value={filtroCli} onChange={(e) => setFiltroCli(e.target.value as typeof filtroCli)}>
+            <option value="todos">Todos os clientes</option>
+            <option value="pendentes">Cadastro pendente</option>
+            <option value="nao_carregar">NÃO CARREGAR</option>
+          </select>
+        )}
+        <span className="pequeno suave">{lista.length} {lista.length === 1 ? 'registro' : 'registros'}</span>
         <button className="btn primario" onClick={() => setEditar('novo')}>Novo</button>
       </div>
       {estado.demo && <Alerta tipo="aviso">Modo demonstração: novos cadastros serão criados como dados demonstrativos.</Alerta>}
@@ -82,9 +110,10 @@ export function Cadastros() {
                   {(lista as unknown as Cliente[]).map((r) => (
                     <tr key={r.id} style={r.ativo ? undefined : { opacity: 0.6 }}>
                       <td style={{ width: 84 }}><LogoCliente url={r.logo_url} nome={r.nome} /></td>
-                      <td><strong>{r.nome}</strong>{r.razao_social && r.razao_social !== r.nome && <div className="pequeno suave">{r.razao_social}</div>}</td>
+                      <td><strong>{r.nome}</strong>{r.restricao_comercial && <> <span className="badge suspenso">{r.restricao_comercial}</span></>}
+                        {r.razao_social && r.razao_social !== r.nome && <div className="pequeno suave">{r.razao_social}</div>}</td>
                       <td className="num">{r.documento ? formatarCnpj(r.documento) : <span className="suave">Pendente</span>}</td>
-                      <td>{nome(idx.comercial, r.comercial_id, 'Sem comercial')}</td>
+                      <td>{nome(idx.comercial, r.comercial_id, naoCarregar(r.restricao_comercial) ? '—' : 'Sem comercial')}</td>
                       <td className="num">{r.telefone_comercial || <span className="suave">Pendente</span>}</td>
                       <td>{r.municipio ? `${r.municipio}${r.uf ? `/${r.uf}` : ''}` : '—'}</td>
                       <td>{r.ativo ? 'Sim' : 'Não'}</td>
@@ -137,7 +166,7 @@ function EditarCadastro({ tipo, registro, aoFechar }: { tipo: TipoCadastro; regi
   const inicial = useMemo(() => Object.fromEntries(def.campos.map((c) => {
     const v = registro ? registro[c.campo] : undefined;
     if (c.tipo === 'bool') return [c.campo, registro ? !!v : true];
-    if (c.tipo === 'select') return [c.campo, (v as string) ?? c.opcoes![0].v];
+    if (c.tipo === 'select') return [c.campo, (v as string) ?? (c.opcoesDe ? '' : c.opcoes![0].v)];
     if (c.tipo === 'decimal') return [c.campo, v === null || v === undefined ? '' : String(v).replace('.', ',')];
     return [c.campo, (v as string) ?? ''];
   })), [def, registro]);
@@ -186,7 +215,9 @@ function EditarCadastro({ tipo, registro, aoFechar }: { tipo: TipoCadastro; regi
       <button className="btn primario" disabled={salvando} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar'}</button>
     </>}>
       <div className="grade-campos">
-        {def.campos.map((c) => <Campo key={c.campo} c={c} valor={d[c.campo]} aoMudar={(v) => setD((x) => ({ ...x, [c.campo]: v }))} />)}
+        {def.campos.map((c) => <Campo key={c.campo} c={c} valor={d[c.campo]} aoMudar={(v) => setD((x) => ({ ...x, [c.campo]: v }))}
+          opcoes={opcoesCampo(c, estado.cadastros as unknown as Record<string, unknown>, registro?.[c.campo])} />)}
+      {tipo === 'filial' && estado.cadastros.centros_custo.length === 0 && <Alerta tipo="aviso">Cadastre primeiro os centros de custo (aba Centros de custo).</Alerta>}
       </div>
       {tipo === 'produto' && (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -202,7 +233,7 @@ function EditarCadastro({ tipo, registro, aoFechar }: { tipo: TipoCadastro; regi
   );
 }
 
-function Campo({ c, valor, aoMudar, desabilitado }: { c: DefCampoCad; valor: unknown; aoMudar: (v: unknown) => void; desabilitado?: boolean }) {
+function Campo({ c, valor, aoMudar, desabilitado, opcoes }: { c: DefCampoCad; valor: unknown; aoMudar: (v: unknown) => void; desabilitado?: boolean; opcoes?: Array<{ v: string; r: string }> }) {
   if (c.tipo === 'bool') {
     return <label className="check"><input type="checkbox" checked={!!valor} disabled={desabilitado} onChange={(e) => aoMudar(e.target.checked)} />{c.rotulo}</label>;
   }
@@ -210,7 +241,8 @@ function Campo({ c, valor, aoMudar, desabilitado }: { c: DefCampoCad; valor: unk
     <label className="campo"><span>{c.rotulo}{c.obrigatorio && ' *'}</span>
       {c.tipo === 'select' ? (
         <select className="entrada" disabled={desabilitado} value={String(valor ?? '')} onChange={(e) => aoMudar(e.target.value)}>
-          {c.opcoes!.map((o) => <option key={o.v} value={o.v}>{o.r}</option>)}
+          {c.opcoesDe && <option value="">Selecione</option>}
+          {(opcoes ?? c.opcoes ?? []).map((o) => <option key={o.v} value={o.v}>{o.r}</option>)}
         </select>
       ) : (
         <input className="entrada" disabled={desabilitado}
@@ -344,7 +376,7 @@ function EditarCliente({ registro, aoFechar }: { registro: Cliente | null; aoFec
     if (!cnpjOk) { setErro('Informe um CNPJ válido.'); return; }
     if (!String(d.nome ?? '').trim()) { setErro('Informe o nome do cliente (como vai aparecer no app).'); return; }
     if (String(d.telefone_comercial ?? '').replace(/\D/g, '').length < 10) { setErro('Telefone de contato comercial é obrigatório (com DDD).'); return; }
-    if (!d.comercial_id) { setErro('Selecione o comercial responsável pelo cliente.'); return; }
+    if (!d.comercial_id && !naoCarregar(d.restricao_comercial as string)) { setErro('Selecione o comercial responsável pelo cliente (ou marque a restrição NÃO CARREGAR).'); return; }
     if (d.uf && !/^[A-Za-z]{2}$/.test(String(d.uf).trim())) { setErro('UF deve ter 2 letras.'); return; }
     const dados: Record<string, unknown> = {};
     for (const k of CAMPOS_CLIENTE) {

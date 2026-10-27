@@ -3,6 +3,9 @@
 set client_min_messages = warning;
 \o /dev/null
 
+-- Cliente vindo da planilha antiga, gravado direto (sem CNPJ nem telefone).
+insert into clientes (nome) values ('LEGADO PLANILHA');
+
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 
@@ -22,6 +25,11 @@ begin
     assert false, 'cliente sem telefone comercial deveria falhar'; exception when sqlstate '22023' then null; end;
   begin perform salvar_cadastro('cliente', null, jsonb_build_object('nome', 'SEM COMERCIAL', 'documento', '45.723.174/0001-10', 'telefone_comercial', '1'));
     assert false, 'cliente sem comercial deveria falhar'; exception when sqlstate '22023' then null; end;
+  perform salvar_cadastro('cliente', null, jsonb_build_object('nome', 'BLOQUEADO', 'documento', '12345678000195', 'telefone_comercial', '1', 'restricao_comercial', 'NÃO CARREGAR'));
+  -- Cliente da planilha antiga (sem CNPJ/telefone): pode ser editado sem completar tudo de uma vez.
+  perform salvar_cadastro('cliente', (select id from clientes where nome = 'LEGADO PLANILHA'), '{"ativo": false}');
+  begin perform salvar_cadastro('cliente', (select id from clientes where nome = 'LEGADO PLANILHA'), '{"documento": "123"}');
+    assert false, 'CNPJ inválido na edição deveria falhar'; exception when sqlstate '22023' then null; end;
   begin perform salvar_cadastro('cliente', null, jsonb_build_object('nome', 'CNPJ REPETIDO', 'comercial_id', v_com, 'documento', '11222333000181', 'telefone_comercial', '1'));
     assert false, 'CNPJ repetido deveria falhar'; exception when unique_violation then null; end;
 
@@ -49,6 +57,18 @@ begin
   c2 := obter_cidade('RIO VERDE', 'go');
   assert c1 = c2, 'cidade reaproveitada';
   assert (select count(*) from cidades where nome_busca = private.normalizar('rio verde')) = 1, 'sem cidade duplicada';
+  assert (select uso from cidades where id = c1) = 'ambos', 'cidade criada no embarque vale para origem e destino';
+  perform salvar_cadastro('cidade', c1, '{"uso":"origem"}');
+  assert (select uso from cidades where id = c1) = 'origem', 'uso da cidade editável';
+  begin perform salvar_cadastro('cidade', c1, '{"uso":"qualquer"}');
+    assert false, 'uso inválido deveria falhar'; exception when check_violation then null; end;
+
+  -- Centro de custo e vínculo da filial
+  v_cli := salvar_cadastro('centro_custo', null, '{"nome":"Sudoeste"}');
+  perform salvar_cadastro('filial', (select id from filiais where nome = 'Montividiu'), jsonb_build_object('centro_custo_id', v_cli ->> 'id'));
+  assert (select centro_custo_id from filiais where nome = 'Montividiu') = (v_cli ->> 'id')::uuid, 'filial vinculada ao centro de custo';
+  begin perform salvar_cadastro('centro_custo', null, '{"nome":"SUDOESTE"}');
+    assert false, 'centro de custo duplicado deveria falhar'; exception when unique_violation then null; end;
 end $$;
 
 -- Usuário sem permissão não cria locais

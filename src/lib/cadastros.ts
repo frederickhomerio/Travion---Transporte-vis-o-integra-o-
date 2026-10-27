@@ -1,4 +1,4 @@
-import type { Cidade, Cliente, Comercial, Filial, Local, Produto } from '../types';
+import type { CentroCusto, Cidade, Cliente, Comercial, Filial, Local, Produto } from '../types';
 
 export interface Cadastros {
   filiais: Filial[];
@@ -7,6 +7,7 @@ export interface Cadastros {
   produtos: Produto[];
   locais: Local[];
   cidades: Cidade[];
+  centros_custo: CentroCusto[];
 }
 
 export interface Indices {
@@ -15,6 +16,7 @@ export interface Indices {
   cliente: Map<string, Cliente>;
   produto: Map<string, Produto>;
   local: Map<string, Local>;
+  centroCusto: Map<string, CentroCusto>;
 }
 
 export function indexar(c: Cadastros): Indices {
@@ -24,10 +26,11 @@ export function indexar(c: Cadastros): Indices {
     cliente: new Map(c.clientes.map((x) => [x.id, x])),
     produto: new Map(c.produtos.map((x) => [x.id, x])),
     local: new Map(c.locais.map((x) => [x.id, x])),
+    centroCusto: new Map(c.centros_custo.map((x) => [x.id, x])),
   };
 }
 
-export const CADASTROS_VAZIOS: Cadastros = { filiais: [], comerciais: [], clientes: [], produtos: [], locais: [], cidades: [] };
+export const CADASTROS_VAZIOS: Cadastros = { filiais: [], comerciais: [], clientes: [], produtos: [], locais: [], cidades: [], centros_custo: [] };
 
 export function nome<T extends { nome: string }>(m: Map<string, T>, id: string | null | undefined, padrao = '—'): string {
   if (!id) return padrao;
@@ -86,4 +89,9 @@ export function mascaraCnpj(v: string): string {
     .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
     .replace(/\.(\d{3})(\d)/, '.$1/$2')
     .replace(/(\d{4})(\d)/, '$1-$2');
+}
+
+/** Cliente com restrição "NÃO CARREGAR" (carteira bloqueada na planilha antiga): dispensa comercial. */
+export function naoCarregar(restricao: string | null | undefined): boolean {
+  return (restricao ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase() === 'NAO CARREGAR';
 }

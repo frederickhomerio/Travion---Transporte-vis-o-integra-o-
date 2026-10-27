@@ -3,12 +3,12 @@
 // Reproduz as regras do servidor (permissões, escopo, conflito por campo, histórico) para que as telas
 // possam ser avaliadas; a segurança real está no banco (supabase/migrations).
 
-import { cnpjValido, type Cadastros } from '../lib/cadastros';
+import { cnpjValido, naoCarregar, type Cadastros } from '../lib/cadastros';
 import { consultarCnpjBrasilApi } from '../lib/cnpj';
 import { hojeSP, somarDias } from '../lib/formato';
 import { normalizar } from '../lib/texto';
 import {
-  CONFIG_PADRAO, type Cidade, type Cliente, type Comercial, type Configuracoes, type Conflito, type Embarque, type Filial,
+  CONFIG_PADRAO, type CentroCusto, type Cidade, type Cliente, type Comercial, type Configuracoes, type Conflito, type Embarque, type Filial,
   type Financeiro, type Historico, type LinkCliente, type Local, type MetaDiaria, type Papel, type Perfil,
   type Permissao, type Posicao, type PosicaoPublica, type Produto, type Sessao,
 } from '../types';
@@ -62,6 +62,7 @@ interface Banco {
   produtos: Produto[];
   locais: Local[];
   cidades?: Cidade[];
+  centros_custo?: CentroCusto[];
   perfis: Perfil[];
   perfilFiliais: Array<{ perfil_id: string; filial_id: string }>;
   perfilPermissoes: Array<{ perfil_id: string; chave: Permissao; permitido: boolean }>;
@@ -180,6 +181,7 @@ export function criarLocalApi(): Api {
     }
     db.cidades = [...vistas.values()];
   }
+  if (!db.centros_custo) db.centros_custo = [];
   let perfilId: string | null = lerStorage(CHAVE_SESSAO);
   const ouvintesAuth = new Set<(e: string) => void>();
   const ouvintesDados = new Set<(e: EventoTempoReal) => void>();
@@ -303,7 +305,7 @@ export function criarLocalApi(): Api {
     unidade_frete: { perm: 'financeiro.editar', tipo: 'enum', valores: ['nao_confirmada', 'rs_tonelada', 'rs_viagem', 'outra'] },
   };
 
-  const listaCadastro = (tipo: string) => ({ filial: db.filiais, comercial: db.comerciais, produto: db.produtos, local: db.locais, cidade: db.cidades!, cliente: db.clientes } as Record<string, Array<{ id: string; nome: string; is_demo: boolean }>>)[tipo];
+  const listaCadastro = (tipo: string) => ({ filial: db.filiais, comercial: db.comerciais, produto: db.produtos, local: db.locais, cidade: db.cidades!, centro_custo: db.centros_custo!, cliente: db.clientes } as Record<string, Array<{ id: string; nome: string; is_demo: boolean }>>)[tipo];
 
   function abrir(data: string, transportar: boolean, ids: string[] | null) {
     let criadas = 0, ja = 0, semAnt = 0;
@@ -356,9 +358,9 @@ export function criarLocalApi(): Api {
     aoMudarAutenticacao(cb) { ouvintesAuth.add(cb); return () => ouvintesAuth.delete(cb); },
 
     async carregarCadastros(demo) {
-      if (!ativo()) return { filiais: [], comerciais: [], clientes: [], produtos: [], locais: [], cidades: [] };
+      if (!ativo()) return { filiais: [], comerciais: [], clientes: [], produtos: [], locais: [], cidades: [], centros_custo: [] };
       const f = <T extends { is_demo: boolean; nome: string }>(xs: T[]) => clone(xs.filter((x) => x.is_demo === demo)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-      return { filiais: f(db.filiais), comerciais: f(db.comerciais), clientes: f(db.clientes.filter(veCliente)), produtos: f(db.produtos), locais: f(db.locais), cidades: f(db.cidades!) } as Cadastros;
+      return { filiais: f(db.filiais), comerciais: f(db.comerciais), clientes: f(db.clientes.filter(veCliente)), produtos: f(db.produtos), locais: f(db.locais), cidades: f(db.cidades!), centros_custo: f(db.centros_custo!) } as Cadastros;
     },
     async carregarConfiguracoes() { return clone(db.config); },
     async carregarEmbarques(demo) { return clone(db.embarques.filter((e) => e.is_demo === demo && veEmbarque(e))); },
@@ -510,7 +512,7 @@ export function criarLocalApi(): Api {
       const u = uf?.trim().toUpperCase() || null;
       const achada = db.cidades!.find((c) => c.is_demo === demo && normalizar(c.nome) === normalizar(nomeC) && c.uf === u);
       if (achada) return achada.id;
-      const nova: Cidade = { id: uid(), nome: nomeC.trim(), uf: u, ativo: true, is_demo: demo };
+      const nova: Cidade = { id: uid(), nome: nomeC.trim(), uf: u, uso: 'ambos', ativo: true, is_demo: demo };
       db.cidades!.push(nova);
       salvar();
       return nova.id;
@@ -526,9 +528,11 @@ export function criarLocalApi(): Api {
       if (tipo === 'cliente') {
         const atual = (id ? lista.find((y) => y.id === id) : {}) as Record<string, unknown>;
         const final = { ...atual, ...dados };
-        if (!cnpjValido(final.documento as string)) erro('Informe um CNPJ válido.');
-        if (!String(final.telefone_comercial ?? '').trim()) erro('Telefone de contato comercial é obrigatório.');
-        if (!final.comercial_id) erro('Informe o comercial responsável pelo cliente.');
+        // Mesmas regras do servidor: na edição só valem para os campos alterados.
+        const exige = (k: string) => !id || k in dados;
+        if (exige('documento') && !cnpjValido(final.documento as string)) erro('Informe um CNPJ válido.');
+        if (exige('telefone_comercial') && !String(final.telefone_comercial ?? '').trim()) erro('Telefone de contato comercial é obrigatório.');
+        if ((exige('comercial_id') || exige('restricao_comercial')) && !final.comercial_id && !naoCarregar(final.restricao_comercial as string)) erro('Informe o comercial responsável pelo cliente.');
         if (db.clientes.some((x) => x.id !== id && x.is_demo === demo && x.documento === final.documento)) erro('Já existe um cliente com este CNPJ.');
       }
       if (dados.nome !== undefined) {
@@ -551,7 +555,7 @@ export function criarLocalApi(): Api {
         return clone(x);
       }
       if (tipo === 'cliente' && dados.comercial_id) exigir('carteira.editar');
-      const base: Record<string, unknown> = { filial: { codigo: null }, comercial: { email: null }, produto: {}, local: { cidade: null, uf: null, tipo: 'ambos' }, cidade: { uf: null },
+      const base: Record<string, unknown> = { filial: { codigo: null, centro_custo_id: null }, comercial: { email: null }, produto: {}, local: { cidade: null, uf: null, tipo: 'ambos' }, cidade: { uf: null, uso: 'ambos' }, centro_custo: {},
         cliente: { documento: null, comercial_id: null, restricao_comercial: null } }[tipo]!;
       const novo = { id: uid(), ativo: true, is_demo: demo, ...base, ...dados };
       (lista as unknown[]).push(novo);

@@ -27,6 +27,9 @@ Este guia leva o app da prévia local para produção com banco de dados real.
    4. `supabase/migrations/20261026000400_importacao_realtime.sql`
    5. `supabase/migrations/20261026000500_dados_demo.sql`
    6. `supabase/migrations/20261027000600_search_path.sql`
+   7. `supabase/migrations/20261027000700_promover_existente.sql` (opcional; não aplicada em produção)
+   8. `supabase/migrations/20261027000800_cadastros_v2.sql`
+   9. `supabase/migrations/20261027000900_centros_custo.sql`
 
    Alternativa: com a [Supabase CLI](https://supabase.com/docs/guides/cli), `supabase link --project-ref SEU_PROJETO` e depois `supabase db push`.
 3. **Não execute** nada da pasta `supabase/tests/`. Aqueles arquivos simulam o Supabase e servem só para testes locais.
