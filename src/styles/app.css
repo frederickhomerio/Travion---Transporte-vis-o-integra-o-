@@ -305,7 +305,7 @@ textarea.entrada { min-height: 80px; resize: vertical; }
   .topo { padding: 10px 16px; }
   .conteudo { padding: 14px 16px 96px; }
   .navinf {
-    display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
     background: var(--vinho); padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
   }
   .navinf a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 54px; color: #f3e6e8; text-decoration: none; font-size: 0.72rem; font-weight: 600; border-radius: 8px; }
