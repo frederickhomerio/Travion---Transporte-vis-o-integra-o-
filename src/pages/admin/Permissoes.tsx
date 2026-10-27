@@ -5,7 +5,7 @@ import { useApp } from '../../data/store';
 import { ROTULO_PAPEL } from '../../lib/formato';
 import type { Papel, Permissao } from '../../types';
 
-const PAPEIS: Papel[] = ['gestor', 'supervisor', 'embarcador', 'operacao', 'comercial', 'consulta'];
+const PAPEIS: Papel[] = ['gestor', 'supervisor', 'embarcador', 'apoio', 'operacao', 'comercial', 'consulta'];
 
 /** Matriz papel × permissão. Ver e editar são permissões separadas. Só administradores alteram. */
 export function Permissoes() {

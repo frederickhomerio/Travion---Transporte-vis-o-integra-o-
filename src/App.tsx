@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { HashRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { Carregando, ProvedorToast } from './components/ui';
 import type { Api } from './data/api';
+import { ProvedorDoc } from './data/documentacao';
 import { ProvedorDados, useApp } from './data/store';
 import { AguardandoAprovacao, Login, NovaSenha } from './pages/Login';
 import { ListaFretes } from './pages/ListaFretes';
@@ -11,6 +12,8 @@ const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default:
 const PosicoesEmbarque = lazy(() => import('./pages/PosicoesEmbarque').then((m) => ({ default: m.PosicoesEmbarque })));
 const PosicaoCliente = lazy(() => import('./pages/PosicaoCliente').then((m) => ({ default: m.PosicaoCliente })));
 const Admin = lazy(() => import('./pages/admin/Admin').then((m) => ({ default: m.Admin })));
+const ApoioOperacional = lazy(() => import('./pages/ApoioOperacional').then((m) => ({ default: m.ApoioOperacional })));
+const AtendimentoDoc = lazy(() => import('./pages/AtendimentoDoc').then((m) => ({ default: m.AtendimentoDoc })));
 const ConsultaPublica = lazy(() => import('./pages/ConsultaPublica').then((m) => ({ default: m.ConsultaPublica })));
 
 function Protegido({ children }: { children: ReactNode }) {
@@ -32,21 +35,25 @@ export function App({ api }: { api: Api }) {
   return (
     <ProvedorToast>
       <ProvedorDados api={api}>
-        <HashRouter>
-          <OuvinteRecuperacao />
-          <Routes>
-            <Route path="/consulta/:token" element={<Suspense fallback={<Carregando />}><ConsultaPublica /></Suspense>} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/nova-senha" element={<NovaSenha />} />
-            <Route path="/" element={<Protegido><ListaFretes /></Protegido>} />
-            <Route path="/dashboard" element={<Protegido><Dashboard /></Protegido>} />
-            <Route path="/posicoes" element={<Protegido><PosicoesEmbarque /></Protegido>} />
-            <Route path="/posicao-cliente" element={<Protegido><PosicaoCliente /></Protegido>} />
-            <Route path="/admin/*" element={<Protegido><Admin /></Protegido>} />
-            <Route path="/mais" element={<Protegido><Mais /></Protegido>} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </HashRouter>
+        <ProvedorDoc>
+          <HashRouter>
+            <OuvinteRecuperacao />
+            <Routes>
+              <Route path="/consulta/:token" element={<Suspense fallback={<Carregando />}><ConsultaPublica /></Suspense>} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/nova-senha" element={<NovaSenha />} />
+              <Route path="/" element={<Protegido><ListaFretes /></Protegido>} />
+              <Route path="/dashboard" element={<Protegido><Dashboard /></Protegido>} />
+              <Route path="/posicoes" element={<Protegido><PosicoesEmbarque /></Protegido>} />
+              <Route path="/posicao-cliente" element={<Protegido><PosicaoCliente /></Protegido>} />
+              <Route path="/apoio" element={<Protegido><ApoioOperacional /></Protegido>} />
+              <Route path="/apoio/:id" element={<Protegido><AtendimentoDoc /></Protegido>} />
+              <Route path="/admin/*" element={<Protegido><Admin /></Protegido>} />
+              <Route path="/mais" element={<Protegido><Mais /></Protegido>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </HashRouter>
+        </ProvedorDoc>
       </ProvedorDados>
     </ProvedorToast>
   );

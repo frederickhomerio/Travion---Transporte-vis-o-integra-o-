@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { BarraFiltros } from '../components/Filtros';
 import { Layout } from '../components/Layout';
 import { AbrirPosicoes } from '../components/AbrirPosicoes';
@@ -25,6 +26,7 @@ const AGRUPAMENTOS: Agrupar[] = ['nenhum', 'origem', 'destino', 'filial', 'produ
 
 export function ListaFretes() {
   const { estado, pode } = useApp();
+  const [params, setParams] = useSearchParams();
   const idx = useIndices();
   const todas = useLinhas();
   const { definirData } = useApp();
@@ -47,6 +49,14 @@ export function ListaFretes() {
   const [gerando, setGerando] = useState(false);
   const [lista, setLista] = useState<ItemLista[] | null>(null);
   const [detalhe, setDetalhe] = useState<string | null>(null);
+  // Notificação de documentação abre Detalhes do embarque → Documentação → Solicitação.
+  const [docAberta, setDocAberta] = useState<string | null>(null);
+  useEffect(() => {
+    const emb = params.get('emb');
+    if (!emb) return;
+    setDetalhe(emb); setDocAberta(params.get('doc'));
+    setParams({}, { replace: true });
+  }, [params, setParams]);
   const [abrir, setAbrir] = useState(false);
   const [novo, setNovo] = useState(false);
   const [rapido, setRapido] = useState<string | null>(null);
@@ -188,7 +198,7 @@ export function ListaFretes() {
       {suspender && <ConfirmarSuspensao e={suspender} aoFechar={() => setSuspender(null)} />}
       {encerrar && <ConfirmarEncerramento e={encerrar} aoFechar={() => setEncerrar(null)} />}
       {verSuspensos && <EmbarquesSuspensos embarques={suspensos} aoFechar={() => setVerSuspensos(false)} />}
-      {detalhe && <DetalhesEmbarque embarqueId={detalhe} aoFechar={() => setDetalhe(null)} />}
+      {detalhe && <DetalhesEmbarque embarqueId={detalhe} solicitacaoDoc={docAberta} aoFechar={() => { setDetalhe(null); setDocAberta(null); }} />}
       {abrir && <AbrirPosicoes aoFechar={() => setAbrir(false)} />}
       {novo && <NovoEmbarque aoFechar={(id) => { setNovo(false); if (id) setAnuncioNovo(id); }} />}
       {anuncioNovo && estado.embarques[anuncioNovo] && (

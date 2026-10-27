@@ -3,6 +3,7 @@ import type { Cadastros } from '../lib/cadastros';
 import { consultarCnpjBrasilApi } from '../lib/cnpj';
 import { CONFIG_PADRAO, type Configuracoes, type DadosCnpj, type Perfil, type Permissao, type Sessao } from '../types';
 import type { Api, CotacaoCna, EstadoConexao, EventoTempoReal, LogoCandidata } from './api';
+import { criarDocSupabase } from './docSupabase';
 
 const COLUNAS_EMBARQUE =
   'id,codigo,cliente_id,comercial_id,filial_id,produto_id,origem_cidade,origem_uf,local_coleta_id,destino_cidade,destino_uf,' +
@@ -43,6 +44,7 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
 
   const api: Api = {
     modo: 'supabase',
+    doc: criarDocSupabase(sb, rpc),
 
     async sessaoAtual() {
       const { data } = await sb.auth.getSession();
