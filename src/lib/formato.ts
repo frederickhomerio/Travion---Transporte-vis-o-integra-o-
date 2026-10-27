@@ -75,6 +75,8 @@ export const ROTULO_STATUS: Record<string, string> = {
 export const ROTULO_PAPEL: Record<string, string> = {
   administrador: 'Administrador',
   gestor: 'Gestor',
+  supervisor: 'Supervisor',
+  embarcador: 'Embarcador',
   operacao: 'Operação',
   comercial: 'Comercial',
   consulta: 'Consulta interna',

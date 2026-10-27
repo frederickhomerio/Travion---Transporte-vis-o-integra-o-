@@ -214,7 +214,8 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d
 do $$ begin
   assert (select count(*) from embarques) = 1, 'comercial vê só a carteira FREDERICK';
   assert (select count(*) from embarque_financeiro) = 1, 'comercial vê financeiro da carteira';
-  assert (select count(*) from clientes) = 1, 'comercial vê só clientes da carteira';
+  -- Desde a migração 1310 o comercial cadastra embarques, então enxerga a lista de clientes para escolher o cliente.
+  assert (select count(*) from clientes) > 1, 'comercial que cadastra embarque vê a lista de clientes';
   begin perform atualizar_posicao((select id from posicoes_diarias limit 1), '{"porta":1}', '{"porta":0}');
     assert false, 'comercial sem permissão de contador'; exception when insufficient_privilege then null; end;
 end $$;
@@ -227,16 +228,16 @@ do $$ begin
     assert false, 'pendente não grava'; exception when insufficient_privilege then null; end;
 end $$;
 
--- Exceção individual: gestor recebe acesso financeiro específico
+-- Gestor tem financeiro por padrão (migração 1310); exceção individual pode tirar a edição
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
-do $$ begin assert (select count(*) from embarque_financeiro) = 0, 'gestor sem financeiro por padrão'; end $$;
+do $$ begin assert (select count(*) from embarque_financeiro) = 2, 'gestor vê financeiro das filiais dele'; end $$;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
-select admin_atualizar_usuario('00000000-0000-0000-0000-00000000000b', '{"permissoes":{"financeiro.ver":true}}') is not null;
+select admin_atualizar_usuario('00000000-0000-0000-0000-00000000000b', '{"permissoes":{"financeiro.editar":false}}') is not null;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
 do $$ begin
-  assert (select count(*) from embarque_financeiro) = 2, 'gestor com exceção vê financeiro das filiais dele';
+  assert (select count(*) from embarque_financeiro) = 2, 'gestor continua vendo o financeiro';
   begin perform atualizar_financeiro((select id from embarques order by codigo limit 1), '{"frete_empresa":1}', '{"frete_empresa":155}');
-    assert false, 'ver não implica editar'; exception when insufficient_privilege then null; end;
+    assert false, 'exceção individual tira a edição'; exception when insufficient_privilege then null; end;
 end $$;
 
 -- Histórico protegido e completo

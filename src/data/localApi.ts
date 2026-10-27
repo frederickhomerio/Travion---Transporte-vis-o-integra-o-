@@ -14,7 +14,7 @@ import {
 } from '../types';
 import type { Api, Convite, EventoTempoReal, MatrizPermissoes, RelatorioImportacao, UsuarioAdmin } from './api';
 
-const CHAVE = 'travion-previa-v1';
+const CHAVE = 'travion-previa-v2';
 const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
@@ -46,10 +46,16 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
   gestor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
-    'compartilhamento.links'],
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar'],
+  supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
+    'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
+    'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar'],
+  embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
+    'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar'],
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional'],
-  comercial: ['embarques.ver', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia', 'posicoes.editar_obs_cliente',
-    'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links'],
+  comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
+    'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links'],
   consulta: ['embarques.ver'],
 };
 
@@ -102,13 +108,14 @@ function semear(): Banco {
   const loc = (nome: string, cidade: string, uf: string, tipo: Local['tipo']): Local => ({ id: uid(), nome, cidade, uf, tipo, ativo: true, is_demo: true });
   const locais = [
     loc('[DEMO] Armazém Norte', 'Rio Verde', 'GO', 'coleta'), loc('[DEMO] Fazenda Boa Vista', 'Jataí', 'GO', 'coleta'),
-    loc('[DEMO] Silo Central', 'Itumbiara', 'GO', 'coleta'), loc('[DEMO] Fazenda Serra', 'Montividiu', 'GO', 'coleta'),
+    loc('[DEMO] Silo Central', 'Itumbiara', 'GO', 'coleta'), { ...loc('[DEMO] Fazenda Serra', 'Montividiu', 'GO', 'coleta'), link_mapa: 'https://maps.app.goo.gl/a4n1Z1LzwwtDoMaZ7' },
     loc('[DEMO] Terminal Porto', 'Santos', 'SP', 'entrega'), loc('[DEMO] Indústria Sul', 'Uberaba', 'MG', 'entrega'),
     loc('[DEMO] Ferrovia Leste', 'Araguari', 'MG', 'entrega'), loc('[DEMO] Usina Oeste', 'Quirinópolis', 'GO', 'entrega'),
   ];
   const perfis: Perfil[] = [
     ['Administrador (prévia)', 'administrador'], ['Gestor Rio Verde (prévia)', 'gestor'], ['Operação Rio Verde (prévia)', 'operacao'],
     ['Comercial Ana (prévia)', 'comercial'], ['Consulta interna (prévia)', 'consulta'],
+    ['Supervisor Jataí (prévia)', 'supervisor'], ['Embarcador Montividiu (prévia)', 'embarcador'],
   ].map(([nome, papel], i) => ({
     id: `perfil-${i}`, nome, email: `${papel}@previa.local`, papel: papel as Papel, status: 'ativo',
     comercial_id: papel === 'comercial' ? comerciais[0].id : null, criado_em: agora(),
@@ -116,7 +123,8 @@ function semear(): Banco {
   const perfilFiliais = [
     { perfil_id: 'perfil-1', filial_id: filiais[0].id }, { perfil_id: 'perfil-1', filial_id: filiais[3].id },
     { perfil_id: 'perfil-2', filial_id: filiais[0].id }, { perfil_id: 'perfil-4', filial_id: filiais[0].id },
-    { perfil_id: 'perfil-4', filial_id: filiais[1].id },
+    { perfil_id: 'perfil-4', filial_id: filiais[1].id }, { perfil_id: 'perfil-5', filial_id: filiais[1].id },
+    { perfil_id: 'perfil-6', filial_id: filiais[3].id },
   ];
   const papelPermissoes = Object.entries(MATRIZ_INICIAL).flatMap(([papel, ps]) => ps.map((chave) => ({ papel: papel as Papel, chave })));
 
@@ -142,7 +150,7 @@ function semear(): Banco {
       id, codigo: i + 1, cliente_id: clientes[l[0]].id, comercial_id: clientes[l[0]].comercial_id, filial_id: filiais[l[1]].id,
       produto_id: produtos[l[2]].id, origem_cidade: l[3], origem_uf: 'GO', local_coleta_id: locais[l[4]].id,
       destino_cidade: l[5], destino_uf: l[6], local_entrega_id: locais[l[7]].id, status_liberacao: l[8], data_liberacao: null,
-      cadencia_valor: l[9], cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: 40, observacao_interna: null,
+      cadencia_valor: l[9], cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: 40, observacao_interna: i === 6 ? 'Carregamento das 7h às 17h. Levar lona e EPI.' : null,
       situacao: 'ativo', is_demo: true, chave_importacao: null, versao: 1, atualizado_em: agora(), atualizado_por_nome: 'Demonstração',
     });
     financeiro.push({ embarque_id: id, frete_empresa: l[10], frete_motorista: l[11], unidade_frete: 'rs_tonelada',
@@ -789,8 +797,10 @@ export function criarLocalApi(): Api {
 
 export const PERFIS_PREVIA = [
   { email: 'administrador@previa.local', rotulo: 'Administrador', descricao: 'Acesso completo' },
-  { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu, sem financeiro' },
+  { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra embarques, com financeiro' },
+  { email: 'supervisor@previa.local', rotulo: 'Supervisor', descricao: 'Filial Jataí: cadastra embarques' },
+  { email: 'embarcador@previa.local', rotulo: 'Embarcador', descricao: 'Filial Montividiu: cadastra embarques, vê frete motorista e margem, anuncia' },
   { email: 'operacao@previa.local', rotulo: 'Operação', descricao: 'Filial Rio Verde: contadores e observação operacional' },
-  { email: 'comercial@previa.local', rotulo: 'Comercial', descricao: 'Carteira [DEMO] Ana, com financeiro' },
+  { email: 'comercial@previa.local', rotulo: 'Comercial', descricao: 'Carteira [DEMO] Ana: cadastra embarques' },
   { email: 'consulta@previa.local', rotulo: 'Consulta interna', descricao: 'Somente leitura nas filiais Rio Verde e Jataí' },
 ];

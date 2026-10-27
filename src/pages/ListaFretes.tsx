@@ -1,50 +1,99 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarraFiltros } from '../components/Filtros';
-import { Contador } from '../components/Contador';
 import { Layout } from '../components/Layout';
 import { AbrirPosicoes } from '../components/AbrirPosicoes';
+import { ImagemAnuncio, ModalDivulgacao } from '../components/AnuncioFrete';
 import { DetalhesEmbarque } from '../components/DetalhesEmbarque';
 import { NovoEmbarque } from '../components/NovoEmbarque';
-import { Alerta, BadgeStatus, Carregando, EstadoVazio, Icone, Segmentado } from '../components/ui';
+import { Alerta, Carregando, EstadoVazio, Icone, Modal, Segmentado, useAviso } from '../components/ui';
 import { useApp, useIndices, useLinhas } from '../data/store';
-import { type Indices, cidadeUF, codigoEmbarque, nome } from '../lib/cadastros';
-import { resumir } from '../lib/calculos';
+import { type DadosAnuncio, cidadeAnuncio, semDemo, valorFrete, UNIDADE_ANUNCIO } from '../lib/anuncio';
+import { type Indices, codigoEmbarque, nome } from '../lib/cadastros';
 import { aplicarFiltros } from '../lib/filtros';
-import { fmtData, fmtT } from '../lib/formato';
-import type { LinhaFrete } from '../types';
+import { fmtPct, fmtReais, fmtT, hojeSP } from '../lib/formato';
+import { normalizar } from '../lib/texto';
+import { type ItemLista, baixarListaPdf, desenharLista, textoLista } from '../lib/listaExport';
+import type { Financeiro, LinhaFrete } from '../types';
 
-type Agrupar = 'nenhum' | 'cliente' | 'filial';
-const CHAVE_AGRUPAR = 'travion-agrupar';
+type Campo = 'origem' | 'destino' | 'filial' | 'produto';
+type CampoBusca = 'nenhum' | Campo;
+type Agrupar = 'nenhum' | Campo;
+const CHAVE_AGRUPAR = 'travion-agrupar-v2';
+const AGRUPAMENTOS: Agrupar[] = ['nenhum', 'origem', 'destino', 'filial', 'produto'];
 
 export function ListaFretes() {
   const { estado, pode } = useApp();
   const idx = useIndices();
   const todas = useLinhas();
-  const linhas = useMemo(() => aplicarFiltros(todas, estado.filtros, idx), [todas, estado.filtros, idx]);
-  const [agrupar, setAgrupar] = useState<Agrupar>(() => { try { return (localStorage.getItem(CHAVE_AGRUPAR) as Agrupar) || 'nenhum'; } catch { return 'nenhum'; } });
+  const { definirData } = useApp();
+  // A lista é sempre a do dia (sem escolher data operacional).
+  useEffect(() => { const h = hojeSP(); if (estado.data !== h) definirData(h); }, [estado.data, definirData]);
+  const [buscarPor, setBuscarPor] = useState<CampoBusca>('nenhum');
+  const [texto, setTexto] = useState('');
+  // Vitrine para a equipe de campo: só fretes liberados e ativos.
+  const liberados = useMemo(() => aplicarFiltros(todas, { ...estado.filtros, busca: '' }, idx)
+    .filter((l) => l.embarque.status_liberacao === 'liberado' && l.embarque.situacao === 'ativo'), [todas, estado.filtros, idx]);
+  const linhas = useMemo(() => {
+    const t = normalizar(texto);
+    return t && buscarPor !== 'nenhum' ? liberados.filter((l) => normalizar(chaveGrupo(l, buscarPor, idx)) === t) : liberados;
+  }, [liberados, texto, buscarPor, idx]);
+  const sugestoes = useMemo(() => buscarPor === 'nenhum' ? [] : [...new Set(liberados.map((l) => chaveGrupo(l, buscarPor, idx)))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [liberados, buscarPor, idx]);
+  const [agrupar, setAgrupar] = useState<Agrupar>(() => {
+    try { const v = localStorage.getItem(CHAVE_AGRUPAR) as Agrupar; return AGRUPAMENTOS.includes(v) ? v : 'nenhum'; } catch { return 'nenhum'; }
+  });
+  const [gerando, setGerando] = useState(false);
+  const [lista, setLista] = useState<ItemLista[] | null>(null);
   const [detalhe, setDetalhe] = useState<string | null>(null);
   const [abrir, setAbrir] = useState(false);
   const [novo, setNovo] = useState(false);
+  const [rapido, setRapido] = useState<string | null>(null);
+  const [anuncioNovo, setAnuncioNovo] = useState<string | null>(null);
+  const [imagem, setImagem] = useState<DadosAnuncio | null>(null);
+  const avisar = useAviso();
 
-  const semPosicao = todas.filter((l) => !l.posicao && l.embarque.situacao === 'ativo').length;
-  const comPosicao = todas.filter((l) => l.posicao).length;
-  const r = useMemo(() => resumir(linhas, estado.config, false), [linhas, estado.config]);
-  const podeEditar = pode('posicoes.editar_contadores');
+  const dadosAnuncio = (l: LinhaFrete): DadosAnuncio => anuncioDe(l, idx, estado.financeiro[l.embarque.id] ?? null);
+  const acoesLinha: AcoesLinha = {
+    detalhes: (id) => setRapido(id),
+    imagem: (l) => setImagem(dadosAnuncio(l)),
+  };
+  const verFrete = pode('financeiro.ver');
 
   const grupos = useMemo(() => {
     if (agrupar === 'nenhum') return [{ chave: '', titulo: '', linhas }];
     const m = new Map<string, LinhaFrete[]>();
     for (const l of linhas) {
-      const k = agrupar === 'cliente' ? l.embarque.cliente_id : l.embarque.filial_id;
+      const k = chaveGrupo(l, agrupar, idx);
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push(l);
     }
     return [...m.entries()]
-      .map(([k, ls]) => ({ chave: k, titulo: agrupar === 'cliente' ? nome(idx.cliente, k) : nome(idx.filial, k), linhas: ls }))
+      .map(([k, ls]) => ({ chave: k, titulo: k, linhas: ls }))
       .sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));
   }, [linhas, agrupar, idx]);
 
   const mudarAgrupar = (a: Agrupar) => { setAgrupar(a); try { localStorage.setItem(CHAVE_AGRUPAR, a); } catch { /* preferência local */ } };
+
+  // Lista para divulgar, na mesma ordem e agrupamento da tela.
+  const itensLista = (): ItemLista[] => grupos.flatMap((g) => g.linhas.map((l) => {
+    const d = anuncioDe(l, idx, estado.financeiro[l.embarque.id] ?? null);
+    const v = valorFrete(d.frete);
+    return { grupo: g.titulo, cliente: nome(idx.cliente, l.embarque.cliente_id), origem_cidade: d.origem_cidade, origem_uf: d.origem_uf, coleta: d.coleta,
+      destino_cidade: d.destino_cidade, destino_uf: d.destino_uf, entrega: d.entrega, produto: d.produto, frete: v, anuncio: d };
+  }));
+  const gerarPdf = async () => {
+    setGerando(true);
+    try { await baixarListaPdf(itensLista(), estado.data, verFrete); }
+    catch (e) { avisar('erro', (e as Error).message); } finally { setGerando(false); }
+  };
+  const desenharListaAtual = useCallback((c: HTMLCanvasElement) => desenharLista(c, lista ?? [], estado.data, verFrete), [lista, estado.data, verFrete]);
+  const botoesExportar = (
+    <>
+      <button className="btn" disabled={!linhas.length} onClick={() => setLista(itensLista())}><Icone nome="baixar" tam={18} />Lista de fretes</button>
+      <button className="btn" disabled={!linhas.length || gerando} onClick={gerarPdf}><Icone nome="baixar" tam={18} />{gerando ? 'Gerando…' : 'Exportar PDF'}</button>
+      <button className="btn" disabled={!linhas.length} onClick={() => exportarCSV(linhas, idx, estado.data)}><Icone nome="baixar" tam={18} />CSV</button>
+    </>
+  );
 
   const acoes = (
     <div className="grupo-btn esconder-celular">
@@ -55,57 +104,56 @@ export function ListaFretes() {
 
   return (
     <Layout titulo="Lista de Fretes" acoes={acoes}>
-      <BarraFiltros linhas={todas} extra={
-        <div className="campo"><span>Agrupar por</span>
-          <Segmentado rotulo="Agrupar por" valor={agrupar} aoMudar={mudarAgrupar}
-            opcoes={[{ valor: 'nenhum', rotulo: 'Nenhum' }, { valor: 'cliente', rotulo: 'Cliente' }, { valor: 'filial', rotulo: 'Filial' }]} />
+      <div className="controles-lista">
+        <div className="controle-linha">
+          <span className="controle-rot">Buscar por</span>
+          <div className="controle-corpo">
+            <Segmentado rotulo="Buscar por" valor={buscarPor} aoMudar={(v) => { setBuscarPor(v); setTexto(''); }}
+              opcoes={[{ valor: 'nenhum', rotulo: 'Nenhum' }, { valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
+                { valor: 'filial', rotulo: 'Filial' }, { valor: 'produto', rotulo: 'Produto' }]} />
+            {buscarPor !== 'nenhum' && <select className="entrada controle-valor" aria-label="Valor da busca" value={texto} onChange={(e) => setTexto(e.target.value)}>
+              <option value="">{{ nenhum: '', origem: 'Todas as origens', destino: 'Todos os destinos', filial: 'Todas as filiais', produto: 'Todos os produtos' }[buscarPor]}</option>
+              {sugestoes.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>}
+          </div>
         </div>
-      } />
+        <div className="controle-linha">
+          <span className="controle-rot">Agrupar por</span>
+          <div className="controle-corpo">
+            <Segmentado rotulo="Agrupar por" valor={agrupar} aoMudar={mudarAgrupar}
+              opcoes={[{ valor: 'nenhum', rotulo: 'Nenhum' }, { valor: 'origem', rotulo: 'Cidade origem' }, { valor: 'destino', rotulo: 'Cidade destino' },
+                { valor: 'filial', rotulo: 'Filial' }, { valor: 'produto', rotulo: 'Produto' }]} />
+          </div>
+        </div>
+        <div className="controle-linha">
+          <span className="controle-rot"><strong>{linhas.length}</strong> frete(s)</span>
+          <div className="controle-corpo controle-botoes">{botoesExportar}</div>
+        </div>
+      </div>
+      <BarraFiltros linhas={todas} semData semBusca />
 
       <div className="grupo-btn so-celular" style={{ marginBottom: 12 }}>
         {pode('posicoes.abrir') && <button className="btn" onClick={() => setAbrir(true)}>Abrir posições</button>}
         {pode('embarques.criar') && <button className="btn primario" onClick={() => setNovo(true)}><Icone nome="mais" tam={18} />Novo embarque</button>}
-        <button className="btn" onClick={() => exportarCSV(linhas, idx, estado.data)}><Icone nome="baixar" tam={18} />CSV</button>
       </div>
 
       {estado.erro && <Alerta tipo="erro"><span><strong>Erro ao carregar:</strong> {estado.erro}</span></Alerta>}
 
-      {semPosicao > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <Alerta tipo={comPosicao === 0 ? 'aviso' : 'info'}>
-            <span style={{ flex: 1 }}>
-              {comPosicao === 0
-                ? <><strong>Nenhuma posição aberta em {fmtData(estado.data)}.</strong> Os contadores não são copiados automaticamente de um dia para o outro.</>
-                : <>{semPosicao} embarque(s) ativo(s) sem posição em {fmtData(estado.data)}.</>}
-            </span>
-            {pode('posicoes.abrir') && <button className="btn peq" onClick={() => setAbrir(true)}>Abrir posições…</button>}
-          </Alerta>
-        </div>
-      )}
-
-      <div className="resumo-linha" aria-live="polite">
-        <span><strong>{linhas.length}</strong> embarque(s) listado(s)</span>
-        <span>Porta <strong className="num">{r.porta}</strong> · {fmtT(r.porta_t)}</span>
-        <span>Trânsito <strong className="num">{r.transito}</strong> · {fmtT(r.transito_t)}</span>
-        <span>Carregados <strong className="num">{r.carregados}</strong> · {fmtT(r.carregado_t)}</span>
-        <span>Projetado (porta + carregados) <strong>{fmtT(r.projetado_t)}</strong></span>
-        <button className="btn sutil peq esconder-celular" onClick={() => exportarCSV(linhas, idx, estado.data)}><Icone nome="baixar" tam={16} />Exportar CSV</button>
-      </div>
 
       {estado.carregando && Object.keys(estado.embarques).length === 0 ? <Carregando /> : linhas.length === 0 ? (
-        <div className="cartao"><EstadoVazio titulo={todas.length === 0 ? 'Nenhum embarque cadastrado' : 'Nenhum embarque com estes filtros'}>
-          <p>{todas.length === 0 ? (pode('embarques.criar') ? 'Cadastre um embarque ou importe a planilha em Administração.' : 'Ainda não há embarques no seu escopo.') : 'Ajuste ou limpe os filtros.'}</p>
+        <div className="cartao"><EstadoVazio titulo={todas.length === 0 ? 'Nenhum embarque cadastrado' : 'Nenhum frete liberado'}>
+          <p>{todas.length === 0 ? (pode('embarques.criar') ? 'Cadastre um embarque ou importe a planilha em Administração.' : 'Ainda não há embarques no seu escopo.') : 'Nenhum frete liberado com estes filtros. Embarques suspensos ou sem liberação aparecem em Posições de Embarque.'}</p>
         </EstadoVazio></div>
       ) : (
         <>
           <div className="cartao tabela-fretes-wrap">
             <table className="tabela-fretes">
               <thead>
-                <tr><th>Origem</th><th>Destino</th><th className="n">Porta</th><th className="n">Trânsito</th><th className="n">Carregados</th><th className="td-acao"><span className="sr">Ações</span></th></tr>
+                <tr><th>Origem</th><th>Destino</th><th>Produto</th>{verFrete && <><th className="n-frete">Frete motorista</th><th className="n-frete">Margem</th></>}<th className="td-acao"><span className="sr">Ações</span></th></tr>
               </thead>
               <tbody>
                 {grupos.map((g) => (
-                  <GrupoTabela key={g.chave} g={g} agrupar={agrupar} idx={idx} podeEditar={podeEditar} aoDetalhe={setDetalhe} />
+                  <GrupoTabela key={g.chave} g={g} idx={idx} verFrete={verFrete} acoes={acoesLinha} />
                 ))}
               </tbody>
             </table>
@@ -113,69 +161,118 @@ export function ListaFretes() {
           <div className="cartoes-fretes">
             {grupos.map((g) => (
               <div key={g.chave} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {g.titulo && <TituloGrupo titulo={g.titulo} linhas={g.linhas} idx={idx} agrupar={agrupar} />}
-                {g.linhas.map((l) => <CartaoFrete key={l.embarque.id} l={l} idx={idx} podeEditar={podeEditar} aoDetalhe={setDetalhe} />)}
+                {g.titulo && <TituloGrupo titulo={g.titulo} linhas={g.linhas} />}
+                {g.linhas.map((l) => <CartaoFrete key={l.embarque.id} l={l} idx={idx} verFrete={verFrete} acoes={acoesLinha} />)}
               </div>
             ))}
           </div>
         </>
       )}
 
+      {rapido && <DetalhesRapidos embarqueId={rapido} aoFechar={() => setRapido(null)} aoFichaCompleta={() => { setDetalhe(rapido); setRapido(null); }} />}
+      {imagem && <ImagemAnuncio dados={imagem} aoFechar={() => setImagem(null)} />}
+      {lista && (
+        <ModalDivulgacao titulo="Divulgação da lista de fretes" desenhar={desenharListaAtual} texto={textoLista(lista, estado.data, verFrete)}
+          arquivoNome={`lista-fretes-${estado.data}.jpg`} tipo="image/jpeg" aoFechar={() => setLista(null)} />
+      )}
       {detalhe && <DetalhesEmbarque embarqueId={detalhe} aoFechar={() => setDetalhe(null)} />}
       {abrir && <AbrirPosicoes aoFechar={() => setAbrir(false)} />}
-      {novo && <NovoEmbarque aoFechar={(id) => { setNovo(false); if (id) setDetalhe(id); }} />}
+      {novo && <NovoEmbarque aoFechar={(id) => { setNovo(false); if (id) setAnuncioNovo(id); }} />}
+      {anuncioNovo && estado.embarques[anuncioNovo] && (
+        <ImagemAnuncio titulo="Anúncio do novo frete" dados={anuncioDe({ embarque: estado.embarques[anuncioNovo] } as LinhaFrete, idx, estado.financeiro[anuncioNovo] ?? null)}
+          aoFechar={() => setAnuncioNovo(null)} />
+      )}
     </Layout>
   );
 }
 
-function subtituloGrupo(linhas: LinhaFrete[], idx: Indices, agrupar: Agrupar) {
-  const t = linhas.reduce((a, l) => ({ p: a.p + (l.posicao?.porta ?? 0), t: a.t + (l.posicao?.transito ?? 0), c: a.c + (l.posicao?.carregados ?? 0) }), { p: 0, t: 0, c: 0 });
-  const carteira = agrupar === 'cliente' ? nome(idx.comercial, linhas[0]?.embarque.comercial_id, 'sem carteira') : null;
-  return `${carteira ? `Carteira ${carteira} · ` : ''}${linhas.length} lote(s) · Porta ${t.p} · Trânsito ${t.t} · Carregados ${t.c}`;
+function chaveGrupo(l: LinhaFrete, agrupar: Agrupar, idx: Indices): string {
+  const e = l.embarque;
+  if (agrupar === 'origem') return cidadeAnuncio(e.origem_cidade, e.origem_uf).toUpperCase();
+  if (agrupar === 'destino') return cidadeAnuncio(e.destino_cidade, e.destino_uf).toUpperCase();
+  if (agrupar === 'filial') return semDemo(nome(idx.filial, e.filial_id));
+  if (agrupar === 'produto') return semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'));
+  return '';
 }
 
-function TituloGrupo({ titulo, linhas, idx, agrupar }: { titulo: string; linhas: LinhaFrete[]; idx: Indices; agrupar: Agrupar }) {
-  return <div className="grupo-titulo"><span>{titulo}</span><span className="pequeno suave" style={{ fontWeight: 500 }}>{subtituloGrupo(linhas, idx, agrupar)}</span></div>;
+function subtituloGrupo(linhas: LinhaFrete[]) {
+  return `${linhas.length} frete(s)`;
 }
 
-function GrupoTabela({ g, agrupar, idx, podeEditar, aoDetalhe }: {
-  g: { chave: string; titulo: string; linhas: LinhaFrete[] }; agrupar: Agrupar; idx: Indices; podeEditar: boolean; aoDetalhe: (id: string) => void;
+function TituloGrupo({ titulo, linhas }: { titulo: string; linhas: LinhaFrete[] }) {
+  return <div className="grupo-titulo"><span>{titulo}</span><span className="pequeno suave" style={{ fontWeight: 500 }}>{subtituloGrupo(linhas)}</span></div>;
+}
+
+type AcoesLinha = { detalhes: (id: string) => void; imagem: (l: LinhaFrete) => void };
+
+function anuncioDe(l: LinhaFrete, idx: Indices, fin: Financeiro | null): DadosAnuncio {
+  const e = l.embarque;
+  return {
+    origem_cidade: e.origem_cidade, origem_uf: e.origem_uf, coleta: e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null,
+    destino_cidade: e.destino_cidade, destino_uf: e.destino_uf, entrega: e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null,
+    produto: e.produto_id ? nome(idx.produto, e.produto_id) : null,
+    link_mapa: (e.local_coleta_id && idx.local.get(e.local_coleta_id)?.link_mapa) || null,
+    frete: fin ? { frete_motorista: fin.frete_motorista, unidade_frete: fin.unidade_frete } : null,
+  };
+}
+
+/** Cidade em destaque e o local entre parênteses, como no anúncio ("MONTIVIDIU-GO (FAZ. SEGREDO)"). */
+function PontoRota({ cidade, uf, local }: { cidade: string; uf: string | null; local: string | null }) {
+  return (
+    <div className="ponto-rota">
+      <div className="cidade">{cidadeAnuncio(cidade, uf).toUpperCase()}</div>
+      <div className="local">{local ? `(${semDemo(local).toUpperCase()})` : '(local a informar)'}</div>
+    </div>
+  );
+}
+
+function FreteMotorista({ fin }: { fin: Financeiro | null | undefined }) {
+  const v = valorFrete(fin ?? null);
+  if (!v) return <span className="suave pequeno">A combinar</span>;
+  const u = fin ? UNIDADE_ANUNCIO[fin.unidade_frete] : '';
+  return <span className="frete-valor">{v}{u && <small> {u}</small>}</span>;
+}
+
+/** Margem do embarque = frete empresa − frete motorista, em R$ e em % do frete empresa. Nunca vai no anúncio. */
+function Margem({ fin }: { fin: Financeiro | null | undefined }) {
+  const emp = fin?.frete_empresa;
+  const mot = fin?.frete_motorista;
+  if (emp == null || mot == null || !(emp > 0)) return <span className="suave pequeno">—</span>;
+  const m = emp - mot;
+  return (
+    <span className={`margem ${m < 0 ? 'negativa' : ''}`} title={`Frete empresa ${fmtReais(emp)} − frete motorista ${fmtReais(mot)}`}>
+      {fmtReais(m)}<small> · {fmtPct((m / emp) * 100)}</small>
+    </span>
+  );
+}
+
+function BotoesAnuncio({ l, acoes }: { l: LinhaFrete; acoes: AcoesLinha }) {
+  return (
+    <div className="grupo-btn botoes-anuncio">
+      <button className="btn peq" onClick={() => acoes.detalhes(l.embarque.id)}>Detalhes</button>
+      <button className="btn peq primario" onClick={() => acoes.imagem(l)} title="Imagem e texto para divulgar no WhatsApp">Divulgação</button>
+    </div>
+  );
+}
+
+function GrupoTabela({ g, idx, verFrete, acoes }: {
+  g: { chave: string; titulo: string; linhas: LinhaFrete[] }; idx: Indices; verFrete: boolean; acoes: AcoesLinha;
 }) {
+  const { estado } = useApp();
   return (
     <>
       {g.titulo && (
-        <tr className="grupo-cab"><td colSpan={6}>{g.titulo}<span className="totais">{subtituloGrupo(g.linhas, idx, agrupar)}</span></td></tr>
+        <tr className="grupo-cab"><td colSpan={verFrete ? 6 : 4}>{g.titulo}<span className="totais">{subtituloGrupo(g.linhas)}</span></td></tr>
       )}
       {g.linhas.map((l) => {
         const e = l.embarque;
         return (
-          <tr key={e.id} className={`${e.status_liberacao === 'suspenso' ? 'suspenso' : ''} ${l.posicao ? '' : 'sem-posicao'}`}>
-            <td>
-              <div className="local-cidade">{cidadeUF(e.origem_cidade, e.origem_uf)}</div>
-              <div className="local-ponto">{nome(idx.local, e.local_coleta_id, 'Coleta não informada')}</div>
-              {(e.status_liberacao === 'suspenso' || e.situacao === 'arquivado') && (
-                <div style={{ marginTop: 3, display: 'flex', gap: 4 }}>
-                  {e.status_liberacao === 'suspenso' && <BadgeStatus status="suspenso" />}
-                  {e.situacao === 'arquivado' && <span className="badge arquivado">Arquivado</span>}
-                </div>
-              )}
-            </td>
-            <td>
-              <div className="local-cidade">{cidadeUF(e.destino_cidade, e.destino_uf)}</div>
-              <div className="local-ponto">{nome(idx.local, e.local_entrega_id, 'Entrega não informada')}</div>
-            </td>
-            {l.posicao ? (
-              <>
-                <td><Contador posicao={l.posicao} campo="porta" podeEditar={podeEditar && e.situacao === 'ativo'} /></td>
-                <td><Contador posicao={l.posicao} campo="transito" podeEditar={podeEditar && e.situacao === 'ativo'} /></td>
-                <td><Contador posicao={l.posicao} campo="carregados" podeEditar={podeEditar && e.situacao === 'ativo'} /></td>
-              </>
-            ) : (
-              <td colSpan={3} className="suave pequeno" style={{ textAlign: 'center' }}>Sem posição nesta data</td>
-            )}
-            <td className="td-acao">
-              <button className="btn peq" onClick={() => aoDetalhe(e.id)} aria-label={`Detalhes de ${codigoEmbarque(e.codigo)}`}>Detalhes</button>
-            </td>
+          <tr key={e.id}>
+            <td><PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} /></td>
+            <td><PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></td>
+            <td className="td-produto">{semDemo(nome(idx.produto, e.produto_id))}</td>
+            {verFrete && <><td className="n-frete"><FreteMotorista fin={estado.financeiro[e.id]} /></td><td className="n-frete"><Margem fin={estado.financeiro[e.id]} /></td></>}
+            <td className="td-acao"><BotoesAnuncio l={l} acoes={acoes} /></td>
           </tr>
         );
       })}
@@ -183,43 +280,52 @@ function GrupoTabela({ g, agrupar, idx, podeEditar, aoDetalhe }: {
   );
 }
 
-function CartaoFrete({ l, idx, podeEditar, aoDetalhe }: { l: LinhaFrete; idx: Indices; podeEditar: boolean; aoDetalhe: (id: string) => void }) {
+function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaFrete; idx: Indices; verFrete: boolean; acoes: AcoesLinha }) {
+  const { estado } = useApp();
   const e = l.embarque;
-  const editar = podeEditar && e.situacao === 'ativo';
   return (
-    <article className="cartao cartao-frete" style={e.status_liberacao === 'suspenso' ? { borderLeft: '4px solid var(--vermelho-700)' } : undefined}>
-      <div className="rota">
-        <div>
-          <div className="local-cidade">{cidadeUF(e.origem_cidade, e.origem_uf)}</div>
-          <div className="local-ponto">{nome(idx.local, e.local_coleta_id, 'Coleta não informada')}</div>
-        </div>
-        <span className="seta"><Icone nome="seta" tam={18} /></span>
-        <div>
-          <div className="local-cidade">{cidadeUF(e.destino_cidade, e.destino_uf)}</div>
-          <div className="local-ponto">{nome(idx.local, e.local_entrega_id, 'Entrega não informada')}</div>
-        </div>
+    <article className="cartao cartao-frete">
+      <div className="rota-anuncio">
+        <div><span className="rot-rota">Origem</span>
+          <PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} /></div>
+        <span className="seta" aria-hidden="true">➜</span>
+        <div><span className="rot-rota">Destino</span>
+          <PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></div>
       </div>
-      {l.posicao ? (
-        <div className="contadores">
-          {(['porta', 'transito', 'carregados'] as const).map((c) => (
-            <div key={c} className="cont-box">
-              <div className="rot">{c === 'porta' ? 'Porta' : c === 'transito' ? 'Trânsito' : 'Carregados'}</div>
-              <Contador posicao={l.posicao!} campo={c} podeEditar={editar} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="suave pequeno">Sem posição nesta data.</div>
-      )}
       <div className="rodape">
-        <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', minWidth: 0 }}>
-          {e.status_liberacao === 'suspenso' && <BadgeStatus status="suspenso" />}
-          {e.situacao === 'arquivado' && <span className="badge arquivado">Arquivado</span>}
-          <span className="pequeno suave" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nome(idx.cliente, e.cliente_id)}</span>
-        </span>
-        <button className="btn peq" onClick={() => aoDetalhe(e.id)}>Detalhes</button>
+        <span className="pequeno suave">{semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))}</span>
+        {verFrete && <span style={{ textAlign: 'right' }}><FreteMotorista fin={estado.financeiro[e.id]} /><br /><span className="pequeno">Margem <Margem fin={estado.financeiro[e.id]} /></span></span>}
       </div>
+      <BotoesAnuncio l={l} acoes={acoes} />
     </article>
+  );
+}
+
+/** Detalhes rápidos para a equipe de campo: veículos na porta, em trânsito e observações. */
+function DetalhesRapidos({ embarqueId, aoFechar, aoFichaCompleta }: { embarqueId: string; aoFechar: () => void; aoFichaCompleta: () => void }) {
+  const { estado } = useApp();
+  const idx = useIndices();
+  const e = estado.embarques[embarqueId];
+  const p = Object.values(estado.posicoes).find((x) => x.embarque_id === embarqueId && x.data_operacional === estado.data) ?? null;
+  if (!e) return null;
+  const cap = p?.toneladas_por_veiculo ?? e.toneladas_por_veiculo;
+  const box = (rot: string, v: number | null | undefined) => (
+    <div className="cont-box"><div className="rot">{rot}</div><div className="num grande">{v ?? '—'}</div><div className="pequeno suave">{v ? fmtT(v * cap) : ''}</div></div>
+  );
+  const obs = [e.observacao_interna, p?.obs_operacional].filter(Boolean) as string[];
+  return (
+    <Modal titulo={`${cidadeAnuncio(e.origem_cidade, e.origem_uf)} ➜ ${cidadeAnuncio(e.destino_cidade, e.destino_uf)}`} aoFechar={aoFechar} rodape={
+      <><button className="btn" onClick={aoFichaCompleta}>Ficha completa</button><button className="btn primario" onClick={aoFechar}>Fechar</button></>
+    }>
+      <div className="pequeno suave" style={{ marginBottom: 10 }}>
+        {codigoEmbarque(e.codigo)} · {semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))} · {semDemo(nome(idx.cliente, e.cliente_id))}
+      </div>
+      {p ? (
+        <div className="detalhes-rapidos">{box('Na porta', p.porta)}{box('Em trânsito', p.transito)}{box('Carregados', p.carregados)}</div>
+      ) : <Alerta tipo="info">Sem posição aberta nesta data: ainda não há contagem de veículos.</Alerta>}
+      <h3 className="pequeno" style={{ margin: '14px 0 4px' }}>Observação do embarque</h3>
+      {obs.length ? obs.map((o) => <p key={o} style={{ margin: '0 0 6px', whiteSpace: 'pre-wrap' }}>{o}</p>) : <p className="suave" style={{ margin: 0 }}>Sem observação.</p>}
+    </Modal>
   );
 }
 

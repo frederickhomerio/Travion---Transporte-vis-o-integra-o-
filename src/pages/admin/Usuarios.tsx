@@ -6,7 +6,7 @@ import { nome } from '../../lib/cadastros';
 import { fmtDataHora, ROTULO_PAPEL } from '../../lib/formato';
 import type { Papel, Permissao, StatusUsuario } from '../../types';
 
-const PAPEIS: Papel[] = ['administrador', 'gestor', 'operacao', 'comercial', 'consulta'];
+const PAPEIS: Papel[] = ['administrador', 'gestor', 'supervisor', 'embarcador', 'operacao', 'comercial', 'consulta'];
 const ROTULO_SITUACAO: Record<StatusUsuario, string> = { pendente: 'Aguardando aprovação', ativo: 'Ativo', bloqueado: 'Bloqueado' };
 
 export function Usuarios() {
