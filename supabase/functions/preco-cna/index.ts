@@ -24,7 +24,16 @@ function kgDaUnidade(titulo: string): number | null {
   if (/\bTON|TONELADA/.test(t)) return 1000;
   if (/ARROBA|@/.test(t)) return 15;
   if (/\bKG\b|QUILO/.test(t)) return 1;
-  return null; // litro, centavos por libra etc.: sem conversão para kg
+  return null;
+}
+
+/** Cotações que não vêm em peso: algodão em R$ por libra-peso e etanol em R$/litro (densidade a 20 °C, faixa da ANP). */
+function kgEspecial(titulo: string, produto: string): number | null {
+  const t = titulo.toUpperCase();
+  const p = norm(produto);
+  if (/LIBRA/.test(t)) return 0.45359237;
+  if (/\/\s*L\s*$|LITRO/.test(t) && /ETANOL/.test(p)) return /ANIDRO/.test(p) ? 0.791 : 0.809;
+  return null;
 }
 
 /** "1571.95", "1.571,95" ou 79.12 → número. */
@@ -67,7 +76,7 @@ Deno.serve(async (req) => {
 
   const cotacoes = dados.filter((d) => casa(String(d.NOME_PRODUTO ?? ''))).map((d) => {
     const valor = numero(d.VALOR);
-    const kg = kgDaUnidade(String(d.TITULO ?? ''));
+    const kg = kgDaUnidade(String(d.TITULO ?? '')) ?? kgEspecial(String(d.TITULO ?? ''), String(d.NOME_PRODUTO ?? ''));
     return {
       produto: String(d.NOME_PRODUTO).trim(), unidade: String(d.TITULO ?? '').trim(), uf: String(d.UF ?? '').trim(), praca: String(d.PRACA ?? '').trim(),
       data: String(d.DATA ?? '').trim(), valor, valor_kg: kg && Number.isFinite(valor) ? Math.round((valor / kg) * 10000) / 10000 : null,

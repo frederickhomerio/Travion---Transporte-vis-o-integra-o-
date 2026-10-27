@@ -96,7 +96,12 @@ begin
   assert (select count(*) from produtos where nome_busca = private.normalizar('sorgo') and not is_demo) = 1, 'produto existente reaproveitado';
   assert (select valor_pauta_kg from produtos where cna_produto = 'BOI GORDO') = 100, 'arroba = 15 kg e valor com vírgula';
   assert (select preco_fonte from produtos where cna_produto = 'BOI GORDO') like '%sem cotação em GO%', 'fonte avisa estado de fora';
-  assert (select valor_pauta_kg from produtos where cna_produto = 'ETANOL ANIDRO') is null, 'litro sem conversão';
+  assert (select valor_pauta_kg from produtos where cna_produto = 'ETANOL ANIDRO') = round(2.94 / 0.791, 4), 'litro pela densidade do anidro';
+  perform private.cna_aplicar('[{"NOME_PRODUTO":"ALGODÃO","TITULO":"R$ / CENTS-LIBRA","UF":"MG","PRACA":"TRIANGULO","DATA":"26/10/2026","VALOR":"4.04"},
+    {"NOME_PRODUTO":"LEITE","TITULO":"R$ / L","UF":"GO","PRACA":"GOIAS","DATA":"26/10/2026","VALOR":"2.50"}]'::jsonb);
+  assert (select valor_pauta_kg from produtos where cna_produto = 'ALGODÃO') = round(4.04 / 0.45359237, 4), 'libra-peso';
+  assert (select preco_fonte from produtos where cna_produto = 'ALGODÃO') like '%libra-peso%', 'fonte explica a conversão';
+  assert (select valor_pauta_kg from produtos where cna_produto = 'LEITE') is null, 'litro de outro produto sem conversão';
   assert (select nome from produtos where cna_produto = 'TRIGO - TIPO PÃO') = 'Trigo tipo pão', 'nome amigável';
   assert (select valor_pauta_kg from produtos where cna_produto = 'TRIGO - TIPO PÃO') = 1.5720, 'tonelada';
   perform private.cna_aplicar('[{"NOME_PRODUTO":"SORGO","TITULO":"R$ / SACA 60 KG","UF":"GO","PRACA":"RIO VERDE","DATA":"27/10/2026","VALOR":"66.00"}]'::jsonb);

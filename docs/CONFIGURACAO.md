@@ -31,6 +31,7 @@ Este guia leva o app da prévia local para produção com banco de dados real.
    8. `supabase/migrations/20261027000800_cadastros_v2.sql`
    9. `supabase/migrations/20261027000900_centros_custo.sql`
   10. `supabase/migrations/20261027001000_precos_cna.sql` (preços da CNA às 15h; liga pg_cron e pg_net)
+  11. `supabase/migrations/20261027001100_precos_cna_conversoes.sql` (etanol em litro e algodão em libra-peso para kg)
 
    Alternativa: com a [Supabase CLI](https://supabase.com/docs/guides/cli), `supabase link --project-ref SEU_PROJETO` e depois `supabase db push`.
 3. **Não execute** nada da pasta `supabase/tests/`. Aqueles arquivos simulam o Supabase e servem só para testes locais.
