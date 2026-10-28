@@ -178,6 +178,7 @@ As duas telas leem a mesma tabela de posições diárias. Os supervisores gravam
 ### 7.5 Permissões por usuário — desde 28/10/2026
 
 - **Onde:** Administração → Permissões → **Por usuário**. Filtra-se o usuário por nome ou e-mail (e por função); ao clicar, aparecem todas as permissões com **Padrão** (segue a função), **Permitir** ou **Negar** (vale só para a pessoa e vence o padrão). Mostra se a pessoa pode ou não, já somando os dois.
+- **Filtro "Aba do app":** mostra só as permissões que valem numa aba (Lista de Fretes, Dashboard Operacional, Posições de Embarque, Posição do Cliente, Apoio Operacional, Cadastro, Administração). Algumas valem em mais de uma aba (ex.: Ver financeiro); cada item mostra em quais.
 - **Quem acessa:** Administrador e Gestor (permissão `permissoes.gerenciar`). A aba **Padrão por função** continua; só o Administrador altera.
 - **Limites para quem não é Administrador:** não altera Administradores nem as próprias permissões; só concede permissões que também tem; não concede gestão de usuários nem de permissões. Negar é sempre possível. Toda mudança vai para o histórico.
 

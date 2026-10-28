@@ -862,3 +862,6 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
   .pu-item { grid-template-columns: minmax(0, 1fr) auto; }
   .pu-escolha { grid-column: 1 / -1; justify-self: start; }
 }
+.pu-topo { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.pu-aba { display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; font-weight: 600; min-width: 240px; }
+@media (max-width: 720px) { .pu-aba { width: 100%; } }

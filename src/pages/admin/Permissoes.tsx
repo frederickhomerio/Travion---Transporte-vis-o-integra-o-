@@ -3,6 +3,7 @@ import { Alerta, Carregando, EstadoVazio, Segmentado, useAviso } from '../../com
 import { type MatrizPermissoes, type UsuarioPermissoes, mensagemErro } from '../../data/api';
 import { useApp } from '../../data/store';
 import { ROTULO_PAPEL } from '../../lib/formato';
+import { ABAS_APP, abasDaPermissao } from '../../lib/permissoesAbas';
 import { normalizar } from '../../lib/texto';
 import type { Papel, Permissao } from '../../types';
 
@@ -16,21 +17,37 @@ export function Permissoes() {
   const [m, setM] = useState<MatrizPermissoes | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aba, setAba] = useState<'usuario' | 'funcao'>('usuario');
+  const [abaApp, setAbaApp] = useState('');
   useEffect(() => { api.matrizPermissoes().then(setM).catch((e) => setErro(mensagemErro(e))); }, [api]);
+  // Com uma aba escolhida, mostra só as permissões que valem nela (na ordem da aba).
   const grupos = useMemo(() => {
+    const filtro = ABAS_APP.find((a) => a.id === abaApp);
+    if (filtro) {
+      const itens = filtro.chaves.map((k) => m?.catalogo.find((c) => c.chave === k)).filter((c): c is MatrizPermissoes['catalogo'][number] => !!c);
+      return [[filtro.rotulo, itens]] as Grupos;
+    }
     const g = new Map<string, MatrizPermissoes['catalogo']>();
     for (const c of m?.catalogo ?? []) g.set(c.grupo, [...(g.get(c.grupo) ?? []), c]);
     return [...g.entries()];
-  }, [m]);
+  }, [m, abaApp]);
 
   if (erro) return <Alerta tipo="erro">{erro}</Alerta>;
   if (!m) return <Carregando />;
   return (
     <div className="pu">
-      <Segmentado rotulo="Modo" valor={aba} aoMudar={setAba} opcoes={[
-        { valor: 'usuario', rotulo: 'Por usuário' },
-        { valor: 'funcao', rotulo: 'Padrão por função' },
-      ]} />
+      <div className="pu-topo">
+        <Segmentado rotulo="Modo" valor={aba} aoMudar={setAba} opcoes={[
+          { valor: 'usuario', rotulo: 'Por usuário' },
+          { valor: 'funcao', rotulo: 'Padrão por função' },
+        ]} />
+        <label className="pu-aba">
+          <span>Aba do app</span>
+          <select className="entrada" value={abaApp} onChange={(e) => setAbaApp(e.target.value)}>
+            <option value="">Todas as abas</option>
+            {ABAS_APP.map((a) => <option key={a.id} value={a.id}>{a.rotulo}</option>)}
+          </select>
+        </label>
+      </div>
       {aba === 'usuario' ? <PorUsuario m={m} grupos={grupos} /> : <PorFuncao m={m} setM={setM} grupos={grupos} />}
     </div>
   );
@@ -177,7 +194,7 @@ function PainelUsuario({ u, grupos, padrao, admin, euId, pode, mudancas, setMuda
                 <div key={c.chave} className={`pu-item${c.chave in mudancas ? ' alterado' : ''}`}>
                   <div className="pu-desc">
                     <span>{c.descricao}</span>
-                    <span className="pequeno suave">Padrão da função: {doPapel ? 'sim' : 'não'}{e !== 'padrao' ? ' · individual' : ''}</span>
+                    <span className="pequeno suave">Padrão da função: {doPapel ? 'sim' : 'não'}{e !== 'padrao' ? ' · individual' : ''} · Abas: {abasDaPermissao(c.chave).join(', ') || '—'}</span>
                   </div>
                   <span className={`pu-efetivo ${efetivo ? 'sim' : 'nao'}`}>{efetivo ? '✓ Pode' : '✕ Não pode'}</span>
                   {!travado && (
