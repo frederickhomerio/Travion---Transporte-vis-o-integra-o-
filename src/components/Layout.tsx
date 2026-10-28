@@ -112,7 +112,11 @@ function FaixaPrevia() {
       <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
         Simular perfil:
         <select value={estado.sessao?.perfil.email ?? ''} onChange={(e) => void api.entrar(e.target.value, '')}>
-          {PERFIS_PREVIA.map((p) => <option key={p.email} value={p.email}>{p.rotulo}</option>)}
+          {[...new Set(PERFIS_PREVIA.map((p) => p.papel))].map((papel) => (
+            <optgroup key={papel} label={ROTULO_PAPEL[papel]}>
+              {PERFIS_PREVIA.filter((p) => p.papel === papel).map((p) => <option key={p.email} value={p.email}>{p.rotulo}</option>)}
+            </optgroup>
+          ))}
         </select>
       </label>
     </div>

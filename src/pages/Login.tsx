@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { mensagemErro } from '../data/api';
 import { PERFIS_PREVIA } from '../data/localApi';
+import { ROTULO_PAPEL } from '../lib/formato';
 import { useApp } from '../data/store';
 import { Alerta, Logo } from '../components/ui';
 
@@ -56,13 +57,18 @@ export function Login() {
               <div><strong>Prévia local, sem servidor.</strong> O app ainda não foi ligado ao banco de dados. Os dados são fictícios e
                 ficam apenas neste navegador. Escolha um perfil para conhecer as telas e as permissões.</div>
             </Alerta>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {PERFIS_PREVIA.map((p) => (
-                <button key={p.email} className="btn" style={{ justifyContent: 'space-between', height: 'auto', padding: '10px 14px' }}
-                  onClick={() => void api.entrar(p.email, '').then(() => nav('/'))}>
-                  <span style={{ textAlign: 'left', whiteSpace: 'normal', minWidth: 0 }}><strong>{p.rotulo}</strong><br /><span className="suave pequeno" style={{ fontWeight: 400 }}>{p.descricao}</span></span>
-                  <span aria-hidden="true">→</span>
-                </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {[...new Set(PERFIS_PREVIA.map((p) => p.papel))].map((papel) => (
+                <div key={papel} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <strong className="pequeno" style={{ color: 'var(--vinho-escuro)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{ROTULO_PAPEL[papel]}</strong>
+                  {PERFIS_PREVIA.filter((p) => p.papel === papel).map((p) => (
+                    <button key={p.email} className="btn" style={{ justifyContent: 'space-between', height: 'auto', padding: '8px 14px' }}
+                      onClick={() => void api.entrar(p.email, '').then(() => nav('/'))}>
+                      <span style={{ textAlign: 'left', whiteSpace: 'normal', minWidth: 0 }}><strong>{p.rotulo}</strong><br /><span className="suave pequeno" style={{ fontWeight: 400 }}>{p.descricao}</span></span>
+                      <span aria-hidden="true">→</span>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           </>

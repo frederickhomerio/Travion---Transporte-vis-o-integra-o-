@@ -226,7 +226,40 @@ function semear(): Banco {
     config: { ...CONFIG_PADRAO }, convites: [], dadosOrigem: {}, importacoes: [],
   };
 }
-const semearPrevia = (): Banco => (DADOS_PREVIA ? semearDaPlanilha(semear(), DADOS_PREVIA) : semear());
+/** Equipe fictícia da prévia: com os perfis de demonstração, 3 pessoas por função. Filiais pelo nome (com ou sem "[DEMO]"). */
+const EQUIPE_PREVIA: Array<{ id: string; nome: string; papel: Papel; filiais: string[] | 'todas'; carteira?: number }> = [
+  { id: 'perfil-7', nome: 'Marcos Andrade', papel: 'administrador', filiais: [] },
+  { id: 'perfil-8', nome: 'Juliana Prado', papel: 'administrador', filiais: [] },
+  { id: 'perfil-9', nome: 'Ricardo Menezes', papel: 'gestor', filiais: ['Jataí', 'Itumbiara'] },
+  { id: 'perfil-10', nome: 'Patrícia Lopes', papel: 'gestor', filiais: ['Goiânia', 'Anápolis'] },
+  { id: 'perfil-11', nome: 'André Barbosa', papel: 'supervisor', filiais: ['Rio Verde', 'Montividiu'] },
+  { id: 'perfil-12', nome: 'Larissa Freitas', papel: 'supervisor', filiais: ['Goiânia', 'Anápolis'] },
+  { id: 'perfil-13', nome: 'Thiago Ribeiro', papel: 'embarcador', filiais: ['Rio Verde'] },
+  { id: 'perfil-14', nome: 'Gabriela Moreira', papel: 'embarcador', filiais: ['Jataí'] },
+  { id: 'perfil-15', nome: 'Camila Rocha', papel: 'apoio', filiais: 'todas' },
+  { id: 'perfil-16', nome: 'Diego Martins', papel: 'apoio', filiais: 'todas' },
+  { id: 'perfil-17', nome: 'Fernanda Castro', papel: 'comercial', filiais: [], carteira: 1 },
+  { id: 'perfil-18', nome: 'Lucas Teixeira', papel: 'comercial', filiais: [], carteira: 2 },
+  { id: 'perfil-19', nome: 'Beatriz Nunes', papel: 'consulta', filiais: ['Montividiu'] },
+  { id: 'perfil-20', nome: 'Rafael Souza', papel: 'consulta', filiais: ['Goiânia'] },
+];
+const emailEquipe = (nome: string) => `${normalizar(nome).toLowerCase().replace(/[^a-z]+/g, '.')}@previa.local`;
+
+/** Inclui a equipe fictícia (também em bancos da prévia gravados antes dela), sem mexer no resto. */
+function completarEquipe(db: Banco): Banco {
+  const nomeSemDemo = (n: string) => normalizar(n.replace('[DEMO]', '').trim());
+  for (const x of EQUIPE_PREVIA) {
+    if (db.perfis.some((p) => p.id === x.id)) continue;
+    const comercial = x.carteira != null ? db.comerciais[x.carteira] ?? db.comerciais[0] : undefined;
+    db.perfis.push({ id: x.id, nome: x.nome, email: emailEquipe(x.nome), papel: x.papel, status: 'ativo', comercial_id: comercial?.id ?? null, criado_em: agora() });
+    const fs = x.filiais === 'todas' ? db.filiais : x.filiais.map((n) => db.filiais.find((f) => nomeSemDemo(f.nome) === normalizar(n))).filter((f): f is Filial => !!f);
+    const escolhidas = fs.length || x.filiais === 'todas' || !x.filiais.length ? fs : db.filiais.slice(0, 1);
+    for (const f of escolhidas) db.perfilFiliais.push({ perfil_id: x.id, filial_id: f.id });
+  }
+  return db;
+}
+
+const semearPrevia = (): Banco => completarEquipe(DADOS_PREVIA ? semearDaPlanilha(semear(), DADOS_PREVIA) : semear());
 
 /** Troca os cadastros e embarques fictícios pelos da planilha, mantendo perfis, permissões e configurações da prévia. */
 function semearDaPlanilha(base: Banco, d: DadosPrevia): Banco {
@@ -321,7 +354,7 @@ function semearDaPlanilha(base: Banco, d: DadosPrevia): Banco {
 export function criarLocalApi(): Api {
   let db: Banco = (() => {
     const s = lerStorage(CHAVE);
-    if (s) { try { return JSON.parse(s) as Banco; } catch { /* recria */ } }
+    if (s) { try { return completarEquipe(JSON.parse(s) as Banco); } catch { /* recria */ } }
     // Grava a semente já: outras abas da prévia passam a ver os mesmos registros (mesmos identificadores).
     const novo = semearPrevia();
     gravarStorage(CHAVE, JSON.stringify(novo));
@@ -1091,12 +1124,19 @@ export function criarLocalApi(): Api {
   return api;
 }
 
-export const PERFIS_PREVIA = [
-  { email: 'administrador@previa.local', rotulo: 'Administrador', descricao: 'Acesso completo' },
-  { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra, suspende e encerra embarques, com financeiro' },
-  { email: 'supervisor@previa.local', rotulo: 'Supervisor', descricao: 'Filiais Jataí e Itumbiara: posições de embarque e cadastro de embarques' },
-  { email: 'embarcador@previa.local', rotulo: 'Comercial de Fretes', descricao: 'Filial Montividiu: cadastra embarques, pede lote e emissão, vê frete motorista e margem' },
-  { email: 'apoio@previa.local', rotulo: 'Apoio Operacional', descricao: 'Todas as filiais: fila de lote e emissão, contadores e observação operacional' },
-  { email: 'comercial@previa.local', rotulo: 'Coordenador Comercial', descricao: 'Carteira [DEMO] Ana: cadastra embarques e suspende fretes' },
-  { email: 'consulta@previa.local', rotulo: 'Consulta interna', descricao: 'Somente leitura nas filiais Rio Verde e Jataí' },
-];
+const PERFIS_DEMO = [
+  { email: 'administrador@previa.local', papel: 'administrador', rotulo: 'Administrador', descricao: 'Acesso completo' },
+  { email: 'gestor@previa.local', papel: 'gestor', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra, suspende e encerra embarques, com financeiro' },
+  { email: 'supervisor@previa.local', papel: 'supervisor', rotulo: 'Supervisor', descricao: 'Filiais Jataí e Itumbiara: posições de embarque e cadastro de embarques' },
+  { email: 'embarcador@previa.local', papel: 'embarcador', rotulo: 'Comercial de Fretes', descricao: 'Filial Montividiu: cadastra embarques, pede lote e emissão, vê frete motorista e margem' },
+  { email: 'apoio@previa.local', papel: 'apoio', rotulo: 'Apoio Operacional', descricao: 'Todas as filiais: fila de lote e emissão, contadores e observação operacional' },
+  { email: 'comercial@previa.local', papel: 'comercial', rotulo: 'Coordenador Comercial', descricao: 'Carteira [DEMO] Ana: cadastra embarques e suspende fretes' },
+  { email: 'consulta@previa.local', papel: 'consulta', rotulo: 'Consulta interna', descricao: 'Somente leitura nas filiais Rio Verde e Jataí' },
+] as const;
+const ESCOPO_EQUIPE = (x: (typeof EQUIPE_PREVIA)[number]) =>
+  x.filiais === 'todas' ? 'Todas as filiais' : x.papel === 'administrador' ? 'Acesso completo' : x.papel === 'comercial' ? 'Carteira própria' : `Filial ${x.filiais.join(' e ')}`;
+/** Perfis para simular na prévia, agrupados pela função (3 por função). */
+export const PERFIS_PREVIA: Array<{ email: string; papel: Papel; rotulo: string; descricao: string }> = PERFIS_DEMO.flatMap((d) => [
+  { email: d.email, papel: d.papel as Papel, rotulo: `${d.rotulo} (demonstração)`, descricao: d.descricao },
+  ...EQUIPE_PREVIA.filter((x) => x.papel === d.papel).map((x) => ({ email: emailEquipe(x.nome), papel: x.papel, rotulo: x.nome, descricao: ESCOPO_EQUIPE(x) })),
+]);
