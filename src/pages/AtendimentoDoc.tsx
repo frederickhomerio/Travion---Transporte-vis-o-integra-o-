@@ -13,10 +13,10 @@ import { useDetalheDoc, useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
 import { cidadeAnuncio } from '../lib/anuncio';
 import {
-  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, OPERACAO, PAGAMENTO, PEDAGIO, REF_CADASTRO, TIPO_DOC, fmtFrete, fmtPlaca, fmtReais2, resumoDoc, tempoDoc, vezDe,
+  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, MOTIVOS_ESCOLHA, MOTIVO_DEVOLUCAO, OPERACAO, PAGAMENTO, PEDAGIO, REF_CADASTRO, TIPO_DOC, fmtFrete, fmtPlaca, fmtReais2, resumoDoc, tempoDoc, vezDe,
 } from '../lib/documentacao';
 import { fmtDataAsHora } from '../lib/formato';
-import type { CategoriaAnexo, SolicitacaoDoc } from '../types';
+import type { CategoriaAnexo, MotivoDevolucao, SolicitacaoDoc } from '../types';
 
 const CHAVE_DIVISAO = 'travion-atendimento-divisao';
 const REFERENCIAS: Array<[string, string]> = [
@@ -56,7 +56,9 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
   const avisar = useAviso();
   const agora = useAgora();
   const eu = app.sessao?.perfil.id;
-  const editavel = pode('apoio.atender') && s.responsavel_id === eu && (s.status === 'em_atendimento' || s.status === 'aguardando_informacao');
+  const editavel = pode('apoio.atender') && s.responsavel_id === eu && (s.status === 'em_atendimento' || s.status === 'aguardando_informacao' || s.status === 'correcao_recebida');
+  // Correção recebida: as ações voltam depois de retomar o atendimento.
+  const retomar = editavel && s.status === 'correcao_recebida';
   const [divisao, setDivisao] = useState(() => { const n = Number(localStorage.getItem(CHAVE_DIVISAO)); return n >= 22 && n <= 60 ? n : 35; });
   const [ampliado, setAmpliado] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
@@ -155,7 +157,7 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
             </div>
 
             {s.status === 'aguardando_informacao' && (
-              <Alerta tipo="aviso"><span><strong>Aguardando informação de {s.solicitante_nome}.</strong> A resposta volta a demanda para Em atendimento com você.</span></Alerta>
+              <Alerta tipo="aviso"><span><strong>Aguardando informação de {s.solicitante_nome}.</strong> A resposta volta a demanda para a sua fila; retome o atendimento para continuar.</span></Alerta>
             )}
             {s.status === 'documentacao_disponivel' && <Alerta tipo="ok">Documentação disponível desde {fmtDataAsHora(s.concluido_em)} ({s.concluido_por_nome}). Tempo total: {t.texto}.</Alerta>}
             {s.status === 'cadastro_concluido' && (
@@ -164,11 +166,15 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
             )}
             {s.status === 'cancelado' && <Alerta tipo="aviso">Cancelada por {s.cancelado_por_nome}: {s.cancelado_motivo}</Alerta>}
 
-            {editavel && s.tipo === 'lote_emissao' && <RegistrarLote s={s} executar={executar} />}
-            {editavel && !cad && <AnexarEmitidos s={s} executar={executar} emitidos={saida.length} />}
+            {s.status === 'correcao_recebida' && !retomar && (
+              <Alerta tipo="info">Correção recebida de {s.solicitante_nome}. Aguardando {s.responsavel_nome ?? 'o responsável'} retomar o atendimento.</Alerta>
+            )}
+            {retomar && <Retomar s={s} executar={executar} />}
+            {editavel && !retomar && s.tipo === 'lote_emissao' && <RegistrarLote s={s} executar={executar} />}
+            {editavel && !retomar && !cad && <AnexarEmitidos s={s} executar={executar} emitidos={saida.length} />}
             {editavel && s.status === 'em_atendimento' && <PedirAjuste s={s} executar={executar} referencias={cad ? REFERENCIAS_CADASTRO : REFERENCIAS} />}
-            {editavel && !cad && <Concluir s={s} executar={executar} emitidos={saida.length} />}
-            {editavel && cad && <ConcluirCadastro s={s} executar={executar} />}
+            {editavel && !retomar && !cad && <Concluir s={s} executar={executar} emitidos={saida.length} />}
+            {editavel && !retomar && cad && <ConcluirCadastro s={s} executar={executar} />}
             {saida.length > 0 && (
               <div className="cartao cartao-corpo at-bloco">
                 <strong>Documentos emitidos {s.status === 'documentacao_disponivel' ? '(liberados)' : '(em conferência)'}</strong>
@@ -250,26 +256,61 @@ function PedirAjuste({ s, executar, referencias }: { s: SolicitacaoDoc; executar
   const { api } = useApp();
   const [texto, setTexto] = useRascunho(`travion-rascunho-ajuste-${s.id}`);
   const [ref, setRef] = useState('');
+  const [motivo, setMotivo] = useState<MotivoDevolucao | ''>('');
+  const [outro, setOutro] = useState('');
   const [gravando, setGravando] = useState(false);
   const [tentou, setTentou] = useState(false);
+  const faltaOutro = motivo === 'outro' && !outro.trim();
   return (
     <div className="cartao cartao-corpo at-bloco">
       <strong>Solicitar ajuste ao {s.tipo === 'cadastro' ? 'solicitante' : 'comercial'}</strong>
       <div className="at-linha">
-        <select className="entrada" value={ref} onChange={(e) => setRef(e.target.value)} aria-label="Referente a">
-          {referencias.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
-        </select>
+        <label className="campo"><span>Motivo</span>
+          <select className="entrada" value={motivo} onChange={(e) => setMotivo(e.target.value as MotivoDevolucao)} aria-label="Motivo da devolução">
+            <option value="">Escolha o motivo</option>
+            {MOTIVOS_ESCOLHA.map((m) => <option key={m} value={m}>{MOTIVO_DEVOLUCAO[m]}</option>)}
+          </select>
+        </label>
+        <label className="campo"><span>Referente a</span>
+          <select className="entrada" value={ref} onChange={(e) => setRef(e.target.value)} aria-label="Referente a">
+            {referencias.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+          </select>
+        </label>
       </div>
+      {tentou && !motivo && <small className="erro-campo">Escolha o motivo da devolução.</small>}
+      {motivo === 'outro' && (
+        <input className="entrada" value={outro} onChange={(e) => setOutro(e.target.value)} maxLength={200}
+          placeholder="Qual é o motivo?" aria-label="Descrição do motivo Outro" />
+      )}
+      {tentou && faltaOutro && <small className="erro-campo">Descreva o motivo "Outro".</small>}
       <textarea className="entrada" rows={3} value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={4000}
-        placeholder="Escreva exatamente o que falta ou precisa ser corrigido" aria-label="Descrição do ajuste" />
+        placeholder="Mensagem ao solicitante: escreva exatamente o que falta ou precisa ser corrigido" aria-label="Descrição do ajuste" />
       {tentou && !texto.trim() && <small className="erro-campo">Descreva o ajuste antes de enviar.</small>}
       <div><button className="btn" disabled={gravando} onClick={async () => {
         setTentou(true);
-        if (!texto.trim()) return;
+        if (!texto.trim() || !motivo || faltaOutro) return;
         setGravando(true);
-        if (await executar(() => api.doc.solicitarAjuste(s.id, texto.trim(), ref || null), `Ajuste enviado a ${s.solicitante_nome}.`)) { setTexto(''); setTentou(false); }
+        if (await executar(() => api.doc.solicitarAjuste(s.id, texto.trim(), ref || null, motivo, motivo === 'outro' ? outro.trim() : null), `Ajuste enviado a ${s.solicitante_nome}.`)) {
+          setTexto(''); setMotivo(''); setOutro(''); setTentou(false);
+        }
         setGravando(false);
       }}>{gravando ? 'Enviando…' : 'Solicitar ajuste'}</button></div>
+    </div>
+  );
+}
+
+function Retomar({ s, executar }: { s: SolicitacaoDoc; executar: Executar }) {
+  const { api } = useApp();
+  const [gravando, setGravando] = useState(false);
+  return (
+    <div className="cartao cartao-corpo at-bloco at-retomar">
+      <strong>Correção recebida de {s.solicitante_nome}</strong>
+      <span className="pequeno suave">Confira a resposta no histórico e retome o atendimento para continuar. O tempo até retomar conta como espera na fila.</span>
+      <div><button className="btn primario" disabled={gravando} onClick={async () => {
+        setGravando(true);
+        await executar(() => api.doc.retomar(s.id), 'Atendimento retomado.');
+        setGravando(false);
+      }}>{gravando ? 'Retomando…' : 'Retomar atendimento'}</button></div>
     </div>
   );
 }

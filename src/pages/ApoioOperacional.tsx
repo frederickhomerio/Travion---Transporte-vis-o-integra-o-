@@ -141,10 +141,13 @@ export function ApoioOperacional() {
                       <td data-rot="Tempo"><span className="ao-l2">{t.rotulo}</span><span className="ao-l1">{t.texto}</span></td>
                       <td data-rot="Status"><StatusDocPill status={s.status} /></td>
                       <td data-rot="Responsável">{s.responsavel_nome ?? <span className="suave">—</span>}</td>
-                      <td data-rot="Pendência">{s.status === 'aguardando_informacao' ? <span className="ao-pend">Resposta de {s.solicitante_nome}</span> : <span className="suave">—</span>}</td>
+                      <td data-rot="Pendência">{s.status === 'aguardando_informacao' ? <span className="ao-pend">Resposta de {s.solicitante_nome}</span>
+                        : s.status === 'correcao_recebida' ? <span className="ao-pend">Correção recebida: retomar</span> : <span className="suave">—</span>}</td>
                       <td className="ao-acao">
                         {!s.responsavel_id && s.status === 'enviado' && pode('apoio.atender') ? (
                           <button className="btn primario peq" disabled={!!assumindo} onClick={() => void assumir(s)}>{assumindo === s.id ? 'Assumindo…' : 'Assumir'}</button>
+                        ) : meu && s.status === 'correcao_recebida' ? (
+                          <button className="btn primario peq" onClick={() => nav(`/apoio/${s.id}`)}>Retomar atendimento</button>
                         ) : meu && (s.status === 'em_atendimento' || s.status === 'aguardando_informacao') ? (
                           <button className="btn secundario peq" onClick={() => nav(`/apoio/${s.id}`)}>Continuar atendimento</button>
                         ) : (

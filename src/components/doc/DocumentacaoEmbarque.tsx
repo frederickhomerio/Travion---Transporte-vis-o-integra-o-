@@ -175,6 +175,7 @@ function SolicitacaoComercial({ s, aoVoltar }: { s: SolicitacaoDoc; aoVoltar: ()
         </div>
       </div>
 
+      {s.status === 'correcao_recebida' && <Alerta tipo="info">Sua correção foi enviada. {s.responsavel_nome} vai retomar o atendimento.</Alerta>}
       {s.status === 'aguardando_informacao' && (
         <div className="cartao cartao-corpo de-pendencia">
           <strong>O apoio precisa de uma informação</strong>

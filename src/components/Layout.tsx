@@ -31,7 +31,8 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
           {pode('apoio.pagina') && <NavLink to="/apoio"><Icone nome="lista" />Apoio Operacional</NavLink>}
           {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <NavLink to="/cadastro"><Icone nome="cadastro" />Cadastro</NavLink>}
           <div className="grupo">Análise</div>
-          <NavLink to="/analise"><Icone nome="painel" />Dashboard Operacional</NavLink>
+          <NavLink to="/analise" end><Icone nome="painel" />Dashboard Operacional</NavLink>
+          {pode('analise.operacional') && <NavLink to="/analise/operacional"><Icone nome="analise" />Painel Operacional</NavLink>}
           {admin && <><div className="grupo">Gestão</div><NavLink to="/admin"><Icone nome="config" />Administração</NavLink></>}
         </nav>
         <div className="lateral-rodape">

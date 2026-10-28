@@ -2,10 +2,11 @@
 // Metadados em localStorage (outras abas simulam outros usuários em tempo real) e arquivos em IndexedDB.
 
 import type {
-  AnexoDoc, CategoriaAnexo, Embarque, LoteErp, MensagemDoc, NotificacaoApp, Perfil, Permissao, RetratoDoc, SolicitacaoDoc,
+  AnexoDoc, CategoriaAnexo, Embarque, LoteErp, MensagemDoc, MotivoDevolucao, NotificacaoApp, Perfil, Permissao, RetratoDoc, SolicitacaoDoc,
 } from '../types';
 import type { ApiDoc, ArquivoDoc, EventoDoc, ResultadoDoc } from './api';
 import { LIMITE_CADASTRO, MAX_MOTORISTA, MAX_VEICULO, TIPOS_CADASTRO, telefoneValido, tipoCadastro } from '../lib/documentacao';
+import { type EventoFluxo, type EventoPainel, type SolPainel, dataSP, diaHoraSP, inicioDiaSP } from '../lib/painelOperacional';
 
 const CHAVE = 'travion-previa-doc-v2';
 const TIPOS = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
@@ -19,6 +20,8 @@ interface BancoDoc {
   solicitacoes: SolicitacaoDoc[]; lotes: LoteErp[]; mensagens: MensagemDoc[]; anexos: AnexoDoc[];
   notificacoes: Array<NotificacaoApp & { destinatario_id: string; chave: string }>;
   objetos: ObjetoArq[];
+  /** Eventos do fluxo (como a tabela solicitacao_eventos da migração 1900). */
+  eventos?: EventoPainel[];
 }
 
 export interface CtxDocLocal {
@@ -154,7 +157,29 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
     if (!s || !podeVerReg(s)) erro('Solicitação não encontrada ou fora do seu escopo.');
     return s;
   };
-  const tocar = (s: SolicitacaoDoc, mud: Partial<SolicitacaoDoc> = {}) => Object.assign(s, mud, { versao: s.versao + 1, atualizado_em: agora() });
+  // Mesmo papel do gatilho do banco: cada mudança gravada de etapa ou de responsável vira um evento.
+  let motivoPendencia: MotivoDevolucao | null = null;
+  const registrarFluxo = (s: SolicitacaoDoc, antes: { status: SolicitacaoDoc['status']; resp: string | null } | null) => {
+    let ev: EventoFluxo;
+    if (!antes) ev = 'enviado';
+    else if (antes.status !== s.status) {
+      ev = antes.status === 'enviado' && s.status === 'em_atendimento' ? 'assumido'
+        : s.status === 'aguardando_informacao' ? 'devolvido'
+        : antes.status === 'aguardando_informacao' && (s.status === 'correcao_recebida' || s.status === 'em_atendimento') ? 'corrigido'
+        : antes.status === 'correcao_recebida' && s.status === 'em_atendimento' ? 'retomado'
+        : s.status === 'documentacao_disponivel' || s.status === 'cadastro_concluido' ? 'concluido'
+        : s.status === 'cancelado' ? 'cancelado' : 'status_alterado';
+    } else if (antes.resp !== s.responsavel_id) ev = 'transferido';
+    else return;
+    (db.eventos ??= []).push({ s: s.id, evento: ev, em: antes ? agora() : s.enviado_em, responsavel_id: s.responsavel_id, responsavel_nome: s.responsavel_nome,
+      motivo: ev === 'devolvido' ? motivoPendencia ?? 'sem_registro' : null, origem: 'registro' });
+  };
+  const tocar = (s: SolicitacaoDoc, mud: Partial<SolicitacaoDoc> = {}) => {
+    const antes = { status: s.status, resp: s.responsavel_id };
+    Object.assign(s, mud, { versao: s.versao + 1, atualizado_em: agora() });
+    registrarFluxo(s, antes);
+    return s;
+  };
   const evento = (s: SolicitacaoDoc, tipo: MensagemDoc['tipo'], texto: string, referencia: string | null = null, autor?: Perfil) => {
     const m: MensagemDoc = { id: uid(), solicitacao_id: s.id, tipo, texto, referencia, autor_id: autor?.id ?? ctx.perfil()?.id ?? null,
       autor_nome: autor?.nome ?? ctx.perfil()?.nome ?? 'Sistema', criado_em: agora() };
@@ -265,6 +290,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       }
       if (status === 'aguardando_informacao') {
         m('pendencia', 'A evidência do frete não mostra o valor do frete motorista. Envie o print com os dois valores, por favor.', lucia, idade - 20, 'evidencia_frete');
+        db.mensagens[db.mensagens.length - 1].motivo = 'informacao_incompleta';
         db.notificacoes.push({ id: uid(), destinatario_id: sol.id, chave: `ajuste:${id}`, tipo: 'ajuste_solicitado', titulo: 'Ajuste solicitado pelo apoio',
           texto: `${rotulo(s)}: A evidência do frete não mostra o valor do frete motorista.`, solicitacao_id: id, embarque_id: e.id, destino: 'embarque', criada_em: min(idade - 20), lida_em: null });
       }
@@ -334,12 +360,15 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
           solicitacao_id: id, embarque_id: null, destino: 'cadastro', criada_em: min(idade - 40), lida_em: null });
       }
     }
+    db.eventos = eventosDosRegistros(db, 'registro');
     salvar();
   };
+  // Prévia gravada antes do Painel Operacional: eventos refeitos a partir dos horários gravados (como a migração 1900).
+  if (!db.eventos) db.eventos = eventosDosRegistros(db, 'historico');
   // Dados da prévia recriados (novos embarques): recomeça a documentação fictícia.
   const ids = new Set(ctx.embarques().map((e) => e.id));
   if (!db.solicitacoes.some((s) => s.embarque_id && ids.has(s.embarque_id)) && typeof document !== 'undefined') {
-    db = { seq: 0, solicitacoes: [], lotes: [], mensagens: [], anexos: [], notificacoes: [], objetos: [] };
+    db = { seq: 0, solicitacoes: [], lotes: [], mensagens: [], anexos: [], notificacoes: [], objetos: [], eventos: [] };
     pronto = semear().catch(() => undefined);
   } else if (!db.solicitacoes.some((s) => s.tipo === 'cadastro') && typeof document !== 'undefined') {
     pronto = semearCadastros().catch(() => undefined);
@@ -360,6 +389,8 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
     return navigator.locks.request(CHAVE, () => { reler(); return fn(); }) as Promise<T>;
   };
 
+  const filiaisDaPrevia = () => [...new Set(ctx.embarques().map((e) => e.filial_id))]
+    .map((id) => ({ id, centro: ctx.filial(id)?.centro_custo_id ?? null }));
   const comNomes = (s: SolicitacaoDoc): SolicitacaoDoc => ({ ...s, nomes_nf: db.anexos.filter((a) => a.solicitacao_id === s.id && (a.categoria === 'nf' || a.categoria === 'correcao')).map((a) => a.nome) });
   const visiveis = () => db.solicitacoes.filter(podeVerReg);
   const offline = () => { if (!navigator.onLine) erro('Failed to fetch'); };
@@ -453,6 +484,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       };
       db.solicitacoes.push(s);
       try { vincular(s, anexos, cats, null); } catch (x) { db.solicitacoes.pop(); db.seq--; throw x; }
+      registrarFluxo(s, null);
       evento(s, 'evento', lote ? `Solicitação de emissão enviada ao apoio (lote ${lote.numero})` : 'Solicitação de lote e emissão enviada ao apoio');
       return fim(s);
     },
@@ -491,13 +523,19 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       emitir({ tabela: 'lotes' });
       return fim(s, { lote: clone(lote) });
     },
-    async solicitarAjuste(id, texto, referencia) {
+    async solicitarAjuste(id, texto, referencia, motivo, motivoOutro) {
       offline();
       const s = carregar(id);
       responsavel(s, ['em_atendimento']);
+      if (!motivo || motivo === 'sem_registro') erro('Escolha o motivo da devolução.');
+      const outro = motivoOutro?.trim().slice(0, 200) || null;
+      if (motivo === 'outro' && !outro) erro('Descreva o motivo "Outro".');
       if (!texto.trim()) erro('Descreva o que falta ou precisa ser corrigido.');
       const m = evento(s, 'pendencia', texto.trim().slice(0, 4000), referencia);
+      Object.assign(m, { motivo, motivo_outro: motivo === 'outro' ? outro : null });
+      motivoPendencia = motivo;
       tocar(s, { status: 'aguardando_informacao' });
+      motivoPendencia = null;
       notificar(s.solicitante_id, 'ajuste_solicitado', 'Ajuste solicitado pelo apoio', `${rotulo(s)}: ${texto.trim().slice(0, 140)}`, s, s.tipo === 'cadastro' ? 'cadastro' : 'embarque', `ajuste:${m.id}`);
       return fim(s);
     },
@@ -514,9 +552,51 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
         if (conta('motorista') > MAX_MOTORISTA || conta('veiculo') > MAX_VEICULO) { db.mensagens.pop(); erro('Na resposta: até 4 documentos do motorista e 10 dos veículos.'); }
       }
       try { vincular(s, anexos, s.tipo === 'cadastro' ? ['motorista', 'veiculo', 'correcao'] : ['nf', 'evidencia_frete', 'correcao'], m.id); } catch (x) { db.mensagens.pop(); throw x; }
-      tocar(s, { status: 'em_atendimento' });
-      notificar(s.responsavel_id, 'resposta_enviada', 'Resposta do comercial', `${rotulo(s)}: ${texto.trim().slice(0, 140)}`, s, 'apoio', `resposta:${m.id}`);
+      // Volta para a fila do responsável: a nova espera começa agora, até ele retomar.
+      tocar(s, { status: 'correcao_recebida' });
+      notificar(s.responsavel_id, 'resposta_enviada', 'Correção recebida: retome o atendimento', `${rotulo(s)}: ${texto.trim().slice(0, 140)}`, s, 'apoio', `resposta:${m.id}`);
       return fim(s);
+    },
+    retomar: (id) => comTrava(async () => {
+      offline();
+      const s = carregar(id);
+      if (s.status === 'em_atendimento' && s.responsavel_id === ctx.perfil()?.id) return { status: 'ok', registro: clone(s) };
+      responsavel(s, ['correcao_recebida']);
+      tocar(s, { status: 'em_atendimento' });
+      evento(s, 'evento', `Atendimento retomado por ${eu().nome}`);
+      return fim(s);
+    }),
+    async painel(desde, ate, alteradosDesde) {
+      await pronto;
+      exigir('analise.operacional');
+      const de = Date.parse(desde);
+      const a = Date.parse(ate);
+      if (!(a > de)) erro('Período inválido.');
+      if (a - de > 400 * 86400e3) erro('Escolha um período de até 400 dias.');
+      const abertos = ['enviado', 'em_atendimento', 'aguardando_informacao', 'correcao_recebida'];
+      const reais = visiveis().filter((s) => {
+        const t = Date.parse(s.enviado_em);
+        return ((t >= de && t < a) || abertos.includes(s.status)) && (!alteradosDesde || s.atualizado_em >= alteradosDesde);
+      });
+      const ids = new Set(reais.map((s) => s.id));
+      const sols: SolPainel[] = reais.map((s) => ({
+        id: s.id, numero: s.numero, tipo: s.tipo, status: s.status, filial_id: s.retrato.filial_id, centro_custo_id: s.retrato.centro_custo_id,
+        solicitante_id: s.solicitante_id, solicitante_nome: s.solicitante_nome, responsavel_id: s.responsavel_id, responsavel_nome: s.responsavel_nome,
+        enviado_em: s.enviado_em,
+      }));
+      const evs = (db.eventos ?? []).filter((e) => ids.has(e.s));
+      // Histórico fictício da prévia (só concluídos/cancelados), para os quadros terem o que mostrar.
+      const fic = historicoFicticio(filiaisDaPrevia(), Date.now());
+      const f = alteradosDesde ? null : fic;
+      if (f) {
+        for (const s of f.solicitacoes) {
+          const t = Date.parse(s.enviado_em);
+          if (t >= de && t < a && (ctx.ehAdmin() || !s.filial_id || ctx.noEscopo(s.filial_id, null))) { sols.push(s); ids.add(s.id); }
+        }
+        evs.push(...f.eventos.filter((e) => ids.has(e.s)));
+      }
+      const datas = [...db.solicitacoes.map((s) => s.enviado_em), fic.inicio].sort();
+      return clone({ agora: agora(), inicio_registro: fic.inicio, inicio_dados: datas[0] ?? null, solicitacoes: sols, eventos: evs });
     },
     async anexarEmitidos(id, anexos) {
       offline();
@@ -574,7 +654,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       if (!c) erro('Selecione um cliente autorizado.');
       if (d.filial_id && !ctx.noEscopo(d.filial_id, null)) erro('Filial fora do seu escopo.');
       if (!d.filial_id && !ctx.ehAdmin() && ctx.temFiliais()) erro('Selecione a filial.');
-      const aberta = db.solicitacoes.find((s) => s.tipo === 'cadastro' && s.placa === placa && ['enviado', 'em_atendimento', 'aguardando_informacao'].includes(s.status));
+      const aberta = db.solicitacoes.find((s) => s.tipo === 'cadastro' && s.placa === placa && ['enviado', 'em_atendimento', 'aguardando_informacao', 'correcao_recebida'].includes(s.status));
       if (aberta) return { status: 'cadastro_aberto', numero: aberta.numero, situacao: aberta.status, registro: podeVerReg(aberta) ? clone(aberta) : null } as unknown as ResultadoDoc;
       const conta = (cat: CategoriaAnexo) => (anexos ?? []).filter((a) => a.categoria === cat).length;
       if (!conta('motorista')) erro('Anexe ao menos um documento do motorista.');
@@ -601,6 +681,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       db.solicitacoes.push(s);
       const antes = db.anexos.length;
       try { vincular(s, anexos, ['motorista', 'veiculo'], null); } catch (x) { db.solicitacoes.pop(); db.anexos.length = antes; db.seq--; throw x; }
+      registrarFluxo(s, null);
       evento(s, 'evento', 'Cadastro enviado ao apoio');
       return fim(s);
     },
@@ -641,4 +722,118 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       return () => { clearTimeout(t); ouvintes.delete(aoEvento); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Painel Operacional na prévia
+// ---------------------------------------------------------------------------
+/** Eventos a partir dos horários gravados (mesma regra da migração 1900). */
+function eventosDosRegistros(db: BancoDoc, origem: EventoPainel['origem']): EventoPainel[] {
+  const out: EventoPainel[] = [];
+  const ev = (s: SolicitacaoDoc, evento: EventoFluxo, em: string | null, motivo: MotivoDevolucao | null = null) => {
+    if (em) out.push({ s: s.id, evento, em, responsavel_id: evento === 'enviado' ? null : s.responsavel_id,
+      responsavel_nome: evento === 'enviado' ? null : s.responsavel_nome, motivo, origem });
+  };
+  for (const s of db.solicitacoes) {
+    ev(s, 'enviado', s.enviado_em);
+    if (s.responsavel_id) ev(s, 'assumido', s.assumido_em);
+    for (const m of db.mensagens.filter((x) => x.solicitacao_id === s.id)) {
+      if (m.tipo === 'pendencia') ev(s, 'devolvido', m.criado_em, m.motivo ?? 'sem_registro');
+      if (m.tipo === 'resposta') { ev(s, 'corrigido', m.criado_em); ev(s, 'retomado', m.criado_em); }
+    }
+    if (s.status === 'documentacao_disponivel' || s.status === 'cadastro_concluido') ev(s, 'concluido', s.concluido_em);
+    if (s.status === 'cancelado') ev(s, 'cancelado', s.cancelado_em);
+  }
+  return out;
+}
+
+function aleatorio(semente: number) {
+  let a = semente >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const COLABORADORES_PREVIA: Array<[string, string, number]> = [
+  ['previa-ana', 'Ana Souza (prévia)', 5], ['previa-bruno', 'Bruno Lima (prévia)', 4], ['previa-carla', 'Carla Mendes (prévia)', 4],
+  ['previa-diego', 'Diego Rocha (prévia)', 3], ['perfil-2', 'Apoio Operacional (prévia)', 2],
+];
+const SOLICITANTES_PREVIA: Array<[string, string]> = [
+  ['perfil-1', 'Gestor Rio Verde (prévia)'], ['perfil-5', 'Supervisor Jataí (prévia)'], ['perfil-6', 'Comercial de Fretes (prévia)'],
+  ['perfil-3', 'Coordenador Comercial (prévia)'],
+];
+const MOTIVOS_PREVIA: MotivoDevolucao[] = ['documento_ausente', 'documento_ausente', 'documento_ilegivel', 'divergencia_dados', 'divergencia_dados', 'informacao_incompleta', 'outro'];
+/** Chegadas por hora (pico de manhã e no meio da tarde; poucas à noite). */
+const PESO_HORA = [0.2, 0.1, 0.1, 0.1, 0.2, 0.5, 1.5, 4, 8, 9, 8, 6, 3, 5, 8, 8, 7, 5, 3, 1.5, 1, 0.8, 0.5, 0.3];
+const cacheFicticio = new Map<string, { solicitacoes: SolPainel[]; eventos: EventoPainel[]; inicio: string }>();
+
+/** 75 dias de chamados fictícios já encerrados, iguais a cada consulta (semente por dia). Nunca vão para o servidor. */
+function historicoFicticio(filiais: Array<{ id: string; centro: string | null }>, agoraMs: number) {
+  const chave = `${filiais.map((f) => f.id).join()}|${Math.floor(agoraMs / 300e3)}`;
+  const c = cacheFicticio.get(chave);
+  if (c) return c;
+  const H = 3600e3;
+  const MIN = 60e3;
+  const DIA = 86400e3;
+  const hoje0 = inicioDiaSP(dataSP(agoraMs));
+  const inicio = hoje0 - 75 * DIA;
+  const sols: SolPainel[] = [];
+  const evs: EventoPainel[] = [];
+  const somaPeso = PESO_HORA.reduce((a, b) => a + b, 0);
+  const somaColab = COLABORADORES_PREVIA.reduce((a, x) => a + x[2], 0);
+  let numero = 90000;
+  for (let d = 75; d >= 0; d--) {
+    const dia0 = hoje0 - d * DIA;
+    const r = aleatorio(Math.floor(dia0 / DIA) * 7919);
+    const dow = diaHoraSP(dia0 + 12 * H).dia;
+    const base = dow < 5 ? 14 : dow === 5 ? 5 : 2;
+    const n = Math.round(base * (0.7 + 0.6 * r()));
+    for (let k = 0; k < n; k++) {
+      let x = r() * somaPeso;
+      let hora = 0;
+      while (hora < 23 && x > PESO_HORA[hora]) { x -= PESO_HORA[hora]; hora++; }
+      let t = dia0 + hora * H + Math.floor(r() * H);
+      const u = r();
+      const tipo: SolPainel['tipo'] = u < 0.45 ? 'emissao' : u < 0.65 ? 'lote_emissao' : 'cadastro';
+      let y = r() * somaColab;
+      const colab = COLABORADORES_PREVIA.find((cb) => (y -= cb[2]) < 0) ?? COLABORADORES_PREVIA[0];
+      const sol = SOLICITANTES_PREVIA[Math.floor(r() * SOLICITANTES_PREVIA.length)];
+      const fil = filiais.length ? filiais[Math.floor(r() * filiais.length)] : { id: null, centro: null };
+      const id = `previa-hist-${dia0}-${k}`;
+      const lista: EventoPainel[] = [];
+      const resp = { responsavel_id: colab[0], responsavel_nome: colab[1] };
+      const ev = (evento: EventoFluxo, em: number, motivo: MotivoDevolucao | null = null, comResp = true) =>
+        lista.push({ s: id, evento, em: new Date(em).toISOString(), ...(comResp ? resp : { responsavel_id: null, responsavel_nome: null }), motivo, origem: 'registro' });
+      const enviado = t;
+      ev('enviado', t, null, false);
+      t += (2 + r() * r() * 45) * MIN;
+      let status: SolPainel['status'] = tipo === 'cadastro' ? 'cadastro_concluido' : 'documentacao_disponivel';
+      if (r() < 0.03) { ev('cancelado', t, null, false); status = 'cancelado'; } else {
+        ev('assumido', t);
+        let voltas = r() < 0.22 ? (r() < 0.25 ? 2 : 1) : 0;
+        while (voltas-- > 0) {
+          t += (5 + r() * 30) * MIN;
+          ev('devolvido', t, MOTIVOS_PREVIA[Math.floor(r() * MOTIVOS_PREVIA.length)]);
+          t += (15 + r() * r() * 240) * MIN;
+          ev('corrigido', t);
+          t += (1 + r() * 20) * MIN;
+          ev('retomado', t);
+        }
+        t += ((tipo === 'cadastro' ? 15 : 8) + r() * 50) * MIN;
+        ev('concluido', t);
+      }
+      if (t > agoraMs - 5 * MIN) continue; // só chamados já encerrados
+      sols.push({ id, numero: ++numero, tipo, status, filial_id: fil.id, centro_custo_id: fil.centro, solicitante_id: sol[0], solicitante_nome: sol[1],
+        responsavel_id: status === 'cancelado' ? null : colab[0], responsavel_nome: status === 'cancelado' ? null : colab[1], enviado_em: new Date(enviado).toISOString() });
+      evs.push(...lista);
+    }
+  }
+  const res = { solicitacoes: sols, eventos: evs, inicio: new Date(inicio).toISOString() };
+  cacheFicticio.clear();
+  cacheFicticio.set(chave, res);
+  return res;
 }

@@ -17,7 +17,7 @@ export type Permissao =
   | 'compartilhamento.preparar' | 'compartilhamento.links'
   | 'importacao.executar' | 'cadastros.gerenciar' | 'usuarios.gerenciar' | 'configuracoes.gerenciar'
   | 'documentacao.ver' | 'documentacao.solicitar' | 'documentacao.cancelar' | 'apoio.pagina' | 'apoio.atender'
-  | 'cadastro.solicitar' | 'cadastro.ver' | 'permissoes.gerenciar';
+  | 'cadastro.solicitar' | 'cadastro.ver' | 'permissoes.gerenciar' | 'analise.operacional';
 
 export interface Filial { id: string; nome: string; codigo: string | null; supervisor?: string | null; centro_custo_id?: string | null; ativo: boolean; is_demo: boolean }
 export interface CentroCusto { id: string; nome: string; ativo: boolean; is_demo: boolean }
@@ -171,7 +171,9 @@ export interface PosicaoPublica {
 // Documentação / Apoio Operacional (migração 1610)
 // ---------------------------------------------------------------------------
 export type TipoSolicitacaoDoc = 'lote_emissao' | 'emissao' | 'cadastro';
-export type StatusDoc = 'enviado' | 'em_atendimento' | 'aguardando_informacao' | 'documentacao_disponivel' | 'cadastro_concluido' | 'cancelado';
+export type StatusDoc = 'enviado' | 'em_atendimento' | 'aguardando_informacao' | 'correcao_recebida' | 'documentacao_disponivel' | 'cadastro_concluido' | 'cancelado';
+/** Motivo da devolução (pedir ajuste); 'sem_registro' só em pendências anteriores à migração 1900. */
+export type MotivoDevolucao = 'documento_ausente' | 'documento_ilegivel' | 'divergencia_dados' | 'informacao_incompleta' | 'outro' | 'sem_registro';
 export type UnidadeFreteDoc = 'rs_tonelada' | 'rs_viagem';
 export type TipoOperacao = 'exportacao' | 'mi_tributado' | 'mi_isento';
 export type FormaPagamento = 'cheque' | 'pagbem';
@@ -217,6 +219,7 @@ export interface LoteErp {
 export interface MensagemDoc {
   id: string; solicitacao_id: string; tipo: 'pendencia' | 'resposta' | 'evento'; texto: string; referencia: string | null;
   autor_id: string | null; autor_nome: string; criado_em: string;
+  motivo?: MotivoDevolucao | null; motivo_outro?: string | null;
 }
 
 export interface AnexoDoc {

@@ -95,8 +95,8 @@ do $$ declare r jsonb; s uuid := (select v from t7 where k = 'c1'); begin
   begin perform registrar_lote_doc(s, 'L1'); raise exception 'lote no cadastro'; exception when sqlstate '55000' then null; end;
   begin perform anexar_documentos_doc(s, '[]'); raise exception 'emitido no cadastro'; exception when sqlstate '55000' then null; end;
   begin perform concluir_solicitacao_doc(s); raise exception 'documentação disponível no cadastro'; exception when sqlstate '55000' then null; end;
-  begin perform solicitar_ajuste_doc(s, '  '); raise exception 'ajuste vazio'; exception when sqlstate '22023' then null; end;
-  r := solicitar_ajuste_doc(s, 'CNH vencida: envie a nova.', 'motorista');
+  begin perform solicitar_ajuste_doc(s, '  ', null, 'documento_ausente'); raise exception 'ajuste vazio'; exception when sqlstate '22023' then null; end;
+  r := solicitar_ajuste_doc(s, 'CNH vencida: envie a nova.', 'motorista', 'divergencia_dados');
   assert r -> 'registro' ->> 'status' = 'aguardando_informacao', 'aguardando informação';
   begin perform concluir_cadastro_doc(s, null, null); raise exception 'concluiu com pendência'; exception when sqlstate '55000' then null; end;
 end $$;
@@ -112,13 +112,15 @@ do $$ declare r jsonb; s uuid := (select v from t7 where k = 'c1'); begin
   assert (select destino from notificacoes where tipo = 'ajuste_solicitado' and solicitacao_id = s) = 'cadastro', 'notificação abre a aba Cadastro';
   r := responder_ajuste_doc(s, 'Segue CNH nova',
     '[{"caminho":"envios/00000000-0000-0000-0000-0000000007a1/cnh2.docx","nome":"cnh2.docx","categoria":"motorista"}]');
-  assert r -> 'registro' ->> 'status' = 'em_atendimento', 'volta para em atendimento';
+  assert r -> 'registro' ->> 'status' = 'correcao_recebida', 'volta para a fila do responsável';
   assert (select count(*) from doc_anexos where solicitacao_id = s and categoria = 'motorista') = 2, 'anexo anterior preservado';
 end $$;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000007a2', false);
 do $$ declare r jsonb; s uuid := (select v from t7 where k = 'c1'); begin
   assert (select count(*) from notificacoes where tipo = 'resposta_enviada' and solicitacao_id = s) = 1, 'responsável avisado';
+  begin perform concluir_cadastro_doc(s, null, null); raise exception 'concluiu sem retomar'; exception when sqlstate '55000' then null; end;
+  r := retomar_atendimento_doc(s);
   r := concluir_cadastro_doc(s, 'MOT-8812', 'Motorista e cavalo cadastrados. Pode carregar.');
   assert r -> 'registro' ->> 'status' = 'cadastro_concluido' and r -> 'registro' ->> 'erp_referencia' = 'MOT-8812', 'cadastro concluído';
   begin perform cancelar_solicitacao_doc(s, 'x'); raise exception 'cancelou concluído'; exception when sqlstate '55000' then null; end;

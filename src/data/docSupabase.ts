@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AnexoDoc, LoteErp, MensagemDoc, NotificacaoApp, SolicitacaoDoc } from '../types';
 import type { ApiDoc, ResultadoDoc } from './api';
 import { tipoCadastro } from '../lib/documentacao';
+import type { DadosPainel } from '../lib/painelOperacional';
 
 const BUCKET = 'documentacao';
 /** Concluídas e canceladas ficam na fila por 30 dias; as abertas, sempre. */
@@ -43,7 +44,7 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
         ql = ql.gte('atualizado_em', desde);
       } else {
         const corte = new Date(Date.now() - DIAS_CONCLUIDAS * 86400e3).toISOString();
-        q = q.or(`status.in.(enviado,em_atendimento,aguardando_informacao),atualizado_em.gte.${corte}`);
+        q = q.or(`status.in.(enviado,em_atendimento,aguardando_informacao,correcao_recebida),atualizado_em.gte.${corte}`);
       }
       const [s, l] = await Promise.all([q, ql]);
       return { solicitacoes: (ok(s) as ComAnexos[]).map(comNomes), lotes: ok(l) as LoteErp[] };
@@ -89,7 +90,10 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
     criar: (embarqueId, dados, anexos) => rpc<ResultadoDoc>('criar_solicitacao_doc', { p_embarque_id: embarqueId, p_dados: dados, p_anexos: anexos }),
     assumir: (id) => rpc<ResultadoDoc>('assumir_solicitacao_doc', { p_id: id }),
     registrarLote: (id, numero) => rpc<ResultadoDoc>('registrar_lote_doc', { p_id: id, p_numero: numero }),
-    solicitarAjuste: (id, texto, referencia) => rpc<ResultadoDoc>('solicitar_ajuste_doc', { p_id: id, p_texto: texto, p_referencia: referencia }),
+    solicitarAjuste: (id, texto, referencia, motivo, motivoOutro) => rpc<ResultadoDoc>('solicitar_ajuste_doc',
+      { p_id: id, p_texto: texto, p_referencia: referencia, p_motivo: motivo, p_motivo_outro: motivoOutro }),
+    retomar: (id) => rpc<ResultadoDoc>('retomar_atendimento_doc', { p_id: id }),
+    painel: (desde, ate, alteradosDesde) => rpc<DadosPainel>('painel_operacional', { p_desde: desde, p_ate: ate, p_alterados_desde: alteradosDesde }),
     responder: (id, texto, anexos) => rpc<ResultadoDoc>('responder_ajuste_doc', { p_id: id, p_texto: texto, p_anexos: anexos }),
     anexarEmitidos: (id, anexos) => rpc<ResultadoDoc>('anexar_documentos_doc', { p_id: id, p_anexos: anexos }),
     concluir: (id) => rpc<ResultadoDoc>('concluir_solicitacao_doc', { p_id: id }),

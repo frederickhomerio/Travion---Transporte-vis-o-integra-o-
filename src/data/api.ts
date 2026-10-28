@@ -3,8 +3,9 @@
 //  - localApi: prévia local sem servidor, só com dados fictícios, para conhecer as telas.
 
 import type { Cadastros } from '../lib/cadastros';
+import type { DadosPainel } from '../lib/painelOperacional';
 import type {
-  AnexoDoc, CategoriaAnexo, DadosCadastroDoc, DadosSolicitacaoDoc, LoteErp, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
+  AnexoDoc, CategoriaAnexo, DadosCadastroDoc, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
   Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
@@ -76,7 +77,12 @@ export interface ApiDoc {
   criar(embarqueId: string, dados: DadosSolicitacaoDoc, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   assumir(id: string): Promise<ResultadoDoc>;
   registrarLote(id: string, numero: string): Promise<ResultadoDoc>;
-  solicitarAjuste(id: string, texto: string, referencia: string | null): Promise<ResultadoDoc>;
+  /** Motivo obrigatório; `motivoOutro` é a descrição quando o motivo é 'outro'. */
+  solicitarAjuste(id: string, texto: string, referencia: string | null, motivo: MotivoDevolucao, motivoOutro: string | null): Promise<ResultadoDoc>;
+  /** Responsável retoma o atendimento depois que a correção chegou (Correção recebida → Em atendimento). */
+  retomar(id: string): Promise<ResultadoDoc>;
+  /** Painel Operacional (migração 1900): chamados enviados em [desde, ate) ou ainda abertos, e seus eventos. */
+  painel(desde: string, ate: string, alteradosDesde: string | null): Promise<DadosPainel>;
   responder(id: string, texto: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   anexarEmitidos(id: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   concluir(id: string): Promise<ResultadoDoc>;

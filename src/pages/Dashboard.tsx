@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Layout } from '../components/Layout';
+import { AbasAnalise } from './analise/AbasAnalise';
 import { Alerta, Carregando, EstadoVazio, Segmentado } from '../components/ui';
 import { mensagemErro } from '../data/api';
 import { linhasDaData, useApp, useIndices } from '../data/store';
@@ -83,6 +84,7 @@ export function Dashboard() {
 
   return (
     <Layout titulo="Análise · Dashboard Operacional">
+      <AbasAnalise />
       <div className="dash">
         <div className="dash-topo">
           <span className="dash-periodo">{tituloData}</span>

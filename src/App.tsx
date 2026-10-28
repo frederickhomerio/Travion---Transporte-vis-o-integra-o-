@@ -9,6 +9,7 @@ import { ListaFretes } from './pages/ListaFretes';
 import { Mais } from './pages/Mais';
 
 const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
+const PainelOperacional = lazy(() => import('./pages/analise/PainelOperacional').then((m) => ({ default: m.PainelOperacional })));
 const PosicoesEmbarque = lazy(() => import('./pages/PosicoesEmbarque').then((m) => ({ default: m.PosicoesEmbarque })));
 const PosicaoCliente = lazy(() => import('./pages/PosicaoCliente').then((m) => ({ default: m.PosicaoCliente })));
 const Admin = lazy(() => import('./pages/admin/Admin').then((m) => ({ default: m.Admin })));
@@ -45,6 +46,7 @@ export function App({ api }: { api: Api }) {
               <Route path="/nova-senha" element={<NovaSenha />} />
               <Route path="/" element={<Protegido><ListaFretes /></Protegido>} />
               <Route path="/analise" element={<Protegido><Dashboard /></Protegido>} />
+              <Route path="/analise/operacional" element={<Protegido><PainelOperacional /></Protegido>} />
               <Route path="/dashboard" element={<Navigate to="/analise" replace />} />
               <Route path="/posicoes" element={<Protegido><PosicoesEmbarque /></Protegido>} />
               <Route path="/posicao-cliente" element={<Protegido><PosicaoCliente /></Protegido>} />

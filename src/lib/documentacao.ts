@@ -1,14 +1,14 @@
 // Regras de apresentação da documentação (Apoio Operacional). Funções puras; quem decide é o servidor.
 
 import type {
-  CategoriaAnexo, FormaPagamento, LoteErp, Pedagio, SolicitacaoDoc, StatusDoc, TipoOperacao, TipoSolicitacaoDoc, UnidadeFreteDoc,
+  CategoriaAnexo, FormaPagamento, LoteErp, MotivoDevolucao, Pedagio, SolicitacaoDoc, StatusDoc, TipoOperacao, TipoSolicitacaoDoc, UnidadeFreteDoc,
 } from '../types';
 import { cidadeAnuncio } from './anuncio';
 import { normalizar } from './texto';
 
 export const TIPO_DOC: Record<TipoSolicitacaoDoc, string> = { lote_emissao: 'Lote e Emissão', emissao: 'Emissão', cadastro: 'Cadastro' };
 export const STATUS_DOC: Record<StatusDoc, string> = {
-  enviado: 'Enviado', em_atendimento: 'Em atendimento', aguardando_informacao: 'Aguardando informação',
+  enviado: 'Enviado', em_atendimento: 'Em atendimento', aguardando_informacao: 'Aguardando informação', correcao_recebida: 'Correção recebida',
   documentacao_disponivel: 'Documentação disponível', cadastro_concluido: 'Cadastro concluído', cancelado: 'Cancelado',
 };
 export const UNIDADE_DOC: Record<UnidadeFreteDoc, string> = { rs_tonelada: 'R$/t', rs_viagem: 'R$/viagem' };
@@ -20,7 +20,13 @@ export const CATEGORIA: Record<CategoriaAnexo, string> = {
   motorista: 'Documento do motorista', veiculo: 'Documento do veículo',
 };
 export const CATEGORIAS_SAIDA: CategoriaAnexo[] = ['cte', 'mdfe', 'outro_emitido'];
-export const ABERTOS: StatusDoc[] = ['enviado', 'em_atendimento', 'aguardando_informacao'];
+export const ABERTOS: StatusDoc[] = ['enviado', 'em_atendimento', 'aguardando_informacao', 'correcao_recebida'];
+/** Motivos da devolução (pedir ajuste). */
+export const MOTIVO_DEVOLUCAO: Record<MotivoDevolucao, string> = {
+  documento_ausente: 'Documento ausente', documento_ilegivel: 'Documento ilegível', divergencia_dados: 'Divergência de dados',
+  informacao_incompleta: 'Informação incompleta', outro: 'Outro', sem_registro: 'Sem registro',
+};
+export const MOTIVOS_ESCOLHA: MotivoDevolucao[] = ['documento_ausente', 'documento_ilegivel', 'divergencia_dados', 'informacao_incompleta', 'outro'];
 export const TIPOS_ARQUIVO = 'application/pdf,image/png,image/jpeg,image/webp';
 export const LIMITE_ARQUIVO = 15 * 1024 * 1024;
 export const PLACA_RE = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
@@ -112,6 +118,7 @@ export function vezDe(s: SolicitacaoDoc): string | null {
   if (s.status === 'aguardando_informacao') return `Resposta de ${s.solicitante_nome}`;
   if (s.status === 'enviado') return 'Apoio (ninguém assumiu)';
   if (s.status === 'em_atendimento') return `Apoio: ${s.responsavel_nome ?? '—'}`;
+  if (s.status === 'correcao_recebida') return `Apoio: retomar (${s.responsavel_nome ?? '—'})`;
   return null;
 }
 
@@ -147,7 +154,7 @@ export function noAtalho(s: SolicitacaoDoc, atalho: Atalho, eu: string): boolean
   switch (atalho) {
     case 'abertas': return ABERTOS.includes(s.status);
     case 'novas': return s.status === 'enviado';
-    case 'minhas': return s.responsavel_id === eu && (s.status === 'em_atendimento' || s.status === 'aguardando_informacao');
+    case 'minhas': return s.responsavel_id === eu && (s.status === 'em_atendimento' || s.status === 'aguardando_informacao' || s.status === 'correcao_recebida');
     case 'aguardando': return s.status === 'aguardando_informacao';
     case 'concluidas': return CONCLUIDOS.includes(s.status) || s.status === 'cancelado';
   }

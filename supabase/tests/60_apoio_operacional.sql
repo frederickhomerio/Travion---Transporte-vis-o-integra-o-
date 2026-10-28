@@ -110,8 +110,8 @@ do $$ declare r jsonb; s uuid := (select v from t6 where k = 's1'); begin
   r := registrar_lote_doc(s, 'L-2026-78');
   assert exists (select 1 from doc_mensagens where solicitacao_id = s and texto like 'Número do lote corrigido de L-2026-77 para L-2026-78%'), 'correção auditada';
   -- Pendência vazia não; com texto notifica o solicitante
-  begin perform solicitar_ajuste_doc(s, '  '); raise exception 'pendência vazia'; exception when sqlstate '22023' then null; end;
-  r := solicitar_ajuste_doc(s, 'NF ilegível, enviar de novo', 'nf');
+  begin perform solicitar_ajuste_doc(s, '  ', null, 'documento_ilegivel'); raise exception 'pendência vazia'; exception when sqlstate '22023' then null; end;
+  r := solicitar_ajuste_doc(s, 'NF ilegível, enviar de novo', 'nf', 'documento_ilegivel');
   assert r -> 'registro' ->> 'status' = 'aguardando_informacao', 'aguardando informação';
   begin perform concluir_solicitacao_doc(s); raise exception 'concluiu com pendência'; exception when sqlstate '55000' then null; end;
 end $$;
@@ -128,7 +128,7 @@ do $$ declare r jsonb; s uuid := (select v from t6 where k = 's1'); begin
   assert r -> 'registro' -> 'retrato' ->> 'lote_numero' = 'L-2026-78', 'Emissão vinculada ao lote';
   begin perform responder_ajuste_doc(s, '', '[]'); raise exception 'resposta vazia'; exception when sqlstate '22023' then null; end;
   r := responder_ajuste_doc(s, 'Segue NF nova', '[{"caminho":"envios/00000000-0000-0000-0000-0000000006a1/correcao.pdf","nome":"nf1-v2.pdf","categoria":"nf"}]');
-  assert r -> 'registro' ->> 'status' = 'em_atendimento', 'volta para em atendimento';
+  assert r -> 'registro' ->> 'status' = 'correcao_recebida', 'volta para a fila do responsável';
   assert (select count(*) from doc_anexos where solicitacao_id = s and categoria = 'nf') = 2, 'NF anterior preservada';
   assert exists (select 1 from doc_mensagens where solicitacao_id = s and tipo = 'pendencia' and texto = 'NF ilegível, enviar de novo'), 'pendência fica no histórico';
   assert marcar_notificacoes_lidas(null) = 1, 'marca lidas';
@@ -137,6 +137,9 @@ end $$;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000006a2', false);
 do $$ declare r jsonb; s uuid := (select v from t6 where k = 's1'); begin
   assert (select count(*) from notificacoes where tipo = 'resposta_enviada') = 1, 'responsável notificado da resposta';
+  begin perform concluir_solicitacao_doc(s); raise exception 'concluiu sem retomar'; exception when sqlstate '55000' then null; end;
+  r := retomar_atendimento_doc(s);
+  assert r -> 'registro' ->> 'status' = 'em_atendimento', 'retomado';
   r := concluir_solicitacao_doc(s);
   assert r -> 'registro' ->> 'status' = 'documentacao_disponivel', 'documentação disponível';
   assert (select count(*) from solicitacoes_doc where tipo = 'emissao' and status = 'enviado') = 1, 'próximo veículo na fila';

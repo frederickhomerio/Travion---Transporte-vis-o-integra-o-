@@ -407,6 +407,7 @@ function CadastroDetalhe({ s, aoVoltar }: { s: SolicitacaoDoc; aoVoltar: () => v
 
       {s.status === 'enviado' && <Alerta tipo="info">Enviado. O apoio ainda vai assumir e fazer o cadastro no ERP; enviado ainda não quer dizer cadastrado.</Alerta>}
       {s.status === 'em_atendimento' && <Alerta tipo="info">{s.responsavel_nome} está fazendo o cadastro no ERP. Você recebe um aviso quando terminar.</Alerta>}
+      {s.status === 'correcao_recebida' && <Alerta tipo="info">Sua correção foi enviada. {s.responsavel_nome} vai retomar o cadastro.</Alerta>}
       {CONCLUIDOS.includes(s.status) && (
         <div className="cartao cartao-corpo cad-retorno">
           <strong>Cadastro concluído no ERP</strong>
