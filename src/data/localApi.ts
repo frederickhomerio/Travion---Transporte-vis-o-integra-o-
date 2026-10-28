@@ -33,7 +33,8 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['embarques.criar', 'Embarques', 'Cadastrar novos embarques'],
   ['embarques.editar_cadastro', 'Embarques', 'Alterar cliente, rota, produto, filial, locais e observação interna'],
   ['embarques.liberar', 'Embarques', 'Liberar ou suspender embarques e alterar a data de liberação'],
-  ['embarques.editar_cadencia', 'Embarques', 'Alterar cadência (meta) do embarque'],
+  ['embarques.editar_cadencia', 'Embarques', 'Alterar a meta diária de qualquer embarque'],
+  ['embarques.editar_cadencia_proprio', 'Embarques', 'Alterar a meta diária dos embarques que a própria pessoa criou'],
   ['embarques.editar_capacidade', 'Embarques', 'Alterar toneladas médias por veículo'],
   ['embarques.arquivar', 'Embarques', 'Arquivar ou reativar embarques'],
   ['embarques.encerrar', 'Embarques', 'Encerrar embarque definitivamente (sem reativação)'],
@@ -73,15 +74,15 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
     'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver',
-    'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir'],
+    'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar',
-    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver'],
+    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio'],
   embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar',
-    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver'],
+    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio'],
   // Apoio Operacional reúne o antigo papel Operação (contadores e observação) e a fila de documentação.
   apoio: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
     'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver', 'analise.operacional', 'estadia.ver'],
@@ -90,7 +91,7 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
     'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar',
-    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver'],
+    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio'],
   consulta: ['embarques.ver'],
 };
 
@@ -345,7 +346,7 @@ export function criarLocalApi(): Api {
     db.filiais.filter((f) => f.is_demo && !f.centro_custo_id).forEach((f, i) => { f.centro_custo_id = cc[i % 2].id; });
   }
   // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
-  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir'] as Permissao[]) {
+  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio'] as Permissao[]) {
     if (db.papelPermissoes.some((x) => x.chave === nova)) continue;
     for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) if (ps.includes(nova)) db.papelPermissoes.push({ papel: papel as Papel, chave: nova });
   }
@@ -405,17 +406,17 @@ export function criarLocalApi(): Api {
   };
   const txt = (v: unknown) => (v === null || v === undefined ? null : String(v));
 
-  type Regra = { perm: Permissao; tipo: 'contador' | 'texto' | 'texto_obrigatorio' | 'positivo' | 'dinheiro' | 'enum' | 'uuid' | 'uf' | 'data'; valores?: string[] };
+  type Regra = { perm: Permissao; tipo: 'contador' | 'texto' | 'texto_obrigatorio' | 'positivo' | 'positivo_obrigatorio' | 'dinheiro' | 'enum' | 'uuid' | 'uf' | 'data'; valores?: string[] };
   function validar(campo: string, r: Regra, v: unknown): unknown {
     if (v === null || v === undefined || v === '') {
-      if (r.tipo === 'texto_obrigatorio' || r.tipo === 'enum') erro(`${campo} é obrigatório.`);
+      if (r.tipo === 'texto_obrigatorio' || r.tipo === 'enum' || r.tipo === 'positivo_obrigatorio') erro(`${campo} é obrigatório.`);
       return null;
     }
     switch (r.tipo) {
       case 'contador':
         if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) erro('Use somente números inteiros maiores ou iguais a zero.');
         return v;
-      case 'positivo':
+      case 'positivo': case 'positivo_obrigatorio':
         if (typeof v !== 'number' || v <= 0) erro('Informe um número maior que zero.');
         return v;
       case 'dinheiro':
@@ -476,7 +477,7 @@ export function criarLocalApi(): Api {
     local_entrega_id: { perm: 'embarques.editar_cadastro', tipo: 'uuid' }, observacao_interna: { perm: 'embarques.editar_cadastro', tipo: 'texto' },
     status_liberacao: { perm: 'embarques.liberar', tipo: 'enum', valores: ['liberado', 'suspenso', 'nao_informado'] },
     data_liberacao: { perm: 'embarques.liberar', tipo: 'data' },
-    cadencia_valor: { perm: 'embarques.editar_cadencia', tipo: 'positivo' },
+    cadencia_valor: { perm: 'embarques.editar_cadencia', tipo: 'positivo_obrigatorio' },
     cadencia_unidade: { perm: 'embarques.editar_cadencia', tipo: 'enum', valores: ['veiculos_dia', 'toneladas_dia'] },
     toneladas_por_veiculo: { perm: 'embarques.editar_capacidade', tipo: 'positivo' },
     situacao: { perm: 'embarques.arquivar', tipo: 'enum', valores: ['ativo', 'arquivado'] },
@@ -653,7 +654,12 @@ export function criarLocalApi(): Api {
       if (!e || !veEmbarque(e)) erro('Embarque não encontrado ou fora do seu escopo.');
       if (e.encerrado_em) erro('Embarque encerrado: não pode ser reativado nem alterado.');
       if (e.situacao === 'arquivado' && !('situacao' in alt)) erro('Embarque arquivado: reative o cadastro antes de alterá-lo.');
-      const { novo, conflitos } = preparar(e, alt, base, forcar, R_EMB);
+      // Quem criou o embarque pode alterar a meta com a permissão "dos embarques que criei" (mesma regra do servidor).
+      const regras = e.criado_por === perfil()?.id && !tem('embarques.editar_cadencia') && tem('embarques.editar_cadencia_proprio')
+        ? { ...R_EMB, cadencia_valor: { ...R_EMB.cadencia_valor, perm: 'embarques.editar_cadencia_proprio' as Permissao },
+          cadencia_unidade: { ...R_EMB.cadencia_unidade, perm: 'embarques.editar_cadencia_proprio' as Permissao } }
+        : R_EMB;
+      const { novo, conflitos } = preparar(e, alt, base, forcar, regras);
       if (conflitos.length) return { status: 'conflito', conflitos, registro: clone(e) };
       if (!Object.keys(novo).length) return { status: 'sem_alteracao', registro: clone(e) };
       const n = { ...e, ...novo } as Embarque;
@@ -717,7 +723,10 @@ export function criarLocalApi(): Api {
       if (comercial !== cli.comercial_id) exigir('carteira.editar');
       const cap = (d.toneladas_por_veiculo as number) ?? db.config.capacidade_padrao_t;
       if (cap !== db.config.capacidade_padrao_t) exigir('embarques.editar_capacidade');
-      if (d.cadencia_valor) exigir('embarques.editar_cadencia');
+      if (typeof d.cadencia_valor !== 'number' || !(d.cadencia_valor > 0)) erro('Informe a meta diária do embarque (veículos ou toneladas por dia).');
+      if (!tem('embarques.editar_cadencia') && !tem('embarques.editar_cadencia_proprio')) erro('Você não tem permissão para definir a meta diária do embarque.');
+      const loteErp = typeof d.lote_erp === 'string' ? d.lote_erp.trim() : '';
+      if (loteErp.length > 60) erro('O número do lote do ERP tem no máximo 60 caracteres.');
       if (d.status_liberacao && d.status_liberacao !== 'nao_informado') exigir('embarques.liberar');
       if (!noEscopo(d.filial_id as string, comercial)) erro('A filial ou carteira escolhida está fora do seu escopo.');
       db.seq++;
@@ -730,7 +739,7 @@ export function criarLocalApi(): Api {
         data_liberacao: (d.data_liberacao as string) ?? null, cadencia_valor: (d.cadencia_valor as number) ?? null,
         cadencia_unidade: (d.cadencia_unidade as Embarque['cadencia_unidade']) ?? 'veiculos_dia', toneladas_por_veiculo: cap,
         observacao_interna: (d.observacao_interna as string) ?? null, situacao: 'ativo', is_demo: demo, chave_importacao: null,
-        versao: 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario(),
+        versao: 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario(), criado_por: perfil()?.id ?? null,
       };
       db.embarques.push(e);
       const fin = (d.financeiro ?? {}) as Partial<Financeiro>;
@@ -741,6 +750,11 @@ export function criarLocalApi(): Api {
         valor_novo: `Embarque EMB-${String(e.codigo).padStart(6, '0')} criado` });
       if (d.abrir_posicao_em) abrir(String(d.abrir_posicao_em), false, [e.id]);
       salvar();
+      if (loteErp) {
+        doc.registrarLoteInicial(e.id, loteErp, nomeUsuario() ?? 'Usuário');
+        registrar({ entidade: 'embarque', registro_id: e.id, embarque_id: e.id, cliente_id: e.cliente_id, campo: 'lote_erp', valor_novo: loteErp });
+        salvar();
+      }
       return clone(e);
     },
     async abrirPosicoes(data, transportar, ids) {

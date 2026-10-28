@@ -214,7 +214,7 @@ export function relatorioFiliais(recorte: LinhaFrete[], data: string, agoraMs: n
 // Imagem por centro de custo (uso interno: supervisores e gestão)
 // ---------------------------------------------------------------------------
 export interface LinhaPrintCentro {
-  chave: string; cliente: string;
+  chave: string; cliente: string; lote: string | null;
   origem: string; coleta: string | null; destino: string; entrega: string | null;
   porta_t: number; carregado_t: number; meta_t: number | null;
   /** Executado = volume carregado ÷ meta do dia × 100 (mesmas faixas do Dashboard). */
@@ -227,7 +227,7 @@ export interface PrintCentro {
 }
 
 /** Agrupa as posições (já filtradas) por centro de custo, na ordem de origem, coleta e destino. */
-export function printPorCentro(linhas: LinhaFrete[], idx: Indices, cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>): PrintCentro[] {
+export function printPorCentro(linhas: LinhaFrete[], idx: Indices, cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>, lotes: Record<string, { numero: string }> = {}): PrintCentro[] {
   const grupos = new Map<string, LinhaFrete[]>();
   for (const l of linhas) {
     if (!l.posicao) continue;
@@ -247,7 +247,7 @@ export function printPorCentro(linhas: LinhaFrete[], idx: Indices, cfg: Pick<Con
         const meta = metaDaPosicao(p, cfg).volume_t;
         const pct = meta && meta > 0 ? (v.carregado_t / meta) * 100 : null;
         return {
-          chave: p.id, cliente: nome(idx.cliente, e.cliente_id),
+          chave: p.id, cliente: nome(idx.cliente, e.cliente_id), lote: lotes[e.id]?.numero ?? null,
           origem: cidadeUF(e.origem_cidade, e.origem_uf), coleta: n(e.local_coleta_id) || null,
           destino: cidadeUF(e.destino_cidade, e.destino_uf), entrega: n(e.local_entrega_id) || null,
           porta_t: v.porta_t, carregado_t: v.carregado_t, meta_t: meta, pct, faixa: faixaBarra(pct),

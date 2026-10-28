@@ -19,7 +19,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
     origem_cidade: '', origem_uf: '', local_coleta: '', destino_cidade: '', destino_uf: '', local_entrega: '',
     status_liberacao: pode('embarques.liberar') ? 'liberado' : 'nao_informado', data_liberacao: '', cadencia_valor: '', cadencia_unidade: estado.config.cadencia_unidade_padrao,
     toneladas_por_veiculo: String(estado.config.capacidade_padrao_t), observacao_interna: '',
-    frete_empresa: '', frete_motorista: '', unidade_frete: 'rs_tonelada', abrir: pode('posicoes.abrir'),
+    frete_empresa: '', frete_motorista: '', unidade_frete: 'rs_tonelada', abrir: pode('posicoes.abrir'), lote_erp: '',
   });
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -37,7 +37,8 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
     const cap = parseNumeroBR(d.toneladas_por_veiculo);
     const cad = parseNumeroBR(d.cadencia_valor);
     if (!cap || cap <= 0) { setErro('Toneladas médias por veículo deve ser maior que zero.'); return; }
-    if (cad === undefined || (cad !== null && cad <= 0)) { setErro('Cadência deve ser um número maior que zero (ou vazia).'); return; }
+    if (!cad || cad <= 0) { setErro(`Informe a meta diária em ${d.cadencia_unidade === 'toneladas_dia' ? 'toneladas' : 'veículos'} por dia (número maior que zero).`); return; }
+    if (d.lote_erp.trim().length > 60) { setErro('O número do lote do ERP tem no máximo 60 caracteres.'); return; }
     const dados: Record<string, unknown> = {
       cliente_id: d.cliente_id, filial_id: d.filial_id, origem_cidade: d.origem_cidade.trim(), destino_cidade: d.destino_cidade.trim(),
       status_liberacao: d.status_liberacao, cadencia_unidade: d.cadencia_unidade,
@@ -46,7 +47,8 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
     if (d.origem_uf) dados.origem_uf = d.origem_uf.trim().toUpperCase();
     if (d.destino_uf) dados.destino_uf = d.destino_uf.trim().toUpperCase();
     if (d.data_liberacao) dados.data_liberacao = d.data_liberacao;
-    if (cad) dados.cadencia_valor = cad;
+    dados.cadencia_valor = cad;
+    if (d.lote_erp.trim()) dados.lote_erp = d.lote_erp.trim();
     if (cap !== estado.config.capacidade_padrao_t) dados.toneladas_por_veiculo = cap;
     if (d.observacao_interna.trim()) dados.observacao_interna = d.observacao_interna.trim();
     if (pode('carteira.editar') && d.comercial_id !== carteiraSugerida) dados.comercial_id = d.comercial_id || null;
@@ -170,8 +172,10 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
         {local('local_entrega', 'Descarga (entrega)', d.destino_cidade, 'coleta')}
         {pode('embarques.liberar') && sel('status_liberacao', 'Status de liberação', [{ id: 'nao_informado', nome: 'Não informado' }, { id: 'liberado', nome: 'Liberado' }, { id: 'suspenso', nome: 'Suspenso' }])}
         {pode('embarques.liberar') && txt('data_liberacao', 'Data de liberação', { type: 'date' })}
-        {pode('embarques.editar_cadencia') && txt('cadencia_valor', 'Cadência (meta)', { inputMode: 'decimal' }, `Vazio = meta padrão (${estado.config.meta_veiculos_lote_padrao} veículos/lote).`)}
-        {pode('embarques.editar_cadencia') && sel('cadencia_unidade', 'Unidade da cadência', [{ id: 'veiculos_dia', nome: 'Veículos por dia' }, { id: 'toneladas_dia', nome: 'Toneladas por dia' }])}
+        {sel('cadencia_unidade', 'Meta diária em *', [{ id: 'veiculos_dia', nome: 'Veículos por dia' }, { id: 'toneladas_dia', nome: 'Toneladas por dia' }])}
+        {txt('cadencia_valor', `Meta diária (${d.cadencia_unidade === 'toneladas_dia' ? 't/dia' : 'veículos/dia'}) *`, { inputMode: 'decimal', placeholder: d.cadencia_unidade === 'toneladas_dia' ? 'ex.: 120' : 'ex.: 3' },
+          'Obrigatória. Base do executado × meta nas Posições e no Dashboard.')}
+        {txt('lote_erp', 'Nº do lote no ERP', { maxLength: 60, placeholder: 'ex.: 2026-004512' }, 'Se o lote já existe no ERP. Vazio: o apoio informa no atendimento de Lote e Emissão.')}
         {txt('toneladas_por_veiculo', 'Toneladas médias por veículo', { inputMode: 'decimal', disabled: !pode('embarques.editar_capacidade') }, `Padrão: ${estado.config.capacidade_padrao_t} t.`)}
         {pode('financeiro.editar') && txt('frete_empresa', 'Frete empresa', { inputMode: 'decimal', placeholder: 'ex.: 67,50' })}
         {pode('financeiro.editar') && txt('frete_motorista', 'Frete motorista', { inputMode: 'decimal' }, 'Informado manualmente (sem desconto automático).')}

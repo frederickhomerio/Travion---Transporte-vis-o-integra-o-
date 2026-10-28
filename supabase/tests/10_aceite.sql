@@ -62,7 +62,7 @@ select criar_embarque(jsonb_build_object(
   'cliente_id', :'cli_alfa', 'filial_id', :'filial_a', 'produto_id', :'prod',
   'origem_cidade', 'RIO VERDE', 'origem_uf', 'go', 'local_coleta_id', :'loc_coleta',
   'destino_cidade', 'SANTOS', 'destino_uf', 'SP', 'local_entrega_id', :'loc_entrega',
-  'financeiro', jsonb_build_object('frete_empresa', 155, 'frete_motorista', 144),
+  'financeiro', jsonb_build_object('frete_empresa', 155, 'frete_motorista', 144), 'cadencia_valor', 2,
   'abrir_posicao_em', private.hoje_sp() - 1)) -> 'registro' ->> 'id' as emb1 \gset
 select set_config('t.emb1', :'emb1', false);
 select criar_embarque(jsonb_build_object(
@@ -74,7 +74,7 @@ select set_config('t.emb2', :'emb2', false);
 select criar_embarque(jsonb_build_object(
   'cliente_id', :'cli_beta', 'filial_id', :'filial_b',
   'origem_cidade', 'JATAI', 'destino_cidade', 'ARAGUARI', 'destino_uf', 'MG',
-  'financeiro', jsonb_build_object('frete_empresa', 155, 'frete_motorista', 139))) -> 'registro' ->> 'id' as emb3 \gset
+  'financeiro', jsonb_build_object('frete_empresa', 155, 'frete_motorista', 139), 'cadencia_valor', 2)) -> 'registro' ->> 'id' as emb3 \gset
 select set_config('t.emb3', :'emb3', false);
 
 do $$ begin

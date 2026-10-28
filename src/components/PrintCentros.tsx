@@ -2,6 +2,7 @@
 // executado × meta (vermelho até 60%, amarelo até 80%, verde acima) e quem atualizou por último.
 
 import { useRef, useState } from 'react';
+import { useDoc } from '../data/documentacao';
 import type { Indices } from '../lib/cadastros';
 import { fmtData, fmtDataAsHora, fmtHora } from '../lib/formato';
 import { type PrintCentro, printPorCentro } from '../lib/posicoes';
@@ -23,7 +24,8 @@ async function gerarPng(el: HTMLElement): Promise<Blob> {
 export function PrintCentros({ linhas, idx, cfg, data, aoFechar }: {
   linhas: LinhaFrete[]; idx: Indices; cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>; data: string; aoFechar: () => void;
 }) {
-  const [grupos] = useState(() => printPorCentro(linhas, idx, cfg));
+  const { estado: doc } = useDoc();
+  const [grupos] = useState(() => printPorCentro(linhas, idx, cfg, doc.lotes));
   const [geradoEm] = useState(() => new Date().toISOString());
   const refs = useRef<Record<string, HTMLDivElement | null>>({});
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro' | 'aviso'; txt: string } | null>(null);
@@ -100,7 +102,7 @@ export function PrintCentros({ linhas, idx, cfg, data, aoFechar }: {
                   <tbody>
                     {g.linhas.map((l) => (
                       <tr key={l.chave}>
-                        <td><span className="pc-cidade">{l.origem}</span>{l.coleta && <span className="pc-local">{l.coleta}</span>}<span className="pc-cliente">{l.cliente}</span></td>
+                        <td><span className="pc-cidade">{l.origem}</span>{l.coleta && <span className="pc-local">{l.coleta}</span>}<span className="pc-cliente">{l.cliente}{l.lote ? ` · Lote ERP ${l.lote}` : ''}</span></td>
                         <td><span className="pc-cidade">{l.destino}</span>{l.entrega && <span className="pc-local">{l.entrega}</span>}</td>
                         <td className="n">{fmtT(l.porta_t)}</td>
                         <td className="n">{fmtT(l.carregado_t)}</td>

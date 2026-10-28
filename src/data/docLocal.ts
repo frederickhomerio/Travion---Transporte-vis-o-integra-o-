@@ -136,7 +136,10 @@ async function imagemDemo(linhas: string[]): Promise<Blob> {
 }
 
 // ---------------------------------------------------------------------------
-export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
+/** Além da API, o lote do ERP informado na criação do embarque (a criação fica na API principal da prévia). */
+export type ApiDocLocal = ApiDoc & { registrarLoteInicial(embarqueId: string, numero: string, nome: string): void };
+
+export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
   let db: BancoDoc = (() => {
     try { const s = localStorage.getItem(CHAVE); if (s) return JSON.parse(s) as BancoDoc; } catch { /* recria */ }
     return { seq: 0, solicitacoes: [], lotes: [], mensagens: [], anexos: [], notificacoes: [], objetos: [] };
@@ -548,6 +551,12 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
   const offline = () => { if (!navigator.onLine) erro('Failed to fetch'); };
 
   return {
+    registrarLoteInicial(embarqueId, numero, nome) {
+      if (db.lotes.some((l) => l.embarque_id === embarqueId)) return;
+      db.lotes.push({ id: uid(), embarque_id: embarqueId, numero, solicitacao_id: null, registrado_por_nome: nome, registrado_em: agora(), versao: 1, atualizado_em: agora() });
+      salvar();
+      emitir({ tabela: 'lotes' });
+    },
     async listar(desde) {
       await pronto;
       eu();
@@ -666,7 +675,9 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       if (!n || n.length > 60) erro('Informe o número do lote gerado no ERP.');
       let l = db.lotes.find((x) => x.embarque_id === embarqueId);
       if (l) {
-        if (l.solicitacao_id !== s.id) erro(`Este embarque já tem lote registrado (${l.numero}).`);
+        if (l.solicitacao_id && l.solicitacao_id !== s.id) erro(`Este embarque já tem lote registrado (${l.numero}).`);
+        // Lote informado na criação do embarque: o apoio confirma (ou corrige) e ele passa a ser desta solicitação.
+        if (!l.solicitacao_id) l.solicitacao_id = s.id;
         if (l.numero === n) return { status: 'sem_alteracao', registro: clone(s), lote: clone(l) };
         evento(s, 'evento', `Número do lote corrigido de ${l.numero} para ${n}`, 'lote');
         Object.assign(l, { numero: n, versao: l.versao + 1, atualizado_em: agora() });

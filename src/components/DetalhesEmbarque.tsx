@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { mensagemErro } from '../data/api';
+import { useDoc } from '../data/documentacao';
 import { useApp, useIndices } from '../data/store';
 import { type Indices, cidadeUF, codigoEmbarque, nome } from '../lib/cadastros';
 import { metaDaPosicao, metaDoEmbarque, volumes } from '../lib/calculos';
@@ -89,8 +90,9 @@ function Resumo({ e, idx }: { e: Embarque; idx: Indices }) {
           <dt>Origem / coleta</dt><dd>{cidadeUF(e.origem_cidade, e.origem_uf)} — {nome(idx.local, e.local_coleta_id, 'não informado')}</dd>
           <dt>Destino / entrega</dt><dd>{cidadeUF(e.destino_cidade, e.destino_uf)} — {nome(idx.local, e.local_entrega_id, 'não informado')}</dd>
           <dt>Liberação</dt><dd><BadgeStatus status={e.status_liberacao} />{e.data_liberacao && <span className="suave"> desde {fmtData(e.data_liberacao)}</span>}</dd>
-          <dt>Cadência</dt><dd>{e.cadencia_valor ? `${fmtNum(e.cadencia_valor, 1)} ${ROTULO_CADENCIA[e.cadencia_unidade]}` : `Sem cadência própria (usa meta padrão de ${estado.config.meta_veiculos_lote_padrao} veículos/lote)`}</dd>
+          <dt>Meta diária</dt><dd>{e.cadencia_valor ? `${fmtNum(e.cadencia_valor, 1)} ${ROTULO_CADENCIA[e.cadencia_unidade]}` : `Sem meta própria (usa a meta padrão de ${estado.config.meta_veiculos_lote_padrao} veículos/lote até alguém preencher)`}</dd>
           <dt>Toneladas médias por veículo</dt><dd>{fmtT(e.toneladas_por_veiculo)}</dd>
+          <dt>Lote no ERP</dt><dd><LoteDoEmbarque embarqueId={e.id} /></dd>
           <dt>Situação cadastral</dt><dd>{e.situacao === 'ativo' ? 'Ativo' : 'Arquivado'}</dd>
           {e.observacao_interna && <><dt>Observação interna</dt><dd>{e.observacao_interna}</dd></>}
           <dt>Última alteração do cadastro</dt><dd>{fmtDataHora(e.atualizado_em)}{e.atualizado_por_nome ? ` · ${e.atualizado_por_nome}` : ''}</dd>
@@ -108,7 +110,7 @@ function Resumo({ e, idx }: { e: Embarque; idx: Indices }) {
               <dt>Total operacional</dt><dd>{v.total_veiculos} veículos <span className="suave pequeno">(soma das posições informadas)</span></dd>
               <dt>Volume projetado</dt><dd>{fmtT(v.projetado_t)} <span className="suave pequeno">(porta + carregado; sem trânsito)</span></dd>
               <dt>Potencial com trânsito</dt><dd>{fmtT(v.potencial_t)}</dd>
-              <dt>Meta do lote</dt><dd>{meta.volume_t === null ? 'Sem meta definida' : `${fmtNum(meta.veiculos, 1)} veículos = ${fmtT(meta.volume_t)} (${meta.origem === 'cadencia' ? 'cadência do embarque' : 'meta padrão'})`}</dd>
+              <dt>Meta do lote</dt><dd>{meta.volume_t === null ? 'Sem meta definida' : `${fmtNum(meta.veiculos, 1)} veículos = ${fmtT(meta.volume_t)} (${meta.origem === 'cadencia' ? 'meta do embarque' : 'meta padrão'})`}</dd>
               {v.nao_informados > 0 && <><dt>Atenção</dt><dd>{v.nao_informados} contador(es) não informado(s)</dd></>}
             </dl>
           )}
@@ -163,13 +165,15 @@ function Cadastro({ e, idx }: { e: Embarque; idx: Indices }) {
   const { api, estado, pode: podeApp, aplicarEmbarque, recarregar } = useApp();
   // Encerrado não se altera nem se reativa (o banco também recusa).
   const pode: typeof podeApp = (k) => !e.encerrado_em && podeApp(k);
+  // Meta: qualquer embarque com "editar meta", ou os que a pessoa criou com "editar meta dos que criei".
+  const podeMeta = pode('embarques.editar_cadencia') || (pode('embarques.editar_cadencia_proprio') && !!e.criado_por && e.criado_por === estado.sessao?.perfil.id);
   const c = estado.cadastros;
   const campos: DefCampo[] = [
     { campo: 'status_liberacao', rotulo: 'Status de liberação', tipo: 'select', pode: pode('embarques.liberar'),
       opcoes: Object.entries(ROTULO_STATUS).map(([valor, rotulo]) => ({ valor, rotulo })) },
     { campo: 'data_liberacao', rotulo: 'Data de liberação', tipo: 'data', pode: pode('embarques.liberar') },
-    { campo: 'cadencia_valor', rotulo: 'Cadência (meta)', tipo: 'numero', pode: pode('embarques.editar_cadencia'), ajuda: 'Vazio = usa a meta padrão de veículos por lote.' },
-    { campo: 'cadencia_unidade', rotulo: 'Unidade da cadência', tipo: 'select', pode: pode('embarques.editar_cadencia'),
+    { campo: 'cadencia_valor', rotulo: 'Meta diária', tipo: 'numero', pode: podeMeta, ajuda: 'Obrigatória: veículos ou toneladas por dia, conforme a unidade abaixo. Vale para hoje em diante.' },
+    { campo: 'cadencia_unidade', rotulo: 'Meta diária em', tipo: 'select', pode: podeMeta,
       opcoes: [{ valor: 'veiculos_dia', rotulo: 'Veículos por dia' }, { valor: 'toneladas_dia', rotulo: 'Toneladas por dia' }] },
     { campo: 'toneladas_por_veiculo', rotulo: 'Toneladas médias por veículo', tipo: 'numero', pode: pode('embarques.editar_capacidade'),
       ajuda: 'Vale para hoje em diante. Posições de datas anteriores mantêm a capacidade usada na época.' },
@@ -308,4 +312,11 @@ function OrigemAba({ embarqueId }: { embarqueId: string }) {
       <dl className="dl">{Object.entries(dados).map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd className="mono">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</dd></Fragment>)}</dl>
     </div>
   );
+}
+
+/** Número do lote no ERP (informado na criação ou pelo apoio no atendimento de Lote e Emissão). */
+function LoteDoEmbarque({ embarqueId }: { embarqueId: string }) {
+  const { estado } = useDoc();
+  const l = estado.lotes[embarqueId];
+  return l ? <>{l.numero} <span className="suave pequeno">· {l.registrado_por_nome}, {fmtDataHora(l.registrado_em)}</span></> : <span className="suave">Ainda não registrado</span>;
 }

@@ -10,7 +10,7 @@ export type TipoLocal = 'coleta' | 'entrega' | 'ambos';
 
 export type Permissao =
   | 'embarques.ver' | 'embarques.criar' | 'embarques.editar_cadastro' | 'embarques.liberar'
-  | 'embarques.editar_cadencia' | 'embarques.editar_capacidade' | 'embarques.arquivar' | 'embarques.encerrar'
+  | 'embarques.editar_cadencia' | 'embarques.editar_cadencia_proprio' | 'embarques.editar_capacidade' | 'embarques.arquivar' | 'embarques.encerrar'
   | 'carteira.editar' | 'posicoes.pagina' | 'posicoes.abrir' | 'posicoes.editar_contadores'
   | 'posicoes.editar_obs_operacional' | 'posicoes.editar_obs_cliente'
   | 'financeiro.ver' | 'financeiro.editar' | 'historico.ver'
@@ -68,6 +68,8 @@ export interface Embarque {
   toneladas_por_veiculo: number; observacao_interna: string | null; situacao: Situacao;
   is_demo: boolean; chave_importacao: string | null; versao: number;
   atualizado_em: string; atualizado_por_nome: string | null;
+  /** Quem cadastrou (pode alterar a meta com a permissão "dos embarques que criei"). */
+  criado_por?: string | null;
   /** Quando foi suspenso (o banco encerra sozinho após 7 dias sem reativação). */
   suspenso_em?: string | null;
   /** Encerrado: arquivado de vez, sem reativação. */

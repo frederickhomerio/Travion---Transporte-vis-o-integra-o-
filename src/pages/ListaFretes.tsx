@@ -8,6 +8,7 @@ import { BotaoDocumentacao, SolicitarDocumentacao } from '../components/doc/Docu
 import { NovoEmbarque } from '../components/NovoEmbarque';
 import { ConfirmarEncerramento, ConfirmarSuspensao, EmbarquesSuspensos } from '../components/SuspenderEncerrar';
 import { Alerta, Carregando, EstadoVazio, Icone, Modal, Segmentado, useAviso } from '../components/ui';
+import { useDoc } from '../data/documentacao';
 import { useApp, useIndices, useLinhas } from '../data/store';
 import { type DadosAnuncio, cidadeAnuncio, semDemo, valorFrete, UNIDADE_ANUNCIO } from '../lib/anuncio';
 import { type Indices, codigoEmbarque, nome } from '../lib/cadastros';
@@ -257,6 +258,13 @@ function PontoRota({ cidade, uf, local }: { cidade: string; uf: string | null; l
   );
 }
 
+/** Número do lote no ERP (base para conciliar com o ERP), quando já registrado. */
+function LoteErp({ embarqueId }: { embarqueId: string }) {
+  const { estado } = useDoc();
+  const l = estado.lotes[embarqueId];
+  return l ? <span className="lote-erp" title={`Registrado por ${l.registrado_por_nome}`}>Lote ERP {l.numero}</span> : null;
+}
+
 function FreteMotorista({ fin }: { fin: Financeiro | null | undefined }) {
   const v = valorFrete(fin ?? null);
   if (!v) return <span className="suave pequeno">A combinar</span>;
@@ -303,7 +311,7 @@ function GrupoTabela({ g, idx, verFrete, acoes }: {
           <tr key={e.id}>
             <td><PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} /></td>
             <td><PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></td>
-            <td className="td-produto">{semDemo(nome(idx.produto, e.produto_id))}</td>
+            <td className="td-produto">{semDemo(nome(idx.produto, e.produto_id))}<LoteErp embarqueId={e.id} /></td>
             {verFrete && <><td className="n-frete"><FreteMotorista fin={estado.financeiro[e.id]} /></td><td className="n-frete"><Margem fin={estado.financeiro[e.id]} /></td></>}
             <td className="td-acao"><BotoesAnuncio l={l} acoes={acoes} /></td>
           </tr>
@@ -326,7 +334,7 @@ function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaFrete; idx: Indices;
           <PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></div>
       </div>
       <div className="rodape">
-        <span className="pequeno suave">{semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))}</span>
+        <span className="pequeno suave">{semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))}<LoteErp embarqueId={e.id} /></span>
         {verFrete && <span style={{ textAlign: 'right' }}><FreteMotorista fin={estado.financeiro[e.id]} /><br /><span className="pequeno">Margem <Margem fin={estado.financeiro[e.id]} /></span></span>}
       </div>
       <BotoesAnuncio l={l} acoes={acoes} />

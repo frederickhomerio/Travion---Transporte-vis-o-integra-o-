@@ -1265,3 +1265,4 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .pc-legenda i.faixa-vermelho { background: var(--faixa-vermelho); }
 .pc-legenda i.faixa-amarelo { background: var(--faixa-amarelo); }
 .pc-legenda i.faixa-verde { background: var(--faixa-verde); }
+.lote-erp { display: block; font-size: 0.72rem; font-weight: 700; color: var(--dourado-escuro); margin-top: 2px; font-family: var(--mono); }
