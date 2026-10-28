@@ -9,7 +9,7 @@ export function Mais() {
   const { api, estado, pode, definirDemo } = useApp();
   const nav = useNavigate();
   const p = estado.sessao!.perfil;
-  const admin = (['usuarios.gerenciar', 'cadastros.gerenciar', 'configuracoes.gerenciar', 'importacao.executar'] as const).some(pode);
+  const admin = (['usuarios.gerenciar', 'permissoes.gerenciar', 'cadastros.gerenciar', 'configuracoes.gerenciar', 'importacao.executar'] as const).some(pode);
   return (
     <Layout titulo="Mais opções">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 560 }}>

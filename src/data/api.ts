@@ -19,6 +19,9 @@ export type EventoTempoReal =
   | { tabela: 'embarque_financeiro'; tipo: 'INSERT' | 'UPDATE'; registro: Financeiro }
   | { tabela: 'recarregar'; tipo: 'TUDO' };
 
+/** Usuário na tela Permissões: só o necessário para escolher e as exceções ao padrão da função. */
+export type UsuarioPermissoes = Pick<Perfil, 'id' | 'nome' | 'email' | 'papel' | 'status'> & { permissoes: Partial<Record<Permissao, boolean>> };
+
 export interface UsuarioAdmin extends Perfil {
   filiais: string[];
   permissoes: Partial<Record<Permissao, boolean>>;
@@ -154,6 +157,10 @@ export interface Api {
   excluirConvite(id: string): Promise<void>;
   matrizPermissoes(): Promise<MatrizPermissoes>;
   salvarPermissaoPapel(papel: Papel, chave: Permissao, permitido: boolean): Promise<void>;
+  /** Permissões por usuário (Administrador e Gestor, via permissoes.gerenciar). */
+  listarPermissoesUsuarios(): Promise<UsuarioPermissoes[]>;
+  /** true permite, false nega, null volta ao padrão da função. Devolve as exceções que ficaram. */
+  salvarPermissoesUsuario(id: string, permissoes: Partial<Record<Permissao, boolean | null>>): Promise<Partial<Record<Permissao, boolean>>>;
   carregarDadosDemo(): Promise<void>;
   limparDadosDemo(): Promise<void>;
 

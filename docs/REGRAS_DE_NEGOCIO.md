@@ -175,6 +175,12 @@ As duas telas leem a mesma tabela de posições diárias. Os supervisores gravam
 - **Quem vê:** quem enviou sempre; quem tem `cadastro.ver` (ou a fila do apoio) vê os das suas filiais e da sua carteira.
 - **Permissões padrão** (ajustáveis em Administração → Permissões): `cadastro.solicitar` (Gestor, Supervisor, Comercial de Fretes, Coordenador Comercial) e `cadastro.ver` (esses e Apoio Operacional). Atender usa `apoio.atender`; cancelar, `documentacao.cancelar`.
 
+### 7.5 Permissões por usuário — desde 28/10/2026
+
+- **Onde:** Administração → Permissões → **Por usuário**. Filtra-se o usuário por nome ou e-mail (e por função); ao clicar, aparecem todas as permissões com **Padrão** (segue a função), **Permitir** ou **Negar** (vale só para a pessoa e vence o padrão). Mostra se a pessoa pode ou não, já somando os dois.
+- **Quem acessa:** Administrador e Gestor (permissão `permissoes.gerenciar`). A aba **Padrão por função** continua; só o Administrador altera.
+- **Limites para quem não é Administrador:** não altera Administradores nem as próprias permissões; só concede permissões que também tem; não concede gestão de usuários nem de permissões. Negar é sempre possível. Toda mudança vai para o histórico.
+
 ## 8. Importação da planilha
 
 - Fluxo: arquivo → aba → mapeamento de colunas → **data operacional obrigatória** → prévia com inconsistências → confirmação → relatório. O nome do arquivo não comprova a data.

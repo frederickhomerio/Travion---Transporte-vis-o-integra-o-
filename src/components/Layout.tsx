@@ -18,7 +18,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
   const { api, estado, pode, definirDemo } = useApp();
   const nav = useNavigate();
   const s = estado.sessao!;
-  const admin = (['usuarios.gerenciar', 'cadastros.gerenciar', 'configuracoes.gerenciar', 'importacao.executar'] as const).some(pode);
+  const admin = (['usuarios.gerenciar', 'permissoes.gerenciar', 'cadastros.gerenciar', 'configuracoes.gerenciar', 'importacao.executar'] as const).some(pode);
 
   return (
     <div className="app">

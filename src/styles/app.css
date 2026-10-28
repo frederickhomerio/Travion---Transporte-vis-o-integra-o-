@@ -832,3 +832,33 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
   .cad-rodape .grupo-btn { width: 100%; }
   .cad-rodape .grupo-btn .primario { flex: 1; }
 }
+
+/* Administração → Permissões por usuário */
+.pu { display: flex; flex-direction: column; gap: 12px; }
+.pu-grade { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.pu-lista { position: sticky; top: 72px; max-height: calc(100vh - 90px); display: flex; flex-direction: column; }
+.pu-filtros { display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--borda); }
+.pu-usuarios { list-style: none; margin: 0; padding: 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.pu-usuario { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid transparent; border-radius: 10px; background: none; font: inherit; color: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.pu-usuario:hover { background: var(--cinza-50); }
+.pu-usuario.ativo { border-color: var(--vinho); background: var(--azul-50); }
+.pu-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.pu-painel { overflow: visible; }
+.pu-cab { border-radius: 12px 12px 0 0; box-shadow: 0 1px 0 var(--borda); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: 61px; background: var(--branco); z-index: 4; }
+.pu-cab h2 { margin: 0; }
+.pu-corpo { display: flex; flex-direction: column; gap: 14px; }
+.pu-grupo h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--vinho); margin: 4px 0 6px; }
+.pu-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--cinza-100); border-radius: 8px; }
+.pu-item.alterado { background: #fffaf0; }
+.pu-desc { display: flex; flex-direction: column; gap: 2px; }
+.pu-efetivo { font-weight: 700; font-size: 0.82rem; white-space: nowrap; }
+.pu-efetivo.sim { color: var(--verde-700); }
+.pu-efetivo.nao { color: var(--cinza-600); }
+.pu-escolha button { padding: 6px 10px; font-size: 0.82rem; }
+.pu-escolha button:disabled { opacity: 0.45; cursor: not-allowed; }
+@media (max-width: 900px) {
+  .pu-grade { grid-template-columns: 1fr; }
+  .pu-lista { position: static; max-height: 360px; }
+  .pu-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .pu-escolha { grid-column: 1 / -1; justify-self: start; }
+}

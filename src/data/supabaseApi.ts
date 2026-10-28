@@ -254,6 +254,8 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
       ]);
       return { catalogo: ok(catalogo) ?? [], papeis: ok(papeis) ?? [] } as never;
     },
+    listarPermissoesUsuarios: () => rpc('listar_permissoes_usuarios', {}),
+    salvarPermissoesUsuario: (id, permissoes) => rpc('salvar_permissoes_usuario', { p_perfil_id: id, p_permissoes: permissoes }),
     salvarPermissaoPapel: (papel, chave, permitido) =>
       rpc('salvar_permissao_papel', { p_papel: papel, p_chave: chave, p_permitido: permitido }),
     async carregarDadosDemo() {

@@ -59,6 +59,7 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['apoio.atender', 'Documentação', 'Assumir e atender demandas: registrar lote, pedir ajuste, anexar e liberar documentos'],
   ['cadastro.solicitar', 'Cadastro', 'Enviar cadastro de motorista e veículos ao apoio e responder pendências'],
   ['cadastro.ver', 'Cadastro', 'Acompanhar os cadastros da sua filial ou carteira (os próprios sempre aparecem)'],
+  ['permissoes.gerenciar', 'Administração', 'Definir as permissões de cada usuário em Administração → Permissões'],
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
 
 /** Mesma matriz inicial de supabase/migrations/20261026000200_permissoes.sql */
@@ -67,7 +68,8 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
-    'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver'],
+    'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver',
+    'permissoes.gerenciar'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
@@ -339,10 +341,9 @@ export function criarLocalApi(): Api {
     db.filiais.filter((f) => f.is_demo && !f.centro_custo_id).forEach((f, i) => { f.centro_custo_id = cc[i % 2].id; });
   }
   // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
-  if (!db.papelPermissoes.some((x) => x.chave.startsWith('cadastro.'))) {
-    for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) {
-      for (const chave of ps) if (chave.startsWith('cadastro.')) db.papelPermissoes.push({ papel: papel as Papel, chave });
-    }
+  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar'] as Permissao[]) {
+    if (db.papelPermissoes.some((x) => x.chave === nova)) continue;
+    for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) if (ps.includes(nova)) db.papelPermissoes.push({ papel: papel as Papel, chave: nova });
   }
   let perfilId: string | null = lerStorage(CHAVE_SESSAO);
   const ouvintesAuth = new Set<(e: string) => void>();
@@ -999,6 +1000,36 @@ export function criarLocalApi(): Api {
       salvar();
     },
     async excluirConvite(id) { exigir('usuarios.gerenciar'); db.convites = db.convites.filter((c) => c.id !== id); salvar(); },
+    async listarPermissoesUsuarios() {
+      exigir('permissoes.gerenciar');
+      return db.perfis.map((p) => ({ id: p.id, nome: p.nome, email: p.email, papel: p.papel, status: p.status,
+        permissoes: Object.fromEntries(db.perfilPermissoes.filter((x) => x.perfil_id === p.id).map((x) => [x.chave, x.permitido])) }))
+        .sort((a, b) => (a.nome || a.email || '').localeCompare(b.nome || b.email || '', 'pt-BR'));
+    },
+    async salvarPermissoesUsuario(id, permissoes) {
+      exigir('permissoes.gerenciar');
+      const p = db.perfis.find((x) => x.id === id);
+      if (!p) erro('Usuário não encontrado.');
+      const admin = perfil()?.papel === 'administrador';
+      if (p.papel === 'administrador') erro('Administrador já tem todas as permissões.');
+      if (p.id === perfilId && !admin) erro('Você não pode alterar as suas próprias permissões.');
+      for (const [k, v] of Object.entries(permissoes)) {
+        if (!CATALOGO.some((c) => c.chave === k)) erro(`Permissão "${k}" não existe.`);
+        if (!admin && v === true) {
+          if (k === 'usuarios.gerenciar' || k === 'permissoes.gerenciar') erro('Somente administradores concedem acesso à gestão de usuários e de permissões.');
+          if (!tem(k as Permissao)) erro(`Você só pode conceder permissões que você também tem (${k}).`);
+        }
+      }
+      for (const [k, v] of Object.entries(permissoes)) {
+        const ant = db.perfilPermissoes.find((x) => x.perfil_id === id && x.chave === k)?.permitido ?? null;
+        db.perfilPermissoes = db.perfilPermissoes.filter((x) => !(x.perfil_id === id && x.chave === k));
+        if (v !== null && v !== undefined) db.perfilPermissoes.push({ perfil_id: id, chave: k as Permissao, permitido: v });
+        if (ant !== (v ?? null)) registrar({ entidade: 'usuario', registro_id: id, campo: `permissao:${k}`, valor_anterior: ant === null ? 'padrão do papel' : String(ant), valor_novo: v == null ? 'padrão do papel' : String(v) });
+      }
+      salvar();
+      for (const o of ouvintesAuth) o('USER_UPDATED');
+      return Object.fromEntries(db.perfilPermissoes.filter((x) => x.perfil_id === id).map((x) => [x.chave, x.permitido]));
+    },
     async matrizPermissoes() { return { catalogo: CATALOGO, papeis: clone(db.papelPermissoes) }; },
     async salvarPermissaoPapel(papel, chave, permitido) {
       exigir('usuarios.gerenciar');

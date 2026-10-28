@@ -14,7 +14,7 @@ import { Usuarios } from './Usuarios';
 
 const ABAS: Array<{ rota: string; rotulo: string; exige: Permissao; somenteAdmin?: boolean; el: () => JSX.Element }> = [
   { rota: 'usuarios', rotulo: 'Usuários e convites', exige: 'usuarios.gerenciar', el: () => <Usuarios /> },
-  { rota: 'permissoes', rotulo: 'Permissões', exige: 'usuarios.gerenciar', el: () => <Permissoes /> },
+  { rota: 'permissoes', rotulo: 'Permissões', exige: 'permissoes.gerenciar', el: () => <Permissoes /> },
   { rota: 'cadastros', rotulo: 'Cadastros', exige: 'cadastros.gerenciar', el: () => <Cadastros /> },
   { rota: 'importacao', rotulo: 'Importação', exige: 'importacao.executar', el: () => <Importacao /> },
   { rota: 'configuracoes', rotulo: 'Configurações', exige: 'configuracoes.gerenciar', el: () => <Configuracoes /> },

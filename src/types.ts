@@ -17,7 +17,7 @@ export type Permissao =
   | 'compartilhamento.preparar' | 'compartilhamento.links'
   | 'importacao.executar' | 'cadastros.gerenciar' | 'usuarios.gerenciar' | 'configuracoes.gerenciar'
   | 'documentacao.ver' | 'documentacao.solicitar' | 'documentacao.cancelar' | 'apoio.pagina' | 'apoio.atender'
-  | 'cadastro.solicitar' | 'cadastro.ver';
+  | 'cadastro.solicitar' | 'cadastro.ver' | 'permissoes.gerenciar';
 
 export interface Filial { id: string; nome: string; codigo: string | null; supervisor?: string | null; centro_custo_id?: string | null; ativo: boolean; is_demo: boolean }
 export interface CentroCusto { id: string; nome: string; ativo: boolean; is_demo: boolean }
