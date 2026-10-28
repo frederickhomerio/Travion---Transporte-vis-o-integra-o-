@@ -1,11 +1,12 @@
 // Visualizador de anexos (quadro maior do atendimento): PDF com pdf.js (texto selecionável quando o PDF tem
 // camada de texto), imagem com zoom e rotação, troca entre arquivos, copiar imagem e baixar.
 // Fotos e PDFs digitalizados não têm texto para copiar (sem OCR nesta versão).
+// Outros formatos do Cadastro (Word, Excel, PowerPoint, HEIC): só baixar; vídeo e áudio tocam no player do navegador.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { useApp } from '../../data/store';
-import { CATEGORIA, CATEGORIAS_SAIDA, ehImagem, fmtTamanho } from '../../lib/documentacao';
+import { CATEGORIA, CATEGORIAS_SAIDA, ehImagem, ehPdf, fmtTamanho } from '../../lib/documentacao';
 import { fmtDataHora } from '../../lib/formato';
 import type { AnexoDoc } from '../../types';
 import { useAviso } from '../ui';
@@ -60,7 +61,12 @@ export function VisualizadorAnexo({ anexos, selecionado, aoSelecionar, ampliado,
 }) {
   const atual = anexos.find((a) => a.id === selecionado) ?? anexos[0] ?? null;
   const { blob, erro, carregando } = useBlob(atual?.caminho ?? null);
-  const grupos: Array<[string, AnexoDoc[]]> = [
+  const cadastro = anexos.some((a) => a.categoria === 'motorista' || a.categoria === 'veiculo');
+  const grupos: Array<[string, AnexoDoc[]]> = cadastro ? [
+    ['Motorista', anexos.filter((a) => a.categoria === 'motorista')],
+    ['Veículos', anexos.filter((a) => a.categoria === 'veiculo')],
+    ['Correções', anexos.filter((a) => a.categoria === 'correcao')],
+  ] : [
     ['Entrada', anexos.filter((a) => !CATEGORIAS_SAIDA.includes(a.categoria))],
     ['Emitidos', anexos.filter((a) => CATEGORIAS_SAIDA.includes(a.categoria))],
   ];
@@ -83,7 +89,8 @@ export function VisualizadorAnexo({ anexos, selecionado, aoSelecionar, ampliado,
         : carregando ? <div className="va-vazio">Carregando {atual.nome}…</div>
         : erro || !blob ? <div className="va-vazio"><p>{erro ?? 'Arquivo indisponível.'}</p></div>
         : ehImagem(atual.tipo_mime) ? <VerImagem key={atual.id} blob={blob} anexo={atual} ampliado={ampliado} aoAmpliar={aoAmpliar} />
-        : <VerPdf key={atual.id} blob={blob} anexo={atual} ampliado={ampliado} aoAmpliar={aoAmpliar} />}
+        : ehPdf(atual.tipo_mime) ? <VerPdf key={atual.id} blob={blob} anexo={atual} ampliado={ampliado} aoAmpliar={aoAmpliar} />
+        : <VerOutro key={atual.id} blob={blob} anexo={atual} ampliado={ampliado} aoAmpliar={aoAmpliar} />}
     </div>
   );
 }
@@ -229,6 +236,28 @@ function VerImagem({ blob, anexo, ampliado, aoAmpliar }: { blob: Blob; anexo: An
       </div>
       <div className="va-area va-area-img">
         {url && <img ref={img} src={url} alt={anexo.nome} style={estilo} />}
+      </div>
+    </div>
+  );
+}
+
+/** Formatos sem visualização embutida: download claro (vídeo e áudio também tocam aqui). Nada do arquivo é executado. */
+function VerOutro({ blob, anexo, ampliado, aoAmpliar }: { blob: Blob; anexo: AnexoDoc; ampliado: boolean; aoAmpliar: (v: boolean) => void }) {
+  const [url, setUrl] = useState('');
+  useEffect(() => { const u = URL.createObjectURL(blob); setUrl(u); return () => URL.revokeObjectURL(u); }, [blob]);
+  const midia = anexo.tipo_mime.startsWith('video/') ? 'video' : anexo.tipo_mime.startsWith('audio/') ? 'audio' : null;
+  return (
+    <div className="va-corpo">
+      <div className="va-barra"><BarraComum blob={blob} anexo={anexo} ampliado={ampliado} aoAmpliar={aoAmpliar} /></div>
+      <div className="va-area va-outro">
+        {midia === 'video' && url && <video src={url} controls preload="metadata" className="va-midia" />}
+        {midia === 'audio' && url && <audio src={url} controls preload="metadata" />}
+        <div className="va-outro-info">
+          <strong>{anexo.nome}</strong>
+          <span className="pequeno suave">{CATEGORIA[anexo.categoria]} · {fmtTamanho(anexo.tamanho)} · enviado por {anexo.enviado_por_nome} em {fmtDataHora(anexo.enviado_em)}</span>
+          <p className="pequeno">{midia ? 'Se o player não tocar este formato neste navegador, baixe o arquivo.' : 'Este formato não tem visualização aqui. Baixe para abrir no programa do seu computador.'}</p>
+          <div><button className="btn primario" onClick={() => baixarBlob(blob, anexo.nome)}>Baixar {anexo.nome}</button></div>
+        </div>
       </div>
     </div>
   );

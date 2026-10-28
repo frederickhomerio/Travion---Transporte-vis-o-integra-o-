@@ -7,6 +7,7 @@ import { cnpjValido, naoCarregar, type Cadastros } from '../lib/cadastros';
 import { consultarCnpjBrasilApi } from '../lib/cnpj';
 import { hojeSP, somarDias } from '../lib/formato';
 import { normalizar } from '../lib/texto';
+import type { LinhaImportacao } from '../lib/planilha';
 import {
   CONFIG_PADRAO, type CentroCusto, type Cidade, type Cliente, type Comercial, type Configuracoes, type Conflito, type Embarque, type Filial,
   type Financeiro, type Historico, type LinkCliente, type Local, type MetaDiaria, type Papel, type Perfil,
@@ -15,7 +16,16 @@ import {
 import { criarDocLocal } from './docLocal';
 import type { Api, Convite, EventoTempoReal, MatrizPermissoes, RelatorioImportacao, UsuarioAdmin } from './api';
 
-const CHAVE = 'travion-previa-v6';
+// Dados reais opcionais para testar a prévia (arquivo dados-previa.js publicado só junto da prévia, nunca no repositório).
+interface DadosPrevia {
+  id: string;
+  filiais: string[];
+  clientes: Array<{ nome: string; carteira: string | null; restricao: string | null }>;
+  linhas: LinhaImportacao[];
+  centros?: Record<string, string>;
+}
+const DADOS_PREVIA = (globalThis as { TRAVION_DADOS_PREVIA?: DadosPrevia }).TRAVION_DADOS_PREVIA ?? null;
+const CHAVE = DADOS_PREVIA ? `travion-previa-v7-${DADOS_PREVIA.id}` : 'travion-previa-v7';
 const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
@@ -47,6 +57,8 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['documentacao.cancelar', 'Documentação', 'Cancelar solicitações de documentação (com motivo)'],
   ['apoio.pagina', 'Documentação', 'Acessar a aba Apoio Operacional (fila de demandas)'],
   ['apoio.atender', 'Documentação', 'Assumir e atender demandas: registrar lote, pedir ajuste, anexar e liberar documentos'],
+  ['cadastro.solicitar', 'Cadastro', 'Enviar cadastro de motorista e veículos ao apoio e responder pendências'],
+  ['cadastro.ver', 'Cadastro', 'Acompanhar os cadastros da sua filial ou carteira (os próprios sempre aparecem)'],
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
 
 /** Mesma matriz inicial de supabase/migrations/20261026000200_permissoes.sql */
@@ -55,18 +67,24 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
-    'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina'],
+    'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
-    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar'],
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar',
+    'cadastro.solicitar', 'cadastro.ver'],
   embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
-    'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar'],
-  apoio: ['embarques.ver', 'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar'],
-  operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional', 'documentacao.ver'],
+    'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar',
+    'cadastro.solicitar', 'cadastro.ver'],
+  // Apoio Operacional reúne o antigo papel Operação (contadores e observação) e a fila de documentação.
+  apoio: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver'],
+  operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
-    'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar'],
+    'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar',
+    'cadastro.solicitar', 'cadastro.ver'],
   consulta: ['embarques.ver'],
 };
 
@@ -126,20 +144,19 @@ function semear(): Banco {
     loc('[DEMO] Esmagadora Centro', 'Rondonópolis', 'MT', 'entrega'), loc('[DEMO] Armazém Catalão', 'Catalão', 'GO', 'entrega'),
   ];
   const perfis: Perfil[] = [
-    ['Administrador (prévia)', 'administrador'], ['Gestor Rio Verde (prévia)', 'gestor'], ['Operação Rio Verde (prévia)', 'operacao'],
+    ['Administrador (prévia)', 'administrador'], ['Gestor Rio Verde (prévia)', 'gestor'], ['Apoio Operacional (prévia)', 'apoio'],
     ['Coordenador Comercial Ana (prévia)', 'comercial'], ['Consulta interna (prévia)', 'consulta'],
     ['Supervisor Jataí (prévia)', 'supervisor'], ['Comercial de Fretes Montividiu (prévia)', 'embarcador'],
-    ['Lúcia · Apoio Operacional (prévia)', 'apoio'], ['Paulo · Apoio Operacional (prévia)', 'apoio'],
   ].map(([nome, papel], i) => ({
-    id: `perfil-${i}`, nome, email: i === 8 ? 'apoio2@previa.local' : `${papel}@previa.local`, papel: papel as Papel, status: 'ativo',
+    id: `perfil-${i}`, nome, email: `${papel}@previa.local`, papel: papel as Papel, status: 'ativo',
     comercial_id: papel === 'comercial' ? comerciais[0].id : null, criado_em: agora(),
   }));
   const perfilFiliais = [
     { perfil_id: 'perfil-1', filial_id: filiais[0].id }, { perfil_id: 'perfil-1', filial_id: filiais[3].id },
-    { perfil_id: 'perfil-2', filial_id: filiais[0].id }, { perfil_id: 'perfil-4', filial_id: filiais[0].id },
+    { perfil_id: 'perfil-4', filial_id: filiais[0].id },
     { perfil_id: 'perfil-4', filial_id: filiais[1].id }, { perfil_id: 'perfil-5', filial_id: filiais[1].id },
     { perfil_id: 'perfil-5', filial_id: filiais[2].id }, { perfil_id: 'perfil-6', filial_id: filiais[3].id },
-    ...['perfil-7', 'perfil-8'].flatMap((perfil_id) => filiais.map((f) => ({ perfil_id, filial_id: f.id }))),
+    ...filiais.map((f) => ({ perfil_id: 'perfil-2', filial_id: f.id })),
   ];
   const papelPermissoes = Object.entries(MATRIZ_INICIAL).flatMap(([papel, ps]) => ps.map((chave) => ({ papel: papel as Papel, chave })));
 
@@ -202,13 +219,104 @@ function semear(): Banco {
     config: { ...CONFIG_PADRAO }, convites: [], dadosOrigem: {}, importacoes: [],
   };
 }
+const semearPrevia = (): Banco => (DADOS_PREVIA ? semearDaPlanilha(semear(), DADOS_PREVIA) : semear());
+
+/** Troca os cadastros e embarques fictícios pelos da planilha, mantendo perfis, permissões e configurações da prévia. */
+function semearDaPlanilha(base: Banco, d: DadosPrevia): Banco {
+  const hoje = hojeSP();
+  const porNome = <T extends { nome: string }>(lista: T[], nome: string | null | undefined) => lista.find((x) => normalizar(x.nome) === normalizar(nome ?? ''));
+  const centros_custo: CentroCusto[] = [];
+  const filiais: Filial[] = [];
+  const comerciais: Comercial[] = [];
+  const clientes: Cliente[] = [];
+  const produtos: Produto[] = [];
+  const locais: Local[] = [];
+  const filial = (nome: string) => {
+    let f = porNome(filiais, nome);
+    if (!f) {
+      const cc = d.centros?.[Object.keys(d.centros).find((k) => normalizar(k) === normalizar(nome)) ?? ''];
+      let c = cc ? porNome(centros_custo, cc) : undefined;
+      if (cc && !c) { c = { id: uid(), nome: cc, ativo: true, is_demo: true }; centros_custo.push(c); }
+      f = { id: uid(), nome: nome.trim(), codigo: null, centro_custo_id: c?.id ?? null, ativo: true, is_demo: true };
+      filiais.push(f);
+    }
+    return f;
+  };
+  const comercial = (nome: string | null) => {
+    if (!nome?.trim()) return null;
+    let c = porNome(comerciais, nome);
+    if (!c) { c = { id: uid(), nome: nome.trim(), email: null, ativo: true, is_demo: true }; comerciais.push(c); }
+    return c;
+  };
+  const cliente = (nome: string, carteira: string | null, restricao: string | null) => {
+    let c = porNome(clientes, nome);
+    if (!c) {
+      c = { id: uid(), nome: nome.trim(), documento: null, comercial_id: comercial(carteira)?.id ?? null, restricao_comercial: restricao, ativo: true, is_demo: true };
+      clientes.push(c);
+    }
+    return c;
+  };
+  const produto = (nome: string | null) => {
+    if (!nome?.trim()) return null;
+    let p = porNome(produtos, nome);
+    if (!p) { p = { id: uid(), nome: nome.trim(), ativo: true, is_demo: true }; produtos.push(p); }
+    return p;
+  };
+  const local = (nome: string | null, cidade: string, uf: string | null, tipo: Local['tipo']) => {
+    if (!nome?.trim()) return null;
+    let l = locais.find((x) => x.tipo === tipo && normalizar(x.nome) === normalizar(nome) && normalizar(x.cidade ?? '') === normalizar(cidade));
+    if (!l) { l = { id: uid(), nome: nome.trim(), cidade, uf, tipo, ativo: true, is_demo: true }; locais.push(l); }
+    return l;
+  };
+  for (const f of d.filiais) filial(f);
+  for (const c of d.clientes) cliente(c.nome, c.carteira, c.restricao);
+  const embarques: Embarque[] = [];
+  const financeiro: Financeiro[] = [];
+  const posicoes: Posicao[] = [];
+  d.linhas.forEach((l, i) => {
+    const id = uid();
+    const cli = cliente(l.cliente, l.carteira, null);
+    const origemUf = l.origem_uf ?? 'GO';
+    embarques.push({
+      id, codigo: i + 1, cliente_id: cli.id, comercial_id: comercial(l.carteira)?.id ?? cli.comercial_id, filial_id: filial(l.filial).id,
+      produto_id: produto(l.produto)?.id ?? null, origem_cidade: l.origem_cidade, origem_uf: origemUf,
+      local_coleta_id: local(l.coleta, l.origem_cidade, origemUf, 'coleta')?.id ?? null,
+      destino_cidade: l.destino_cidade, destino_uf: l.destino_uf, local_entrega_id: local(l.entrega, l.destino_cidade, l.destino_uf, 'entrega')?.id ?? null,
+      status_liberacao: l.status, data_liberacao: null, cadencia_valor: l.cadencia_valor, cadencia_unidade: 'veiculos_dia',
+      toneladas_por_veiculo: base.config.capacidade_padrao_t, observacao_interna: null, situacao: 'ativo', is_demo: true,
+      chave_importacao: l.chave, versao: 1, atualizado_em: agora(), atualizado_por_nome: 'Planilha',
+      suspenso_em: l.status === 'suspenso' ? new Date(Date.now() - 86400e3).toISOString() : null,
+    });
+    financeiro.push({ embarque_id: id, frete_empresa: l.frete_empresa, frete_motorista: l.frete_motorista, unidade_frete: 'rs_tonelada',
+      frete_empresa_original: l.frete_empresa_original, frete_motorista_original: l.frete_motorista_original, versao: 1, atualizado_em: agora() });
+    posicoes.push({
+      id: uid(), embarque_id: id, data_operacional: hoje, porta: l.porta, transito: l.transito, carregados: l.carregados,
+      toneladas_por_veiculo: base.config.capacidade_padrao_t, meta_valor: l.cadencia_valor, meta_unidade: 'veiculos_dia',
+      obs_operacional: l.obs_operacional, obs_cliente: l.obs_cliente, is_demo: true, origem: 'importacao', versao: 1,
+      atualizado_em: agora(), atualizado_por_nome: 'Planilha', confirmado_em: null, confirmado_por_nome: null,
+    });
+  });
+  // Mesmo escopo dos perfis da prévia, agora com as filiais reais; o apoio vê todas.
+  const ids = (...nomes: string[]) => nomes.map((n) => porNome(filiais, n)?.id).filter((x): x is string => !!x);
+  const escopo: Record<string, string[]> = {
+    'perfil-1': ids('Rio Verde', 'Montividiu'), 'perfil-2': filiais.map((f) => f.id), 'perfil-4': ids('Rio Verde', 'Jataí'),
+    'perfil-5': ids('Jataí', 'Itumbiara'), 'perfil-6': ids('Montividiu'),
+  };
+  const perfilFiliais = Object.entries(escopo).flatMap(([perfil_id, fs]) => fs.map((filial_id) => ({ perfil_id, filial_id })));
+  const carteira = comerciais.find((c) => embarques.some((e) => e.comercial_id === c.id)) ?? comerciais[0];
+  const perfis = base.perfis.map((p) => (p.papel === 'comercial' ? { ...p, nome: `Coordenador Comercial ${carteira?.nome ?? ''} (prévia)`.replace('  ', ' '), comercial_id: carteira?.id ?? null } : p));
+  return {
+    ...base, seq: embarques.length, filiais, comerciais, clientes, produtos, locais, centros_custo, perfis, perfilFiliais,
+    embarques, financeiro, posicoes, metas: [], historico: [], links: [], dadosOrigem: Object.fromEntries(d.linhas.map((l, i) => [embarques[i].id, l.extras])),
+  };
+}
 
 export function criarLocalApi(): Api {
   let db: Banco = (() => {
     const s = lerStorage(CHAVE);
     if (s) { try { return JSON.parse(s) as Banco; } catch { /* recria */ } }
     // Grava a semente já: outras abas da prévia passam a ver os mesmos registros (mesmos identificadores).
-    const novo = semear();
+    const novo = semearPrevia();
     gravarStorage(CHAVE, JSON.stringify(novo));
     return novo;
   })();
@@ -229,6 +337,12 @@ export function criarLocalApi(): Api {
     const cc = ['[DEMO] Vegetal', '[DEMO] Sul'].map((nome) => ({ id: uid(), nome, ativo: true, is_demo: true }));
     db.centros_custo.push(...cc);
     db.filiais.filter((f) => f.is_demo && !f.centro_custo_id).forEach((f, i) => { f.centro_custo_id = cc[i % 2].id; });
+  }
+  // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
+  if (!db.papelPermissoes.some((x) => x.chave.startsWith('cadastro.'))) {
+    for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) {
+      for (const chave of ps) if (chave.startsWith('cadastro.')) db.papelPermissoes.push({ papel: papel as Papel, chave });
+    }
   }
   let perfilId: string | null = lerStorage(CHAVE_SESSAO);
   const ouvintesAuth = new Set<(e: string) => void>();
@@ -396,8 +510,18 @@ export function criarLocalApi(): Api {
   }
 
   const doc = criarDocLocal({
-    perfil, tem, veEmbarque,
+    perfil, tem, veEmbarque, noEscopo,
     embarques: () => db.embarques,
+    ehAdmin: () => perfil()?.papel === 'administrador',
+    temFiliais: () => db.perfilFiliais.some((x) => x.perfil_id === perfilId),
+    cliente: (id) => {
+      const c = db.clientes.find((x) => x.id === id);
+      return c && veCliente(c) ? { id: c.id, nome: c.nome, comercial_id: c.comercial_id, carteira: db.comerciais.find((x) => x.id === c.comercial_id)?.nome ?? null } : null;
+    },
+    filial: (id) => {
+      const f = db.filiais.find((x) => x.id === id);
+      return f ? { id: f.id, nome: f.nome, centro_custo_id: f.centro_custo_id ?? null, centro_custo: db.centros_custo?.find((c) => c.id === f.centro_custo_id)?.nome ?? null } : null;
+    },
     retrato: (e) => {
       const n = <T extends { id: string; nome: string }>(xs: T[] | undefined, id: string | null | undefined) => (id ? xs?.find((x) => x.id === id)?.nome ?? null : null);
       const filial = db.filiais.find((f) => f.id === e.filial_id);
@@ -886,7 +1010,7 @@ export function criarLocalApi(): Api {
     },
     async carregarDadosDemo() {
       const sessao = perfilId;
-      db = semear();
+      db = semearPrevia();
       perfilId = sessao;
       salvar();
       emitir({ tabela: 'recarregar', tipo: 'TUDO' });
@@ -923,9 +1047,7 @@ export const PERFIS_PREVIA = [
   { email: 'gestor@previa.local', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra, suspende e encerra embarques, com financeiro' },
   { email: 'supervisor@previa.local', rotulo: 'Supervisor', descricao: 'Filiais Jataí e Itumbiara: posições de embarque e cadastro de embarques' },
   { email: 'embarcador@previa.local', rotulo: 'Comercial de Fretes', descricao: 'Filial Montividiu: cadastra embarques, pede lote e emissão, vê frete motorista e margem' },
-  { email: 'apoio@previa.local', rotulo: 'Apoio Operacional (Lúcia)', descricao: 'Todas as filiais: fila de demandas, lote e emissão' },
-  { email: 'apoio2@previa.local', rotulo: 'Apoio Operacional (Paulo)', descricao: 'Todas as filiais: outro atendente, para testar quem assume primeiro' },
-  { email: 'operacao@previa.local', rotulo: 'Operação', descricao: 'Filial Rio Verde: contadores e observação operacional' },
+  { email: 'apoio@previa.local', rotulo: 'Apoio Operacional', descricao: 'Todas as filiais: fila de lote e emissão, contadores e observação operacional' },
   { email: 'comercial@previa.local', rotulo: 'Coordenador Comercial', descricao: 'Carteira [DEMO] Ana: cadastra embarques e suspende fretes' },
   { email: 'consulta@previa.local', rotulo: 'Consulta interna', descricao: 'Somente leitura nas filiais Rio Verde e Jataí' },
 ];

@@ -5,6 +5,7 @@ import { Layout } from '../components/Layout';
 import { AbrirPosicoes } from '../components/AbrirPosicoes';
 import { ImagemAnuncio, ModalDivulgacao } from '../components/AnuncioFrete';
 import { DetalhesEmbarque } from '../components/DetalhesEmbarque';
+import { BotaoDocumentacao, SolicitarDocumentacao } from '../components/doc/DocumentacaoEmbarque';
 import { NovoEmbarque } from '../components/NovoEmbarque';
 import { ConfirmarEncerramento, ConfirmarSuspensao, EmbarquesSuspensos } from '../components/SuspenderEncerrar';
 import { Alerta, Carregando, EstadoVazio, Icone, Modal, Segmentado, useAviso } from '../components/ui';
@@ -60,6 +61,7 @@ export function ListaFretes() {
   const [abrir, setAbrir] = useState(false);
   const [novo, setNovo] = useState(false);
   const [rapido, setRapido] = useState<string | null>(null);
+  const [formDoc, setFormDoc] = useState<string | null>(null);
   const [anuncioNovo, setAnuncioNovo] = useState<string | null>(null);
   const [imagem, setImagem] = useState<DadosAnuncio | null>(null);
   const [suspender, setSuspender] = useState<Embarque | null>(null);
@@ -189,7 +191,11 @@ export function ListaFretes() {
         </>
       )}
 
-      {rapido && <DetalhesRapidos embarqueId={rapido} aoFechar={() => setRapido(null)} aoFichaCompleta={() => { setDetalhe(rapido); setRapido(null); }} />}
+      {rapido && <DetalhesRapidos embarqueId={rapido} aoFechar={() => setRapido(null)} aoFichaCompleta={() => { setDetalhe(rapido); setRapido(null); }}
+        aoSolicitarDoc={() => { setFormDoc(rapido); setRapido(null); }}
+        aoAcompanharDoc={(sid) => { setDetalhe(rapido); setDocAberta(sid); setRapido(null); }} />}
+      {formDoc && estado.embarques[formDoc] && <SolicitarDocumentacao embarque={estado.embarques[formDoc]} aoFechar={() => setFormDoc(null)}
+        aoEnviada={(s) => { setFormDoc(null); setDetalhe(s.embarque_id); setDocAberta(s.id); }} />}
       {imagem && <ImagemAnuncio dados={imagem} aoFechar={() => setImagem(null)} />}
       {lista && (
         <ModalDivulgacao titulo="Divulgação da lista de fretes" desenhar={desenharListaAtual} texto={textoLista(lista, estado.data, verFrete)}
@@ -334,7 +340,9 @@ function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaFrete; idx: Indices;
 }
 
 /** Detalhes rápidos para a equipe de campo: veículos na porta, em trânsito e observações. */
-function DetalhesRapidos({ embarqueId, aoFechar, aoFichaCompleta }: { embarqueId: string; aoFechar: () => void; aoFichaCompleta: () => void }) {
+function DetalhesRapidos({ embarqueId, aoFechar, aoFichaCompleta, aoSolicitarDoc, aoAcompanharDoc }: {
+  embarqueId: string; aoFechar: () => void; aoFichaCompleta: () => void; aoSolicitarDoc: () => void; aoAcompanharDoc: (solicitacaoId: string) => void;
+}) {
   const { estado } = useApp();
   const idx = useIndices();
   const e = estado.embarques[embarqueId];
@@ -347,7 +355,8 @@ function DetalhesRapidos({ embarqueId, aoFechar, aoFichaCompleta }: { embarqueId
   const obs = [e.observacao_interna, p?.obs_operacional].filter(Boolean) as string[];
   return (
     <Modal titulo={`${cidadeAnuncio(e.origem_cidade, e.origem_uf)} ➜ ${cidadeAnuncio(e.destino_cidade, e.destino_uf)}`} aoFechar={aoFechar} rodape={
-      <><button className="btn" onClick={aoFichaCompleta}>Ficha completa</button><button className="btn primario" onClick={aoFechar}>Fechar</button></>
+      <><BotaoDocumentacao embarque={e} aoSolicitar={aoSolicitarDoc} aoAcompanhar={aoAcompanharDoc} />
+        <button className="btn" onClick={aoFichaCompleta}>Ficha completa</button><button className="btn" onClick={aoFechar}>Fechar</button></>
     }>
       <div className="pequeno suave" style={{ marginBottom: 10 }}>
         {codigoEmbarque(e.codigo)} · {semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))} · {semDemo(nome(idx.cliente, e.cliente_id))}

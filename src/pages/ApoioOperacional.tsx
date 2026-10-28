@@ -9,9 +9,9 @@ import { AcessoNegado, Alerta, Carregando, EstadoVazio, Segmentado, useAviso } f
 import { mensagemErro } from '../data/api';
 import { useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
-import { type Atalho, FILTROS_FILA, type FiltrosFila, filtrarFila, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
+import { type Atalho, FILTROS_FILA, type FiltrosFila, TIPO_DOC, filtrarFila, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
 import { fmtHora } from '../lib/formato';
-import type { SolicitacaoDoc } from '../types';
+import type { SolicitacaoDoc, TipoSolicitacaoDoc } from '../types';
 
 const CHAVE_FILTROS = 'travion-fila-apoio';
 let rolagemFila = 0;
@@ -101,6 +101,10 @@ export function ApoioOperacional() {
         <div className="ao-filtros">
           <input className="entrada" type="search" value={f.busca} onChange={(e) => setF({ ...f, busca: e.target.value })}
             placeholder="Buscar placa, lote, cliente, NF ou nº" aria-label="Buscar na fila" />
+          <select className="entrada" value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value as TipoSolicitacaoDoc | '' })} aria-label="Tipo de solicitação">
+            <option value="">Todos os tipos</option>
+            {(Object.keys(TIPO_DOC) as TipoSolicitacaoDoc[]).map((t) => <option key={t} value={t}>{TIPO_DOC[t]}</option>)}
+          </select>
           <select className="entrada" value={f.filial} onChange={(e) => setF({ ...f, filial: e.target.value })} aria-label="Filial">
             <option value="">Todas as filiais</option>{opcoes.filiais.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
           </select>
@@ -131,7 +135,7 @@ export function ApoioOperacional() {
                   return (
                     <tr key={s.id} className={nova ? 'ao-nova' : ''}>
                       <td data-rot="Solicitação"><TipoNumero s={s} /></td>
-                      <td data-rot="Cliente e lote"><span className="ao-l1">{s.retrato.cliente}</span><span className="ao-l2">{s.retrato.lote_numero ? `Lote ${s.retrato.lote_numero}` : 'Lote a gerar'}</span></td>
+                      <td data-rot="Cliente e lote"><span className="ao-l1">{s.retrato.cliente}</span><span className="ao-l2">{s.tipo === 'cadastro' ? 'Cadastro no ERP' : s.retrato.lote_numero ? `Lote ${s.retrato.lote_numero}` : 'Lote a gerar'}</span></td>
                       <td data-rot="Placa e rota"><span className="ao-l1">{fmtPlaca(s.placa)}</span><span className="ao-l2">{rotaDoc(s)}</span></td>
                       <td data-rot="Comercial">{s.solicitante_nome}</td>
                       <td data-rot="Tempo"><span className="ao-l2">{t.rotulo}</span><span className="ao-l1">{t.texto}</span></td>

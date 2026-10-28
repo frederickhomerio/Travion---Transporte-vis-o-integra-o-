@@ -14,25 +14,55 @@ import { Alerta, Carregando, EstadoVazio, Modal, useAviso } from '../ui';
 import { type ArquivoLocal, Historico, JanelaAnexos, LinhaInfo, SeletorArquivos, StatusDocPill, TipoNumero, enviarArquivos, useAgora, useArquivo } from './Comum';
 import { FormSolicitacaoDoc } from './FormSolicitacaoDoc';
 
+/** Solicitações e lote do embarque, buscados ao abrir (a fila sincronizada pode não ter as antigas). */
+function useDocEmbarque(embarqueId: string) {
+  const { estado, carregarEmbarque } = useDoc();
+  const avisar = useAviso();
+  const [carregando, setCarregando] = useState(true);
+  useEffect(() => {
+    setCarregando(true);
+    carregarEmbarque(embarqueId).catch((e) => avisar('erro', mensagemErro(e))).finally(() => setCarregando(false));
+  }, [embarqueId, carregarEmbarque, avisar]);
+  const doEmbarque = useMemo(() => Object.values(estado.solicitacoes).filter((s) => s.embarque_id === embarqueId)
+    .sort((a, b) => b.numero - a.numero), [estado.solicitacoes, embarqueId]);
+  const lote = estado.lotes[embarqueId];
+  return { carregando, doEmbarque, lote, acao: acaoDocumentacao(lote, doEmbarque) };
+}
+
+/** Botão de documentação para atalhos fora da ficha (Detalhes rápidos da Lista de Fretes). */
+export function BotaoDocumentacao({ embarque, aoSolicitar, aoAcompanhar }: {
+  embarque: Embarque; aoSolicitar: () => void; aoAcompanhar: (solicitacaoId: string) => void;
+}) {
+  const { pode } = useApp();
+  const { carregando, acao } = useDocEmbarque(embarque.id);
+  if (!pode('documentacao.solicitar') || embarque.situacao !== 'ativo' || embarque.encerrado_em) return null;
+  if (carregando) return <button className="btn" disabled>Documentação…</button>;
+  return acao.tipo === 'gerar' ? <button className="btn primario" onClick={aoSolicitar}>Gerar lote e emissão</button>
+    : acao.tipo === 'acompanhar' ? <button className="btn" onClick={() => aoAcompanhar(acao.solicitacao.id)}>Acompanhar solicitação</button>
+    : <button className="btn primario" onClick={aoSolicitar}>Emitir documentação</button>;
+}
+
+/** Formulário de solicitação aberto direto da Lista de Fretes. */
+export function SolicitarDocumentacao({ embarque, aoFechar, aoEnviada }: { embarque: Embarque; aoFechar: () => void; aoEnviada: (s: SolicitacaoDoc) => void }) {
+  const avisar = useAviso();
+  const { carregando, doEmbarque, lote } = useDocEmbarque(embarque.id);
+  if (carregando) return null;
+  return (
+    <FormSolicitacaoDoc embarque={embarque} lote={lote ?? null} doEmbarque={doEmbarque} aoFechar={aoFechar}
+      aoEnviada={(s, aviso) => { avisar(aviso ? 'info' : 'ok', aviso ?? `${TIPO_DOC[s.tipo]} nº ${s.numero} enviada ao apoio.`); aoEnviada(s); }} />
+  );
+}
+
 export function DocumentacaoEmbarque({ embarque, solicitacaoInicial }: { embarque: Embarque; solicitacaoInicial?: string | null }) {
   const { pode } = useApp();
-  const { estado, carregarEmbarque } = useDoc();
+  const { estado } = useDoc();
   const avisar = useAviso();
   const agora = useAgora();
   const [aberta, setAberta] = useState<string | null>(solicitacaoInicial ?? null);
   const [form, setForm] = useState(false);
-  const [carregando, setCarregando] = useState(true);
+  const { carregando, doEmbarque, lote, acao } = useDocEmbarque(embarque.id);
 
   useEffect(() => { setAberta(solicitacaoInicial ?? null); }, [solicitacaoInicial]);
-  useEffect(() => {
-    setCarregando(true);
-    carregarEmbarque(embarque.id).catch((e) => avisar('erro', mensagemErro(e))).finally(() => setCarregando(false));
-  }, [embarque.id, carregarEmbarque, avisar]);
-
-  const doEmbarque = useMemo(() => Object.values(estado.solicitacoes).filter((s) => s.embarque_id === embarque.id)
-    .sort((a, b) => b.numero - a.numero), [estado.solicitacoes, embarque.id]);
-  const lote = estado.lotes[embarque.id];
-  const acao = acaoDocumentacao(lote, doEmbarque);
   const podeSolicitar = pode('documentacao.solicitar') && embarque.situacao === 'ativo' && !embarque.encerrado_em;
 
   if (aberta && estado.solicitacoes[aberta]) {

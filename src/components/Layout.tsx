@@ -30,6 +30,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
           {pode('posicoes.pagina') && <NavLink to="/posicoes"><Icone nome="caminhao" />Posições de Embarque</NavLink>}
           {pode('compartilhamento.preparar') && <NavLink to="/posicao-cliente"><Icone nome="cliente" />Posição do Cliente</NavLink>}
           {pode('apoio.pagina') && <NavLink to="/apoio"><Icone nome="lista" />Apoio Operacional</NavLink>}
+          {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <NavLink to="/cadastro"><Icone nome="cadastro" />Cadastro</NavLink>}
           <div className="grupo">Em breve</div>
           <span className="em-breve" aria-disabled="true"><span style={{ display: 'flex', gap: 10 }}><Icone nome="analise" />Análise</span><span className="badge info">Em breve</span></span>
           {admin && <><div className="grupo">Gestão</div><NavLink to="/admin"><Icone nome="config" />Administração</NavLink></>}
@@ -72,6 +73,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
         <NavLink to="/dashboard"><Icone nome="painel" />Dashboard</NavLink>
         {pode('posicoes.pagina') && <NavLink to="/posicoes"><Icone nome="caminhao" />Posições</NavLink>}
         {pode('apoio.pagina') && <NavLink to="/apoio"><Icone nome="lista" />Apoio</NavLink>}
+        {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <NavLink to="/cadastro"><Icone nome="cadastro" />Cadastro</NavLink>}
         <NavLink to="/mais"><Icone nome="config" />Mais</NavLink>
       </nav>
     </div>

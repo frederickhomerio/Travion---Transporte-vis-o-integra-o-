@@ -29,6 +29,7 @@ export function Sino() {
     setAberto(false);
     if (!n.lida_em) { try { await api.doc.marcarLidas([n.id]); } catch { /* fica não lida */ } void recarregarNotificacoes(); }
     if (n.destino === 'apoio') nav(`/apoio/${n.solicitacao_id}`);
+    else if (n.destino === 'cadastro') nav(`/cadastro?s=${n.solicitacao_id}`);
     else nav(`/?emb=${n.embarque_id}&doc=${n.solicitacao_id}`);
   };
   return (

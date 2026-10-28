@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SolicitacaoDoc } from '../types';
-import { acaoDocumentacao, avisosDuplicidade, duracao, FILTROS_FILA, filtrarFila, normalizarPlaca, tempoDoc } from './documentacao';
+import { acaoDocumentacao, avisosDuplicidade, duracao, FILTROS_FILA, filtrarFila, lerReais, normalizarPlaca, telefoneValido, tempoDoc, tipoCadastro } from './documentacao';
 
 const base = Date.parse('2026-10-27T12:00:00Z');
 const sol = (o: Partial<SolicitacaoDoc>): SolicitacaoDoc => ({
@@ -58,5 +58,46 @@ describe('documentação', () => {
     expect(ids({ busca: '24817' })).toEqual(['c']);
     expect(ids({ busca: 'amaggi' })).toEqual(['c']);
     expect(normalizarPlaca('abc-1d23')).toBe('ABC1D23');
+  });
+});
+
+describe('Cadastro', () => {
+  it('telefone com DDD, +55 e zero de operadora', () => {
+    expect(telefoneValido('(64) 99999-1234')).toBe(true);
+    expect(telefoneValido('64 3611-2233')).toBe(true);
+    expect(telefoneValido('+55 64 99999-1234')).toBe(true);
+    expect(telefoneValido('0 64 99999-1234')).toBe(true);
+    expect(telefoneValido('99999-1234')).toBe(false);
+    expect(telefoneValido('(00) 99999-1234')).toBe(false);
+    expect(telefoneValido('(64) 9999-12')).toBe(false);
+    expect(telefoneValido('')).toBe(false);
+  });
+  it('valor da carga no padrão brasileiro', () => {
+    expect(lerReais('85.000,00')).toBe(85000);
+    expect(lerReais('R$ 85.000,50')).toBe(85000.5);
+    expect(lerReais('85.000')).toBe(85000);
+    expect(lerReais('85000')).toBe(85000);
+    expect(lerReais('1250,5')).toBe(1250.5);
+    expect(lerReais('')).toBeNull();
+    expect(Number.isNaN(lerReais('85,000.00') as number)).toBe(true);
+    expect(Number.isNaN(lerReais('abc') as number)).toBe(true);
+    expect(Number.isNaN(lerReais('-10') as number)).toBe(true);
+  });
+  it('tipo do arquivo pelo navegador ou pela extensão', () => {
+    expect(tipoCadastro('cnh.pdf', 'application/pdf')).toBe('application/pdf');
+    expect(tipoCadastro('audio.opus', '')).toBe('audio/ogg');
+    expect(tipoCadastro('foto.heic', 'application/octet-stream')).toBe('image/heic');
+    expect(tipoCadastro('planilha.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBeTruthy();
+    expect(tipoCadastro('script.exe', 'application/x-msdownload')).toBeNull();
+    expect(tipoCadastro('macro.html', 'text/html')).toBeNull();
+  });
+  it('filtro por tipo e Concluídas com Cadastro concluído', () => {
+    const ss = [
+      sol({ id: '1', tipo: 'cadastro', status: 'cadastro_concluido', embarque_id: null }),
+      sol({ id: '2', tipo: 'emissao', status: 'documentacao_disponivel' }),
+      sol({ id: '3', tipo: 'cadastro', status: 'enviado', embarque_id: null }),
+    ];
+    expect(filtrarFila(ss, { ...FILTROS_FILA, atalho: 'concluidas' }, 'eu').map((s) => s.id).sort()).toEqual(['1', '2']);
+    expect(filtrarFila(ss, { ...FILTROS_FILA, tipo: 'cadastro' }, 'eu').map((s) => s.id)).toEqual(['3']);
   });
 });

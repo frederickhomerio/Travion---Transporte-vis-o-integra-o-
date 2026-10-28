@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../../data/store';
 import type { ArquivoDoc } from '../../data/api';
-import { CATEGORIA, LIMITE_ARQUIVO, STATUS_DOC, TIPOS_ARQUIVO, TIPO_DOC, fmtTamanho } from '../../lib/documentacao';
+import { ACEITA_CADASTRO, CATEGORIA, LIMITE_ARQUIVO, LIMITE_CADASTRO, REF_CADASTRO, STATUS_DOC, TIPOS_ARQUIVO, TIPO_DOC, fmtTamanho, tipoCadastro } from '../../lib/documentacao';
 import { fmtDataHora } from '../../lib/formato';
 import type { AnexoDoc, CategoriaAnexo, MensagemDoc, SolicitacaoDoc, StatusDoc } from '../../types';
 import { useAviso } from '../ui';
@@ -41,11 +41,12 @@ export function Copiar({ texto, rotulo = 'Copiar' }: { texto: string; rotulo?: s
 }
 
 /** Arquivo escolhido no formulário: sobe ao Storage só no envio e guarda o caminho para não repetir em nova tentativa. */
-export interface ArquivoLocal { id: string; arquivo: File; categoria: CategoriaAnexo; enviado?: ArquivoDoc }
+export interface ArquivoLocal { id: string; arquivo: File; categoria: CategoriaAnexo; enviado?: ArquivoDoc; situacao?: 'enviando' | 'falhou' }
 
-export function SeletorArquivos({ rotulo, categoria, itens, aoMudar, obrigatorio, ajuda, categorias }: {
+/** `cadastro`: formatos do Cadastro (PDF, imagem, Office, vídeo, áudio) até 10 MB; `max`: quantidade máxima nesta lista. */
+export function SeletorArquivos({ rotulo, categoria, itens, aoMudar, obrigatorio, ajuda, categorias, cadastro, max, desabilitado }: {
   rotulo: string; categoria: CategoriaAnexo; itens: ArquivoLocal[]; aoMudar: (x: ArquivoLocal[]) => void;
-  obrigatorio?: boolean; ajuda?: string; categorias?: CategoriaAnexo[];
+  obrigatorio?: boolean; ajuda?: string; categorias?: CategoriaAnexo[]; cadastro?: boolean; max?: number; desabilitado?: boolean;
 }) {
   const avisar = useAviso();
   const input = useRef<HTMLInputElement>(null);
@@ -65,23 +66,29 @@ export function SeletorArquivos({ rotulo, categoria, itens, aoMudar, obrigatorio
               </select>
             )}
             <span className="sa-nome">{i.arquivo.name}</span>
-            <span className="suave pequeno">{fmtTamanho(i.arquivo.size)}{i.enviado ? ' · enviado' : ''}</span>
-            <button type="button" className="btn sutil peq" onClick={() => aoMudar(itens.filter((x) => x.id !== i.id))} aria-label={`Remover ${i.arquivo.name}`}>Remover</button>
+            <span className={`pequeno ${i.situacao === 'falhou' ? 'erro-campo' : 'suave'}`}>{fmtTamanho(i.arquivo.size)} · {
+              i.enviado ? 'enviado' : i.situacao === 'enviando' ? 'enviando…' : i.situacao === 'falhou' ? 'falhou, tente de novo' : 'pronto para enviar'}</span>
+            <button type="button" className="btn sutil peq" disabled={desabilitado} onClick={() => aoMudar(itens.filter((x) => x.id !== i.id))} aria-label={`Remover ${i.arquivo.name}`}>Remover</button>
           </li>
         ))}
       </ul>
-      <input ref={input} type="file" multiple accept={TIPOS_ARQUIVO} hidden onChange={(e) => {
+      <input ref={input} type="file" multiple accept={cadastro ? ACEITA_CADASTRO : TIPOS_ARQUIVO} hidden onChange={(e) => {
         const novos: ArquivoLocal[] = [];
         for (const f of Array.from(e.target.files ?? [])) {
-          if (!TIPOS_ARQUIVO.split(',').includes(f.type)) { avisar('erro', `${f.name}: use PDF, PNG, JPG ou WEBP.`); continue; }
+          if (cadastro ? !tipoCadastro(f.name, f.type) : !TIPOS_ARQUIVO.split(',').includes(f.type)) {
+            avisar('erro', cadastro ? `${f.name}: formato não aceito.` : `${f.name}: use PDF, PNG, JPG ou WEBP.`); continue;
+          }
           if (f.size <= 0) { avisar('erro', `${f.name}: arquivo vazio.`); continue; }
-          if (f.size > LIMITE_ARQUIVO) { avisar('erro', `${f.name}: maior que 15 MB.`); continue; }
+          if (f.size > (cadastro ? LIMITE_CADASTRO : LIMITE_ARQUIVO)) { avisar('erro', `${f.name}: maior que ${cadastro ? 10 : 15} MB.`); continue; }
+          if (max && meus.length + novos.length >= max) { avisar('erro', `${rotulo}: no máximo ${max} arquivo(s).`); break; }
           novos.push({ id: crypto.randomUUID(), arquivo: f, categoria });
         }
         aoMudar([...outros, ...meus, ...novos]);
         e.target.value = '';
       }} />
-      <button type="button" className="btn peq sa-add" onClick={() => input.current?.click()}>+ Anexar PDF ou imagem</button>
+      <button type="button" className="btn peq sa-add" disabled={desabilitado || (!!max && meus.length >= max)} onClick={() => input.current?.click()}>
+        {cadastro ? '+ Anexar arquivo' : '+ Anexar PDF ou imagem'}{max ? ` (${meus.length}/${max})` : ''}
+      </button>
     </div>
   );
 }
@@ -92,8 +99,16 @@ export async function enviarArquivos(itens: ArquivoLocal[], enviar: (f: File) =>
   const atual = [...itens];
   for (const [n, i] of atual.entries()) {
     if (i.enviado) { atual[n] = { ...i, enviado: { ...i.enviado, categoria: i.categoria } }; continue; }
-    const r = await enviar(i.arquivo);
-    atual[n] = { ...i, enviado: { ...r, categoria: i.categoria } };
+    atual[n] = { ...i, situacao: 'enviando' };
+    aoAtualizar([...atual]);
+    try {
+      const r = await enviar(i.arquivo);
+      atual[n] = { ...i, situacao: undefined, enviado: { ...r, categoria: i.categoria } };
+    } catch (e) {
+      atual[n] = { ...i, situacao: 'falhou' };
+      aoAtualizar([...atual]);
+      throw e;
+    }
     aoAtualizar([...atual]);
   }
   aoAtualizar(atual);
@@ -112,7 +127,7 @@ export function Historico({ mensagens, anexos }: { mensagens: MensagemDoc[]; ane
               <span className="suave pequeno">{m.autor_nome} · {fmtDataHora(m.criado_em)}</span>
             </div>
             <p>{m.texto}</p>
-            {m.referencia && m.tipo === 'pendencia' && <span className="pequeno suave">Referente a: {CATEGORIA[m.referencia as CategoriaAnexo] ?? m.referencia}</span>}
+            {m.referencia && m.tipo === 'pendencia' && <span className="pequeno suave">Referente a: {CATEGORIA[m.referencia as CategoriaAnexo] ?? REF_CADASTRO[m.referencia] ?? m.referencia}</span>}
             {arqs.length > 0 && <span className="pequeno">Anexos: {arqs.map((a) => a.nome).join(', ')}</span>}
           </li>
         );

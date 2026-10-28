@@ -13,7 +13,7 @@ import { useDetalheDoc, useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
 import { cidadeAnuncio } from '../lib/anuncio';
 import {
-  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, OPERACAO, PAGAMENTO, PEDAGIO, TIPO_DOC, fmtFrete, fmtPlaca, resumoDoc, tempoDoc, vezDe,
+  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, OPERACAO, PAGAMENTO, PEDAGIO, REF_CADASTRO, TIPO_DOC, fmtFrete, fmtPlaca, fmtReais2, resumoDoc, tempoDoc, vezDe,
 } from '../lib/documentacao';
 import { fmtDataAsHora } from '../lib/formato';
 import type { CategoriaAnexo, SolicitacaoDoc } from '../types';
@@ -23,6 +23,7 @@ const REFERENCIAS: Array<[string, string]> = [
   ['', 'Geral'], ['nf', 'NF'], ['evidencia_frete', 'Evidência do frete'], ['placa', 'Placa'], ['frete', 'Fretes'],
   ['pagamento', 'Pagamento/pedágio'], ['obs_cte', 'Observação do CT-e'],
 ];
+const REFERENCIAS_CADASTRO = Object.entries(REF_CADASTRO);
 
 function useRascunho(chave: string) {
   const [v, setV] = useState(() => { try { return sessionStorage.getItem(chave) ?? ''; } catch { return ''; } });
@@ -90,6 +91,8 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
     } catch (e) { avisar('erro', mensagemErro(e)); return false; }
   };
 
+  const cad = s.tipo === 'cadastro';
+  const conta = (c: CategoriaAnexo) => anexos.filter((a) => a.categoria === c).length;
   const placaTxt = `${fmtPlaca(s.placa)}${s.placas_reboque.length ? ` + ${s.placas_reboque.map(fmtPlaca).join(', ')}` : ''}`;
   return (
     <Layout titulo={`${TIPO_DOC[s.tipo]} nº ${s.numero}`} aoLadoTitulo={<StatusDocPill status={s.status} />}>
@@ -106,6 +109,27 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
                 <TipoNumero s={s} />
                 <Copiar texto={resumoDoc(s)} rotulo="Copiar resumo" />
               </div>
+              {cad ? (
+                <div className="at-info">
+                  <LinhaInfo rot="Cliente" valor={r.cliente} copiar />
+                  <LinhaInfo rot="Placa do cavalo" valor={fmtPlaca(s.placa)} copiar />
+                  <LinhaInfo rot="Telefone do motorista" valor={s.telefone_motorista} copiar />
+                  <LinhaInfo rot="Mercadoria" valor={s.mercadoria} copiar />
+                  <LinhaInfo rot="Valor da carga" valor={s.valor_carga != null ? fmtReais2(s.valor_carga) : null} copiar />
+                  <LinhaInfo rot="Origem" valor={cidadeAnuncio(r.origem_cidade, r.origem_uf)} copiar />
+                  <LinhaInfo rot="Destino" valor={cidadeAnuncio(r.destino_cidade, r.destino_uf)} copiar />
+                  <LinhaInfo rot="Primeiro embarque" valor={s.primeiro_embarque ? 'Sim, motorista de primeiro embarque' : 'Não'} />
+                  <LinhaInfo rot="Filial / CC" valor={`${r.filial ?? 'Sem filial'}${r.centro_custo ? ` · ${r.centro_custo}` : ''}`} />
+                  <LinhaInfo rot="Carteira" valor={r.carteira} />
+                  <LinhaInfo rot="Documentos" valor={detalhe ? `Motorista: ${conta('motorista')} · Veículos: ${conta('veiculo')}${conta('correcao') ? ` · Correções: ${conta('correcao')}` : ''}` : '…'} />
+                  {s.observacoes && <LinhaInfo rot="Observações" valor={s.observacoes} copiar />}
+                  <LinhaInfo rot="Cadastro no ERP" valor={s.erp_referencia ?? (s.status === 'cadastro_concluido' ? 'Concluído (sem referência)' : 'A fazer manualmente no ERP')} copiar={!!s.erp_referencia} />
+                  <LinhaInfo rot="Solicitante" valor={`${s.solicitante_nome} · ${fmtDataAsHora(s.enviado_em)}`} />
+                  <LinhaInfo rot="Responsável" valor={s.responsavel_nome ?? '—'} />
+                  <LinhaInfo rot={t.rotulo} valor={t.texto} />
+                  {vezDe(s) && <LinhaInfo rot="Vez de" valor={vezDe(s)} />}
+                </div>
+              ) : (
               <div className="at-info">
                 <LinhaInfo rot="Cliente" valor={r.cliente} copiar />
                 <LinhaInfo rot="Lote" valor={r.lote_numero ?? 'Lote a gerar'} copiar={!!r.lote_numero} />
@@ -127,18 +151,24 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
                 <LinhaInfo rot={t.rotulo} valor={t.texto} />
                 {vezDe(s) && <LinhaInfo rot="Vez de" valor={vezDe(s)} />}
               </div>
+              )}
             </div>
 
             {s.status === 'aguardando_informacao' && (
               <Alerta tipo="aviso"><span><strong>Aguardando informação de {s.solicitante_nome}.</strong> A resposta volta a demanda para Em atendimento com você.</span></Alerta>
             )}
             {s.status === 'documentacao_disponivel' && <Alerta tipo="ok">Documentação disponível desde {fmtDataAsHora(s.concluido_em)} ({s.concluido_por_nome}). Tempo total: {t.texto}.</Alerta>}
+            {s.status === 'cadastro_concluido' && (
+              <Alerta tipo="ok"><span>Cadastro concluído em {fmtDataAsHora(s.concluido_em)} ({s.concluido_por_nome}). Tempo total: {t.texto}.
+                {s.retorno_solicitante ? <> Retorno ao solicitante: {s.retorno_solicitante}</> : null}</span></Alerta>
+            )}
             {s.status === 'cancelado' && <Alerta tipo="aviso">Cancelada por {s.cancelado_por_nome}: {s.cancelado_motivo}</Alerta>}
 
             {editavel && s.tipo === 'lote_emissao' && <RegistrarLote s={s} executar={executar} />}
-            {editavel && <AnexarEmitidos s={s} executar={executar} emitidos={saida.length} />}
-            {editavel && s.status === 'em_atendimento' && <PedirAjuste s={s} executar={executar} />}
-            {editavel && <Concluir s={s} executar={executar} emitidos={saida.length} />}
+            {editavel && !cad && <AnexarEmitidos s={s} executar={executar} emitidos={saida.length} />}
+            {editavel && s.status === 'em_atendimento' && <PedirAjuste s={s} executar={executar} referencias={cad ? REFERENCIAS_CADASTRO : REFERENCIAS} />}
+            {editavel && !cad && <Concluir s={s} executar={executar} emitidos={saida.length} />}
+            {editavel && cad && <ConcluirCadastro s={s} executar={executar} />}
             {saida.length > 0 && (
               <div className="cartao cartao-corpo at-bloco">
                 <strong>Documentos emitidos {s.status === 'documentacao_disponivel' ? '(liberados)' : '(em conferência)'}</strong>
@@ -216,7 +246,7 @@ function AnexarEmitidos({ s, executar, emitidos }: { s: SolicitacaoDoc; executar
   );
 }
 
-function PedirAjuste({ s, executar }: { s: SolicitacaoDoc; executar: Executar }) {
+function PedirAjuste({ s, executar, referencias }: { s: SolicitacaoDoc; executar: Executar; referencias: Array<[string, string]> }) {
   const { api } = useApp();
   const [texto, setTexto] = useRascunho(`travion-rascunho-ajuste-${s.id}`);
   const [ref, setRef] = useState('');
@@ -224,10 +254,10 @@ function PedirAjuste({ s, executar }: { s: SolicitacaoDoc; executar: Executar })
   const [tentou, setTentou] = useState(false);
   return (
     <div className="cartao cartao-corpo at-bloco">
-      <strong>Solicitar ajuste ao comercial</strong>
+      <strong>Solicitar ajuste ao {s.tipo === 'cadastro' ? 'solicitante' : 'comercial'}</strong>
       <div className="at-linha">
         <select className="entrada" value={ref} onChange={(e) => setRef(e.target.value)} aria-label="Referente a">
-          {REFERENCIAS.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+          {referencias.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
         </select>
       </div>
       <textarea className="entrada" rows={3} value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={4000}
@@ -264,6 +294,34 @@ function Concluir({ s, executar, emitidos }: { s: SolicitacaoDoc; executar: Exec
         await executar(() => api.doc.concluir(s.id), 'Documentação disponível ao comercial.');
         setGravando(false);
       }}>{gravando ? 'Liberando…' : 'Marcar documentação disponível'}</button></div>
+    </div>
+  );
+}
+
+// Cadastro: o apoio fez o cadastro à mão no ERP e confirma. Sem documento emitido; referência do ERP opcional.
+function ConcluirCadastro({ s, executar }: { s: SolicitacaoDoc; executar: Executar }) {
+  const { api } = useApp();
+  const [ref, setRef] = useRascunho(`travion-rascunho-erp-${s.id}`);
+  const [retorno, setRetorno] = useRascunho(`travion-rascunho-retorno-${s.id}`);
+  const [gravando, setGravando] = useState(false);
+  const pendente = s.status !== 'em_atendimento';
+  return (
+    <div className="cartao cartao-corpo at-bloco at-concluir">
+      <strong>Concluir cadastro</strong>
+      <span className="pequeno suave">Faça o cadastro do motorista e dos veículos no ERP e confirme aqui. O Travion não cadastra no ERP sozinho.</span>
+      <label className="campo"><span>Referência do cadastro no ERP (opcional)</span>
+        <input className="entrada" value={ref} onChange={(e) => setRef(e.target.value)} maxLength={120} placeholder="Código ou número no ERP" />
+      </label>
+      <label className="campo"><span>Retorno ao solicitante</span>
+        <textarea className="entrada" rows={2} value={retorno} onChange={(e) => setRetorno(e.target.value)} maxLength={2000}
+          placeholder="Ex.: motorista e cavalo cadastrados; carreta já existia no ERP." />
+      </label>
+      {pendente && <span className="pequeno suave">Há pendência aguardando resposta de {s.solicitante_nome}: resolva antes de concluir.</span>}
+      <div><button className="btn primario" disabled={pendente || gravando} onClick={async () => {
+        setGravando(true);
+        if (await executar(() => api.doc.concluirCadastro(s.id, ref.trim() || null, retorno.trim() || null), `Cadastro da placa ${fmtPlaca(s.placa)} concluído. ${s.solicitante_nome} foi avisado.`)) { setRef(''); setRetorno(''); }
+        setGravando(false);
+      }}>{gravando ? 'Confirmando…' : 'Confirmar cadastro concluído'}</button></div>
     </div>
   );
 }
