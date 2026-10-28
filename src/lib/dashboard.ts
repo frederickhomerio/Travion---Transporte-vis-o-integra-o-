@@ -120,3 +120,15 @@ export function indicadoresPorGrupo(
   for (const k of chaves) out.set(k, indicadores(porDia.map((ls) => ls.filter((l) => chave(l) === k)), cfg, comFinanceiro));
   return out;
 }
+
+export type FaixaBarra = 'vermelho' | 'amarelo' | 'verde';
+
+/** Cor das barras de % (regra da coordenação comercial, 28/10/2026): até 60% vermelho, 60,1% a 80% amarelo, acima de 80% verde.
+ *  Compara o valor arredondado a 1 casa, o mesmo que aparece na tela. Sem meta, a barra fica neutra (null). */
+export function faixaBarra(pct: number | null | undefined): FaixaBarra | null {
+  if (pct === null || pct === undefined || !Number.isFinite(pct)) return null;
+  const p = Math.round(pct * 10) / 10;
+  if (p <= 60) return 'vermelho';
+  if (p <= 80) return 'amarelo';
+  return 'verde';
+}

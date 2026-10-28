@@ -44,7 +44,8 @@ export function App({ api }: { api: Api }) {
               <Route path="/login" element={<Login />} />
               <Route path="/nova-senha" element={<NovaSenha />} />
               <Route path="/" element={<Protegido><ListaFretes /></Protegido>} />
-              <Route path="/dashboard" element={<Protegido><Dashboard /></Protegido>} />
+              <Route path="/analise" element={<Protegido><Dashboard /></Protegido>} />
+              <Route path="/dashboard" element={<Navigate to="/analise" replace />} />
               <Route path="/posicoes" element={<Protegido><PosicoesEmbarque /></Protegido>} />
               <Route path="/posicao-cliente" element={<Protegido><PosicaoCliente /></Protegido>} />
               <Route path="/apoio" element={<Protegido><ApoioOperacional /></Protegido>} />

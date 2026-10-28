@@ -8,7 +8,7 @@ export const ABAS_APP: Array<{ id: string; rotulo: string; chaves: Permissao[] }
     'embarques.editar_capacidade', 'embarques.arquivar', 'embarques.encerrar', 'carteira.editar', 'financeiro.ver', 'financeiro.editar',
     'historico.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente',
     'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar'] },
-  { id: 'dashboard', rotulo: 'Dashboard Operacional', chaves: ['embarques.ver', 'financeiro.ver'] },
+  { id: 'dashboard', rotulo: 'Análise · Dashboard Operacional', chaves: ['embarques.ver', 'financeiro.ver'] },
   { id: 'posicoes', rotulo: 'Posições de Embarque', chaves: ['posicoes.pagina', 'embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional'] },
   { id: 'cliente', rotulo: 'Posição do Cliente', chaves: ['compartilhamento.preparar', 'compartilhamento.links', 'posicoes.editar_obs_cliente'] },
   { id: 'apoio', rotulo: 'Apoio Operacional', chaves: ['apoio.pagina', 'apoio.atender', 'documentacao.ver', 'documentacao.cancelar'] },

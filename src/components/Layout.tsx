@@ -26,13 +26,12 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
         <div className="marca"><Logo /><div>TRAVION<small>by Transpanorama</small></div></div>
         <nav className="nav" aria-label="Principal">
           <NavLink to="/" end><Icone nome="lista" />Lista de Fretes</NavLink>
-          <NavLink to="/dashboard"><Icone nome="painel" />Dashboard Operacional</NavLink>
           {pode('posicoes.pagina') && <NavLink to="/posicoes"><Icone nome="caminhao" />Posições de Embarque</NavLink>}
           {pode('compartilhamento.preparar') && <NavLink to="/posicao-cliente"><Icone nome="cliente" />Posição do Cliente</NavLink>}
           {pode('apoio.pagina') && <NavLink to="/apoio"><Icone nome="lista" />Apoio Operacional</NavLink>}
           {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <NavLink to="/cadastro"><Icone nome="cadastro" />Cadastro</NavLink>}
-          <div className="grupo">Em breve</div>
-          <span className="em-breve" aria-disabled="true"><span style={{ display: 'flex', gap: 10 }}><Icone nome="analise" />Análise</span><span className="badge info">Em breve</span></span>
+          <div className="grupo">Análise</div>
+          <NavLink to="/analise"><Icone nome="painel" />Dashboard Operacional</NavLink>
           {admin && <><div className="grupo">Gestão</div><NavLink to="/admin"><Icone nome="config" />Administração</NavLink></>}
         </nav>
         <div className="lateral-rodape">
@@ -70,7 +69,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
 
       <nav className="navinf" aria-label="Principal (celular)">
         <NavLink to="/" end><Icone nome="lista" />Fretes</NavLink>
-        <NavLink to="/dashboard"><Icone nome="painel" />Dashboard</NavLink>
+        <NavLink to="/analise"><Icone nome="analise" />Análise</NavLink>
         {pode('posicoes.pagina') && <NavLink to="/posicoes"><Icone nome="caminhao" />Posições</NavLink>}
         {pode('apoio.pagina') && <NavLink to="/apoio"><Icone nome="lista" />Apoio</NavLink>}
         {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <NavLink to="/cadastro"><Icone nome="cadastro" />Cadastro</NavLink>}

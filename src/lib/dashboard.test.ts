@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG_PADRAO, type Embarque, type Financeiro, type LinhaFrete, type Posicao } from '../types';
-import { diasDoIntervalo, indicadores, indicadoresPorGrupo, intervaloPeriodo } from './dashboard';
+import { diasDoIntervalo, faixaBarra, indicadores, indicadoresPorGrupo, intervaloPeriodo } from './dashboard';
 
 const emb = (id: string, filial: string): Embarque => ({
   id, codigo: 1, cliente_id: 'c1', comercial_id: null, filial_id: filial, produto_id: null,
@@ -64,5 +64,22 @@ describe('indicadores do dashboard', () => {
     expect(g.get('f1')!.projetado_t).toBe(40);
     expect(g.get('f2')!.projetado_t).toBe(80);
     expect(g.get('f3')!.lotes).toBe(0);
+  });
+});
+
+describe('faixaBarra', () => {
+  it('até 60% vermelho, 60,1% a 80% amarelo, acima de 80% verde', () => {
+    expect(faixaBarra(0)).toBe('vermelho');
+    expect(faixaBarra(60)).toBe('vermelho');
+    expect(faixaBarra(60.04)).toBe('vermelho'); // aparece como 60,0%
+    expect(faixaBarra(60.1)).toBe('amarelo');
+    expect(faixaBarra(80)).toBe('amarelo');
+    expect(faixaBarra(80.1)).toBe('verde');
+    expect(faixaBarra(135)).toBe('verde');
+  });
+  it('sem meta fica neutra', () => {
+    expect(faixaBarra(null)).toBeNull();
+    expect(faixaBarra(undefined)).toBeNull();
+    expect(faixaBarra(Infinity)).toBeNull();
   });
 });

@@ -22,6 +22,9 @@
   --vermelho-100: #fbe7e8;
   --ambar-800: #845406;
   --ambar-100: #fbf0dc;
+  --faixa-vermelho: #d63a44;
+  --faixa-amarelo: #e3a907;
+  --faixa-verde: #2e9a57;
   --cinza-900: #2d2a2a;
   --cinza-700: #4a4446;
   --cinza-600: #6a6365;
@@ -417,6 +420,11 @@ textarea.entrada { min-height: 80px; resize: vertical; }
 .dash-veiculos { border-top: 1px solid var(--borda); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .dash-veiculos > div { display: flex; justify-content: space-between; }
 .dash-barras { display: flex; flex-direction: column; gap: 10px; }
+/* Barras de % por faixa: até 60% vermelho, 60,1% a 80% amarelo, acima de 80% verde (sem meta = neutra). */
+.dash-barra > .faixa-vermelho, .dash-barras-linha .proj.faixa-vermelho, .dash-destaque-barra .trilho > .faixa-vermelho, .legenda i.faixa-vermelho { background: var(--faixa-vermelho); }
+.dash-barra > .faixa-amarelo, .dash-barras-linha .proj.faixa-amarelo, .dash-destaque-barra .trilho > .faixa-amarelo, .legenda i.faixa-amarelo { background: var(--faixa-amarelo); }
+.dash-barra > .faixa-verde, .dash-barras-linha .proj.faixa-verde, .dash-destaque-barra .trilho > .faixa-verde, .legenda i.faixa-verde { background: var(--faixa-verde); }
+.dash-barra > .faixa-neutra, .dash-barras-linha .proj.faixa-neutra { background: var(--cinza-500); }
 .dash-barras-linha { display: grid; grid-template-columns: 160px minmax(0, 1fr) 120px; gap: 12px; align-items: center; font-size: 0.9rem; }
 .dash-barras-linha .nome { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-barras-linha .trilho { position: relative; height: 22px; background: var(--cinza-100); border-radius: 6px; }

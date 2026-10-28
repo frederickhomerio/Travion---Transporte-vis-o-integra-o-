@@ -4,7 +4,7 @@ import { Alerta, Carregando, EstadoVazio, Segmentado } from '../components/ui';
 import { mensagemErro } from '../data/api';
 import { linhasDaData, useApp, useIndices } from '../data/store';
 import { nome } from '../lib/cadastros';
-import { type Indicadores, type TipoPeriodo, diasDoIntervalo, indicadores, indicadoresPorGrupo, intervaloPeriodo } from '../lib/dashboard';
+import { type Indicadores, type TipoPeriodo, diasDoIntervalo, indicadores, faixaBarra, indicadoresPorGrupo, intervaloPeriodo } from '../lib/dashboard';
 import { FILTROS_VAZIOS, aplicarFiltros } from '../lib/filtros';
 import { fmtDataCurta, fmtNum, fmtPct, fmtReais, fmtT, hojeSP } from '../lib/formato';
 import type { LinhaFrete } from '../types';
@@ -82,7 +82,7 @@ export function Dashboard() {
     .sort((a, b) => (b.x.faturamento ?? b.x.projetado_t) - (a.x.faturamento ?? a.x.projetado_t));
 
   return (
-    <Layout titulo="Dashboard Operacional">
+    <Layout titulo="Análise · Dashboard Operacional">
       <div className="dash">
         <div className="dash-topo">
           <span className="dash-periodo">{tituloData}</span>
@@ -138,7 +138,7 @@ export function Dashboard() {
               <section className="cartao dash-sec dash-filiais">
                 <div className="dash-sec-topo">
                   <h3>Meta x Projeção {exibirRs ? 'de faturamento ' : ''}por filial</h3>
-                  <div className="legenda"><span><i style={{ background: 'var(--cinza-300)' }} />Meta</span><span><i style={{ background: 'var(--vinho)' }} />Projeção</span></div>
+                  <div className="legenda"><span><i style={{ background: 'var(--cinza-300)' }} />Meta</span><span><i className="faixa-vermelho" />Projeção até 60%</span><span><i className="faixa-amarelo" />60,1% a 80%</span><span><i className="faixa-verde" />acima de 80%</span></div>
                 </div>
                 <BarrasMeta itens={filiaisLista} rs={exibirRs} />
                 <span className="suave pequeno">Meta = volume disponibilizado {exibirRs ? '× frete empresa ' : ''}· projeção = porta + carregados{exibirRs ? ' × frete empresa' : ''}</span>
@@ -148,7 +148,7 @@ export function Dashboard() {
                 <h3>Disponibilizado x Projetado</h3>
                 <div><span className="suave pequeno">Volume disponibilizado (meta dos lotes)</span><div className="dash-num">{r.disponibilizado_t === null ? 'Sem meta' : fmtT(r.disponibilizado_t)}</div></div>
                 <div><span className="suave pequeno">Volume projetado</span><div className="dash-num vinho">{fmtT(r.projetado_t)}</div></div>
-                <div className="dash-barra"><div style={{ width: `${Math.min(r.aderencia_pct ?? 0, 100)}%` }} /></div>
+                <div className="dash-barra"><div className={classeFaixa(r.aderencia_pct)} style={{ width: `${Math.min(r.aderencia_pct ?? 0, 100)}%` }} /></div>
                 <span><strong>{fmtPct(r.aderencia_pct)}</strong> de aderência{r.disponibilizado_t !== null && r.disponibilizado_t > r.projetado_t
                   ? ` · faltam ${fmtT(r.disponibilizado_t - r.projetado_t)} (${Math.ceil((r.disponibilizado_t - r.projetado_t) / (estado.config.capacidade_padrao_t || 40))} cargas)` : ''}</span>
                 <div className="dash-veiculos">
@@ -191,7 +191,7 @@ export function Dashboard() {
                     return (
                       <div key={c.id || 'sem'} className="cartao dash-centro">
                         <div className="dash-centro-topo"><strong>{c.nome}</strong><span>{pct === null ? 'Sem meta' : fmtPct(pct)}</span></div>
-                        <div className="dash-barra fina"><div style={{ width: `${Math.min(pct ?? 0, 100)}%` }} /></div>
+                        <div className="dash-barra fina"><div className={classeFaixa(pct)} style={{ width: `${Math.min(pct ?? 0, 100)}%` }} /></div>
                         <div className="dash-centro-nums">
                           <div><span>Meta</span><strong>{f(meta)}</strong></div>
                           <div><span>Projeção</span><strong>{f(proj)}</strong></div>
@@ -223,11 +223,17 @@ function Destaque({ r, tipo, fin }: { r: Indicadores; tipo: TipoPeriodo; fin: bo
         <span className="dash-destaque-det">Projeção {f(proj)} · meta {f(meta)}{meta !== null && proj !== null && meta > proj ? ` · faltam ${f(meta - proj)}` : ''}</span>
       </div>
       <div className="dash-destaque-barra">
-        <div className="trilho"><div style={{ width: `${Math.min(pct ?? 0, 100)}%` }} /></div>
+        <div className="trilho"><div className={classeFaixa(pct)} style={{ width: `${Math.min(pct ?? 0, 100)}%` }} /></div>
         <div className="escala"><span>0</span><span>Meta = volume disponibilizado{fin ? ' × frete empresa' : ''}</span><span>Meta</span></div>
       </div>
     </section>
   );
+}
+
+/** Classe de cor da barra pela faixa de % (vermelho / amarelo / verde); sem meta fica neutra. */
+function classeFaixa(pct: number | null | undefined): string {
+  const f = faixaBarra(pct);
+  return f ? `faixa-${f}` : 'faixa-neutra';
 }
 
 function Kpi({ rot, val, det }: { rot: string; val: string; det?: string }) {
@@ -255,7 +261,7 @@ function BarrasMeta({ itens, rs }: { itens: Array<{ id: string; nome: string; x:
           <span className="nome">{v.nome}</span>
           <div className="trilho">
             <div className="meta" style={{ width: `${(v.meta / max) * 100}%` }} />
-            <div className="proj" style={{ width: `${(v.proj / max) * 100}%` }} />
+            <div className={`proj ${classeFaixa(v.meta > 0 ? (v.proj / v.meta) * 100 : null)}`} style={{ width: `${(v.proj / max) * 100}%` }} />
           </div>
           <span className="pct">{v.meta > 0 ? <><strong>{fmtPct((v.proj / v.meta) * 100)}</strong> da meta</> : 'Sem meta'}</span>
         </div>

@@ -20,7 +20,7 @@ export function Mais() {
         <div className="cartao">
           <div className="cartao-cab"><h2>Módulos</h2></div>
           <div className="cartao-corpo" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div className="grupo-btn" style={{ justifyContent: 'space-between' }}><span><Icone nome="analise" /> Análise</span><span className="badge info">Em breve</span></div>
+            <Link className="btn" to="/analise"><Icone nome="analise" />Análise · Dashboard Operacional</Link>
             {pode('compartilhamento.preparar') && <Link className="btn" to="/posicao-cliente"><Icone nome="cliente" />Posição do Cliente</Link>}
             {pode('apoio.pagina') && <Link className="btn" to="/apoio"><Icone nome="lista" />Apoio Operacional</Link>}
             {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <Link className="btn" to="/cadastro"><Icone nome="cadastro" />Cadastro</Link>}
