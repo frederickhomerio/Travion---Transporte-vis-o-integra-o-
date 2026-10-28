@@ -14,7 +14,7 @@ import { useDetalheDoc, useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
 import { cidadeAnuncio } from '../lib/anuncio';
 import {
-  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, MOTIVOS_ESCOLHA, MOTIVO_DEVOLUCAO, OPERACAO, PAGAMENTO, PEDAGIO, REF_CADASTRO, TIPO_DOC, fmtFrete, fmtPlaca, fmtReais2, resumoDoc, tempoDoc, vezDe,
+  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, MOTIVOS_ESCOLHA, MOTIVO_DEVOLUCAO, OPERACAO, textoPagamento, PEDAGIO, REF_CADASTRO, TIPO_DOC, fmtFrete, fmtPlaca, fmtReais2, resumoDoc, tempoDoc, vezDe,
 } from '../lib/documentacao';
 import { fmtDataAsHora } from '../lib/formato';
 import type { CategoriaAnexo, MotivoDevolucao, SolicitacaoDoc } from '../types';
@@ -144,7 +144,7 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
                 <LinhaInfo rot="Frete empresa" valor={fmtFrete(s.frete_empresa, s.frete_empresa_unidade)} copiar />
                 <LinhaInfo rot="Frete motorista" valor={fmtFrete(s.frete_motorista, s.frete_motorista_unidade)} copiar />
                 {s.tipo_operacao && <LinhaInfo rot="Tipo de operação" valor={OPERACAO[s.tipo_operacao]} copiar />}
-                <LinhaInfo rot="Pagamento" valor={PAGAMENTO[s.forma_pagamento]} copiar />
+                <LinhaInfo rot="Pagamento" valor={textoPagamento(s)} copiar />
                 <LinhaInfo rot="Pedágio" valor={PEDAGIO[s.pedagio]} copiar />
                 <LinhaInfo rot="Obs. no CT-e" valor={s.exige_obs_cte ? s.obs_cte : 'Não exigida'} copiar={s.exige_obs_cte} />
                 <LinhaInfo rot="CT-e por NF" valor={s.cte_por_nf ? 'Sim, um CT-e por NF' : 'Não'} />

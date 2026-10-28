@@ -1,4 +1,4 @@
-// Indicadores do Dashboard Operacional (Modelo A): período dia/semana/mês, faturamento, margens e agrupamentos.
+// Indicadores do Dashboard Embarques (Modelo A): período dia/semana/mês, faturamento, margens e agrupamentos.
 
 import type { Configuracoes, LinhaFrete } from '../types';
 import { resumir } from './calculos';

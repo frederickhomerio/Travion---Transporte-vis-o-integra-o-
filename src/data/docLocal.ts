@@ -635,6 +635,8 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       if (reboques.some((x) => !PLACA.test(x))) erro('Placa de carreta inválida: use o formato ABC1D23 ou ABC1234.');
       if (!(d.frete_empresa > 0) || !(d.frete_motorista > 0)) erro('Confira fretes (valores maiores que zero, unidade R$/t ou R$/viagem), pagamento e pedágio.');
       if (d.exige_obs_cte && !d.obs_cte?.trim()) erro('Informe qual observação o cliente exige no CT-e.');
+      if (d.forma_pagamento === 'pix' && !['proprietario', 'motorista'].includes(d.pix_titular ?? '')) erro('No PIX, informe se a chave é do proprietário ou do motorista.');
+      if (d.forma_pagamento === 'pix' && (!d.pix_chave?.trim() || d.pix_chave.trim().length > 140)) erro('Informe a chave PIX (até 140 caracteres).');
       const cats: CategoriaAnexo[] = lote ? ['nf'] : ['nf', 'evidencia_frete'];
       if (!anexos.some((a) => a.categoria === 'nf')) erro('Anexe ao menos uma NF.');
       if (!lote && !anexos.some((a) => a.categoria === 'evidencia_frete')) erro('Anexe a evidência do frete.');
@@ -642,7 +644,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
         id: uid(), numero: ++db.seq, embarque_id: e.id, lote_id: lote?.id ?? null, tipo: lote ? 'emissao' : 'lote_emissao', status: 'enviado',
         placa, placas_reboque: reboques, frete_empresa: d.frete_empresa, frete_empresa_unidade: d.frete_empresa_unidade,
         frete_motorista: d.frete_motorista, frete_motorista_unidade: d.frete_motorista_unidade, tipo_operacao: tipoOp,
-        forma_pagamento: d.forma_pagamento, pedagio: d.pedagio, exige_obs_cte: d.exige_obs_cte, obs_cte: d.exige_obs_cte ? d.obs_cte!.trim() : null,
+        forma_pagamento: d.forma_pagamento, pix_titular: d.forma_pagamento === 'pix' ? d.pix_titular ?? null : null, pix_chave: d.forma_pagamento === 'pix' ? d.pix_chave?.trim() ?? null : null, pedagio: d.pedagio, exige_obs_cte: d.exige_obs_cte, obs_cte: d.exige_obs_cte ? d.obs_cte!.trim() : null,
         cte_por_nf: d.cte_por_nf, observacoes: d.observacoes?.trim() || null, retrato: { ...ctx.retrato(e), lote_numero: lote?.numero ?? null },
         solicitante_id: p.id, solicitante_nome: p.nome, responsavel_id: null, responsavel_nome: null, enviado_em: agora(), assumido_em: null,
         concluido_em: null, concluido_por_nome: null, cancelado_em: null, cancelado_por_nome: null, cancelado_motivo: null,

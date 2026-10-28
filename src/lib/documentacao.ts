@@ -1,7 +1,7 @@
 // Regras de apresentação da documentação (Apoio Operacional). Funções puras; quem decide é o servidor.
 
 import type {
-  CategoriaAnexo, FormaPagamento, LoteErp, MotivoDevolucao, Pedagio, SolicitacaoDoc, StatusDoc, TipoOperacao, TipoSolicitacaoDoc, UnidadeFreteDoc,
+  CategoriaAnexo, FormaPagamento, LoteErp, TitularPix, MotivoDevolucao, Pedagio, SolicitacaoDoc, StatusDoc, TipoOperacao, TipoSolicitacaoDoc, UnidadeFreteDoc,
 } from '../types';
 import { cidadeAnuncio } from './anuncio';
 import { normalizar } from './texto';
@@ -16,7 +16,11 @@ export const STATUS_DOC: Record<StatusDoc, string> = {
 };
 export const UNIDADE_DOC: Record<UnidadeFreteDoc, string> = { rs_tonelada: 'R$/t', rs_viagem: 'R$/viagem' };
 export const OPERACAO: Record<TipoOperacao, string> = { exportacao: 'Exportação', mi_tributado: 'Mercado Interno Tributado', mi_isento: 'Mercado Interno Isento' };
-export const PAGAMENTO: Record<FormaPagamento, string> = { cheque: 'Cheque', pagbem: 'Pagbem' };
+export const PAGAMENTO: Record<FormaPagamento, string> = { cheque: 'Cheque', pagbem: 'Pagbem', pix: 'PIX' };
+export const TITULAR_PIX: Record<TitularPix, string> = { proprietario: 'Chave do proprietário', motorista: 'Chave do motorista' };
+/** "PIX · Chave do motorista: 64999…" ou só o nome da forma de pagamento. */
+export const textoPagamento = (s: Pick<SolicitacaoDoc, 'forma_pagamento' | 'pix_titular' | 'pix_chave'>) =>
+  s.forma_pagamento === 'pix' && s.pix_titular ? `PIX · ${TITULAR_PIX[s.pix_titular]}: ${s.pix_chave ?? '—'}` : PAGAMENTO[s.forma_pagamento] ?? '—';
 export const PEDAGIO: Record<Pedagio, string> = { sem_parar: 'Sem Parar', move_mais: 'Move Mais', conect_car: 'Conect Car', veloe: 'Veloe', nao_ha: 'Não há' };
 export const CATEGORIA: Record<CategoriaAnexo, string> = {
   nf: 'NF', evidencia_frete: 'Evidência do frete', correcao: 'Correção', cte: 'CT-e', mdfe: 'MDF-e', outro_emitido: 'Outro documento emitido',
@@ -224,7 +228,7 @@ export function resumoDoc(s: SolicitacaoDoc): string {
     `Frete empresa: ${fmtFrete(s.frete_empresa, s.frete_empresa_unidade)}`,
     `Frete motorista: ${fmtFrete(s.frete_motorista, s.frete_motorista_unidade)}`,
     s.tipo_operacao ? `Tipo de operação: ${OPERACAO[s.tipo_operacao]}` : null,
-    `Pagamento: ${PAGAMENTO[s.forma_pagamento]} · Pedágio: ${PEDAGIO[s.pedagio]}`,
+    `Pagamento: ${textoPagamento(s)} · Pedágio: ${PEDAGIO[s.pedagio]}`,
     `Observação no CT-e: ${s.exige_obs_cte ? s.obs_cte : 'não exigida'}`,
     `Um CT-e por NF: ${s.cte_por_nf ? 'Sim' : 'Não'}`,
     s.observacoes ? `Observações: ${s.observacoes}` : null,

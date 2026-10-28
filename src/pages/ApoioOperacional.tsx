@@ -18,7 +18,8 @@ const CHAVE_FILTROS = 'travion-fila-apoio';
 let rolagemFila = 0;
 
 function lerFiltros(): FiltrosFila {
-  try { return { ...FILTROS_FILA, ...(JSON.parse(sessionStorage.getItem(CHAVE_FILTROS) ?? '{}') as Partial<FiltrosFila>) }; } catch { return FILTROS_FILA; }
+  // A fila não filtra por filial nem centro de custo: zera o que tenha ficado salvo de versões anteriores.
+  try { return { ...FILTROS_FILA, ...(JSON.parse(sessionStorage.getItem(CHAVE_FILTROS) ?? '{}') as Partial<FiltrosFila>), filial: '', centro: '' }; } catch { return FILTROS_FILA; }
 }
 
 export function ApoioOperacional() {
@@ -49,18 +50,16 @@ export function ApoioOperacional() {
   const reconhecer = () => { for (const s of novas) vistas.current?.add(s.id); setF((x) => ({ ...x })); };
 
   const opcoes = useMemo(() => {
-    const filiais = new Map<string, string>(); const centros = new Map<string, string>(); const resp = new Map<string, string>();
+    const resp = new Map<string, string>();
     for (const s of todas) {
-      if (s.retrato.filial_id) filiais.set(s.retrato.filial_id, s.retrato.filial ?? '—');
-      if (s.retrato.centro_custo_id) centros.set(s.retrato.centro_custo_id, s.retrato.centro_custo ?? '—');
       if (s.responsavel_id) resp.set(s.responsavel_id, s.responsavel_nome ?? '—');
     }
     const ord = (m: Map<string, string>) => [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
-    return { filiais: ord(filiais), centros: ord(centros), resp: ord(resp) };
+    return { resp: ord(resp) };
   }, [todas]);
 
-  // Os números dos atalhos seguem os filtros escolhidos (tipo, filial, centro, responsável e busca).
-  const filtradas = useMemo(() => filtrarSemAtalho(todas, f), [todas, f.tipo, f.filial, f.centro, f.responsavel, f.busca]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Os números dos atalhos seguem os filtros escolhidos (tipo, responsável e busca).
+  const filtradas = useMemo(() => filtrarSemAtalho(todas, f), [todas, f.tipo, f.responsavel, f.busca]); // eslint-disable-line react-hooks/exhaustive-deps
   const contagem = (a: Atalho) => filtradas.filter((s) => noAtalho(s, a, eu)).length;
 
   if (!pode('apoio.pagina')) return <Layout titulo="Apoio Operacional"><AcessoNegado /></Layout>;
@@ -108,12 +107,6 @@ export function ApoioOperacional() {
           <select className="entrada" value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value as TipoSolicitacaoDoc | '' })} aria-label="Tipo de solicitação">
             <option value="">Todos os tipos</option>
             {(Object.keys(TIPO_DOC) as TipoSolicitacaoDoc[]).map((t) => <option key={t} value={t}>{TIPO_DOC[t]}</option>)}
-          </select>
-          <select className="entrada" value={f.filial} onChange={(e) => setF({ ...f, filial: e.target.value })} aria-label="Filial">
-            <option value="">Todas as filiais</option>{opcoes.filiais.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
-          </select>
-          <select className="entrada" value={f.centro} onChange={(e) => setF({ ...f, centro: e.target.value })} aria-label="Centro de custo">
-            <option value="">Todos os centros de custo</option>{opcoes.centros.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
           </select>
           <select className="entrada" value={f.responsavel} onChange={(e) => setF({ ...f, responsavel: e.target.value })} aria-label="Responsável">
             <option value="">Todos os responsáveis</option><option value="-">Sem responsável</option>

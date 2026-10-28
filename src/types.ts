@@ -182,7 +182,8 @@ export type StatusDoc = 'enviado' | 'em_atendimento' | 'aguardando_informacao' |
 export type MotivoDevolucao = 'documento_ausente' | 'documento_ilegivel' | 'divergencia_dados' | 'informacao_incompleta' | 'outro' | 'sem_registro';
 export type UnidadeFreteDoc = 'rs_tonelada' | 'rs_viagem';
 export type TipoOperacao = 'exportacao' | 'mi_tributado' | 'mi_isento';
-export type FormaPagamento = 'cheque' | 'pagbem';
+export type FormaPagamento = 'cheque' | 'pagbem' | 'pix';
+export type TitularPix = 'proprietario' | 'motorista';
 export type Pedagio = 'sem_parar' | 'move_mais' | 'conect_car' | 'veloe' | 'nao_ha';
 export type CategoriaAnexo = 'nf' | 'evidencia_frete' | 'correcao' | 'cte' | 'mdfe' | 'outro_emitido' | 'motorista' | 'veiculo'
   | 'est_documento' | 'est_nf_carga' | 'est_comprovante' | 'est_agendamento' | 'est_tratativa' | 'est_retorno' | 'est_pagamento';
@@ -203,6 +204,8 @@ export interface SolicitacaoDoc {
   // Campos de emissão: vazios no tipo Cadastro (as telas de Cadastro não os leem).
   frete_empresa: number; frete_empresa_unidade: UnidadeFreteDoc; frete_motorista: number; frete_motorista_unidade: UnidadeFreteDoc;
   tipo_operacao: TipoOperacao | null; forma_pagamento: FormaPagamento; pedagio: Pedagio;
+  /** Só com PIX: de quem é a chave e a chave informada. */
+  pix_titular?: TitularPix | null; pix_chave?: string | null;
   exige_obs_cte: boolean; obs_cte: string | null; cte_por_nf: boolean; observacoes: string | null;
   retrato: RetratoDoc;
   // Campos do Cadastro (migração 1700); nulos nos tipos de emissão.
@@ -254,6 +257,8 @@ export interface DadosSolicitacaoDoc {
   placa: string; placas_reboque: string[];
   frete_empresa: number; frete_empresa_unidade: UnidadeFreteDoc; frete_motorista: number; frete_motorista_unidade: UnidadeFreteDoc;
   tipo_operacao: TipoOperacao | null; forma_pagamento: FormaPagamento; pedagio: Pedagio;
+  /** Só com PIX: de quem é a chave e a chave informada. */
+  pix_titular?: TitularPix | null; pix_chave?: string | null;
   exige_obs_cte: boolean; obs_cte: string | null; cte_por_nf: boolean; observacoes: string | null; chave_envio: string;
 }
 

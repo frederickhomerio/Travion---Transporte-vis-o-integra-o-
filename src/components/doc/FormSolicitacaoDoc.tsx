@@ -6,10 +6,10 @@ import { mensagemErro, type ResultadoDoc } from '../../data/api';
 import { useDoc } from '../../data/documentacao';
 import { useApp } from '../../data/store';
 import {
-  OPERACAO, PAGAMENTO, PEDAGIO, PLACA_RE, UNIDADE_DOC, avisosDuplicidade, normalizarPlaca,
+  OPERACAO, PAGAMENTO, PEDAGIO, TITULAR_PIX, PLACA_RE, UNIDADE_DOC, avisosDuplicidade, normalizarPlaca,
 } from '../../lib/documentacao';
 import { cidadeAnuncio } from '../../lib/anuncio';
-import type { Embarque, FormaPagamento, LoteErp, Pedagio, SolicitacaoDoc, TipoOperacao, UnidadeFreteDoc } from '../../types';
+import type { Embarque, FormaPagamento, LoteErp, Pedagio, TitularPix, SolicitacaoDoc, TipoOperacao, UnidadeFreteDoc } from '../../types';
 import { Alerta, Modal } from '../ui';
 import { type ArquivoLocal, SeletorArquivos, enviarArquivos } from './Comum';
 
@@ -72,6 +72,8 @@ export function FormSolicitacaoDoc({ embarque, lote, doEmbarque, aoFechar, aoEnv
   const [uMot, setUMot] = useState<UnidadeFreteDoc>(unidadeFin(fin?.unidade_frete));
   const [operacao, setOperacao] = useState<TipoOperacao | ''>('');
   const [pagamento, setPagamento] = useState<FormaPagamento | ''>('');
+  const [pixTitular, setPixTitular] = useState<TitularPix | ''>('');
+  const [pixChave, setPixChave] = useState('');
   const [pedagio, setPedagio] = useState<Pedagio | ''>('');
   const [exigeObs, setExigeObs] = useState<SimNao>('');
   const [obsCte, setObsCte] = useState('');
@@ -98,6 +100,8 @@ export function FormSolicitacaoDoc({ embarque, lote, doEmbarque, aoFechar, aoEnv
     operacao: inicial && !operacao ? 'Escolha o tipo de operação.' : null,
     evid: inicial && !evid.length ? 'Anexe a evidência do frete.' : null,
     pagamento: !pagamento ? 'Escolha a forma de pagamento.' : null,
+    pixTitular: pagamento === 'pix' && !pixTitular ? 'Escolha de quem é a chave PIX.' : null,
+    pixChave: pagamento === 'pix' && !pixChave.trim() ? 'Informe a chave PIX.' : null,
     pedagio: !pedagio ? 'Escolha o pedágio.' : null,
     exigeObs: !exigeObs ? 'Responda Sim ou Não.' : null,
     obsCte: exigeObs === 'sim' && !obsCte.trim() ? 'Escreva a observação que o cliente exige.' : null,
@@ -119,6 +123,7 @@ export function FormSolicitacaoDoc({ embarque, lote, doEmbarque, aoFechar, aoEnv
       const r: ResultadoDoc = await api.doc.criar(embarque.id, {
         placa: pl, placas_reboque: rbs, frete_empresa: vEmp!, frete_empresa_unidade: uEmp, frete_motorista: vMot!, frete_motorista_unidade: uMot,
         tipo_operacao: inicial ? (operacao as TipoOperacao) : null, forma_pagamento: pagamento as FormaPagamento, pedagio: pedagio as Pedagio,
+        ...(pagamento === 'pix' ? { pix_titular: pixTitular as TitularPix, pix_chave: pixChave.trim() } : {}),
         exige_obs_cte: exigeObs === 'sim', obs_cte: exigeObs === 'sim' ? obsCte.trim() : null, cte_por_nf: ctePorNf === 'sim',
         observacoes: obs.trim() || null, chave_envio: chave,
       }, anexos);
@@ -190,6 +195,15 @@ export function FormSolicitacaoDoc({ embarque, lote, doEmbarque, aoFechar, aoEnv
         {inicial && <><SeletorArquivos rotulo="Evidência do frete" categoria="evidencia_frete" itens={arquivos} aoMudar={setArquivos} obrigatorio ajuda="Print ou PDF com o valor combinado; pode anexar vários." />{msg('evid')}</>}
 
         <Opcoes rotulo="Forma de pagamento" valor={pagamento} opcoes={PAGAMENTO} aoMudar={setPagamento} />{msg('pagamento')}
+        {pagamento === 'pix' && (
+          <div className="fsd-pix">
+            <Opcoes rotulo="Chave PIX de quem?" valor={pixTitular} opcoes={TITULAR_PIX} aoMudar={setPixTitular} />{msg('pixTitular')}
+            <label className="campo"><span>{pixTitular ? TITULAR_PIX[pixTitular] : 'Chave PIX'} *</span>
+              <input className="entrada" maxLength={140} value={pixChave} onChange={(e) => setPixChave(e.target.value)} placeholder="CPF, CNPJ, telefone, e-mail ou chave aleatória" autoComplete="off" />
+              {msg('pixChave')}
+            </label>
+          </div>
+        )}
         <Opcoes rotulo="Pedágio" valor={pedagio} opcoes={PEDAGIO} aoMudar={setPedagio} />{msg('pedagio')}
         <SimNaoCampo rotulo="Cliente exige observação no CT-e?" valor={exigeObs} aoMudar={setExigeObs} />{msg('exigeObs')}
         {exigeObs === 'sim' && (

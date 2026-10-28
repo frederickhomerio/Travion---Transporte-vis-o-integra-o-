@@ -3,25 +3,30 @@
 // Os cálculos ficam em lib/painelOperacional.ts; o servidor aplica permissão e escopo na consulta.
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GraficoLinha, MapaCalorGrade } from '../../components/analise/Graficos';
 import { Layout } from '../../components/Layout';
 import { AcessoNegado, Alerta, Carregando, Icone, Segmentado } from '../../components/ui';
+import { useDoc } from '../../data/documentacao';
 import { usePainel } from '../../data/painel';
 import { useApp } from '../../data/store';
 import { intervaloPeriodo } from '../../lib/dashboard';
-import { MOTIVO_DEVOLUCAO, duracao } from '../../lib/documentacao';
+import { MOTIVO_DEVOLUCAO, STATUS_DOC, duracao, fmtPlaca } from '../../lib/documentacao';
+import { documentosEstadia, fmtReais, periodoEstadia } from '../../lib/estadia';
 import { fmtDataCurta, fmtDataHora, fmtHora, fmtNum, fmtPct, hojeSP } from '../../lib/formato';
 import {
   DIAS_CURTOS, DIAS_SEMANA, type FiltrosPainel, type LinhaChamado, OPERACOES, type SituacaoPrazo, TIPOS_DEMANDA, type TipoDemanda, type VisaoEvolucao,
   dataSP, evolucao, filaAtual, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo, situacaoPrazo,
 } from '../../lib/painelOperacional';
-import type { MotivoDevolucao } from '../../types';
+import type { MotivoDevolucao, StatusDoc } from '../../types';
+import { ResultadoPill } from '../Estadia';
 import { AbasAnalise } from './AbasAnalise';
 
-type IdQuadro = 'filas' | 'equipe' | 'mapa' | 'evolucao' | 'resumo';
+type IdQuadro = 'filas' | 'equipe' | 'estadias' | 'mapa' | 'evolucao' | 'resumo';
 const QUADROS: Array<{ id: IdQuadro; rotulo: string }> = [
   { id: 'filas', rotulo: 'Filas por operação' },
   { id: 'equipe', rotulo: 'Atendimento por colaborador' },
+  { id: 'estadias', rotulo: 'Estadias por situação' },
   { id: 'mapa', rotulo: 'Mapa de calor' },
   { id: 'evolucao', rotulo: 'Evolução das demandas' },
   { id: 'resumo', rotulo: 'Resumo geral' },
@@ -129,6 +134,7 @@ function Painel({ perfilId }: { perfilId: string }) {
     switch (id) {
       case 'filas': return <QFilas key={id} c={c} aoExpandir={expandir} />;
       case 'equipe': return <QEquipe key={id} c={c} aoExpandir={expandir} />;
+      case 'estadias': return <QEstadias key={id} c={c} aoExpandir={expandir} />;
       case 'mapa': return <QMapa key={id} c={c} aoExpandir={expandir} />;
       case 'evolucao': return <QEvolucao key={id} c={c} aoExpandir={expandir} />;
       case 'resumo': return <QResumo key={id} c={c} aoExpandir={expandir} />;
@@ -549,6 +555,104 @@ function QResumo({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
+// Estadias por situação: barras com a quantidade em cada situação; o clique abre a relação analítica.
+// ---------------------------------------------------------------------------
+/** Ordem do fluxo da Estadia (não é ranking): fila, atendimento, cliente e finais. */
+const SITUACOES_ESTADIA: StatusDoc[] = [
+  'enviado', 'em_atendimento', 'aguardando_informacao', 'correcao_recebida', 'aguardando_cliente', 'pago_pendencia',
+  'aprovada', 'aprovada_parcial', 'encerrado', 'cancelado',
+];
+
+function QEstadias({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
+  const { estado: doc } = useDoc();
+  const { pode } = useApp();
+  const nav = useNavigate();
+  const [aberta, setAberta] = useState<StatusDoc | null>(null);
+  const tv = c.modo === 'tv';
+  const estadias = c.grupo.filter((l) => l.s.tipo === 'estadia');
+  const porSit = new Map<StatusDoc, LinhaChamado[]>(SITUACOES_ESTADIA.map((st) => [st, []]));
+  for (const l of estadias) { const g = porSit.get(l.s.status); if (g) g.push(l); else porSit.set(l.s.status, [l]); }
+  const barras = [...porSit.entries()];
+  const max = Math.max(1, ...barras.map(([, g]) => g.length));
+  const total = estadias.length;
+  const selecionadas = aberta ? (porSit.get(aberta) ?? []) : [];
+  const detalhe = (id: string) => doc.solicitacoes[id];
+  const soma = (k: 'est_valor_calculado' | 'est_valor_aprovado' | 'est_valor_pago') =>
+    selecionadas.reduce((t, l) => t + (detalhe(l.s.id)?.[k] ?? 0), 0);
+  const abrir = (id: string) => nav(pode('estadia.ver') ? `/estadia/consultar?s=${id}` : `/apoio/${id}`);
+  const fmtV = (v: number | null | undefined) => (v == null ? '—' : fmtReais(v));
+
+  return (
+    <Quadro id="estadias" titulo="Estadias por situação" modo={c.modo} aoExpandir={aoExpandir}
+      sub={`Estadias enviadas de ${c.txtPeriodo} · situação agora${tv ? '' : ' · clique numa barra para ver a relação'}`}>
+      {!c.pref.tipos.includes('estadia') ? <p className="po-vazio">Marque o tipo Estadia nos filtros para ver este quadro.</p> : (
+        <>
+          <div className="po-est-total"><strong>{fmtNum(total)}</strong> {total === 1 ? 'estadia no período' : 'estadias no período'}</div>
+          <div className="po-est-barras" role="list" aria-label="Quantidade de estadias por situação">
+            {barras.map(([st, g]) => {
+              const pct = total ? (g.length / total) * 100 : 0;
+              return (
+                <button key={st} type="button" role="listitem" className={`po-est-barra${aberta === st ? ' ativa' : ''}${aberta && aberta !== st ? ' apagada' : ''}`}
+                  disabled={!g.length || tv} aria-expanded={aberta === st} onClick={() => setAberta(aberta === st ? null : st)}
+                  title={`${STATUS_DOC[st]}: ${g.length} ${g.length === 1 ? 'estadia' : 'estadias'} (${fmtPct(pct)} do total)`}>
+                  <span className="po-est-rot">{STATUS_DOC[st]}</span>
+                  <span className="po-est-trilho"><span className="po-est-valor" style={{ width: g.length ? `max(4px, ${(g.length / max) * 100}%)` : 0 }} /></span>
+                  <span className="po-est-n"><strong>{g.length}</strong>{total > 0 && <small>{fmtPct(pct)}</small>}</span>
+                </button>
+              );
+            })}
+          </div>
+          {!tv && aberta && (
+            <div className="po-est-det">
+              <div className="po-est-det-cab">
+                <strong>{STATUS_DOC[aberta]} · {selecionadas.length} {selecionadas.length === 1 ? 'estadia' : 'estadias'}</strong>
+                <button type="button" className="btn sutil peq" onClick={() => setAberta(null)}>Fechar relação</button>
+              </div>
+              <div className="rolagem-x">
+                <table className="tabela po-est-tab">
+                  <thead><tr>
+                    <th>Estadia e placa</th><th>Cliente</th><th>Documento</th><th>Período</th><th className="n">Calculado</th><th className="n">Aprovado</th><th className="n">Pago</th>
+                    <th>Resultado</th><th>Solicitante</th><th>Responsável</th><th>Enviada</th><th><span className="sr">Ação</span></th>
+                  </tr></thead>
+                  <tbody>
+                    {[...selecionadas].sort((a, b) => Date.parse(a.s.enviado_em) - Date.parse(b.s.enviado_em)).map((l) => {
+                      const d = detalhe(l.s.id);
+                      return (
+                        <tr key={l.s.id}>
+                          <td><strong>{d?.est_codigo ?? `Nº ${l.s.numero}`}</strong>{d?.placa && <small className="po-est-placa">Placa {fmtPlaca(d.placa)}</small>}</td>
+                          <td>{d?.retrato.cliente ?? '—'}</td>
+                          <td>{d ? documentosEstadia(d) : '—'}</td>
+                          <td className="po-est-periodo">{d ? periodoEstadia(d) : '—'}</td>
+                          <td className="n">{fmtV(d?.est_valor_calculado)}</td>
+                          <td className="n">{fmtV(d?.est_valor_aprovado)}</td>
+                          <td className="n">{fmtV(d?.est_valor_pago)}</td>
+                          <td>{d?.est_resultado ? <ResultadoPill r={d.est_resultado} /> : <span className="suave">—</span>}</td>
+                          <td>{l.s.solicitante_nome}</td>
+                          <td>{l.s.responsavel_nome ?? <span className="suave">—</span>}</td>
+                          <td>{fmtDataHora(l.s.enviado_em)}</td>
+                          <td><button type="button" className="btn peq" onClick={() => abrir(l.s.id)}>Abrir</button></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot><tr>
+                    <th colSpan={4}>Total · {selecionadas.length} {selecionadas.length === 1 ? 'estadia' : 'estadias'}</th>
+                    <td className="n"><strong>{fmtReais(soma('est_valor_calculado'))}</strong></td>
+                    <td className="n"><strong>{fmtReais(soma('est_valor_aprovado'))}</strong></td>
+                    <td className="n"><strong>{fmtReais(soma('est_valor_pago'))}</strong></td>
+                    <td colSpan={5} />
+                  </tr></tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </Quadro>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sincronização, Modo TV
 // ---------------------------------------------------------------------------
 function Sincronia({ ultimaSync, falha, tempoReal }: { ultimaSync: number | null; falha: boolean; tempoReal: boolean }) {
@@ -621,7 +725,7 @@ function ModoTv({ quadros, render, cabecalho, sinc, aoSair }: {
     try { await el.requestFullscreen(); } catch { setAviso('O navegador bloqueou a tela inteira. Use a tecla F11 para ocupar a tela toda.'); }
   };
   // Filas e evolução lado a lado; equipe numa linha inteira; mapa e resumo lado a lado.
-  const ordem = (['filas', 'evolucao', 'equipe', 'mapa', 'resumo'] as IdQuadro[]).filter((id) => quadros.includes(id));
+  const ordem = (['filas', 'evolucao', 'equipe', 'estadias', 'mapa', 'resumo'] as IdQuadro[]).filter((id) => quadros.includes(id));
   return (
     <div className="tv" ref={caixa} data-n={ordem.length}>
       <header className="tv-cab">

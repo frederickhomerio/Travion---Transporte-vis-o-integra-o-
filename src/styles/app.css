@@ -386,7 +386,7 @@ textarea.entrada { min-height: 80px; resize: vertical; }
   .controles-lista + .ferramentas { margin-left: 0; }
 }
 
-/* Dashboard Operacional (Modelo A) */
+/* Dashboard Embarques (Modelo A) */
 .dash { display: flex; flex-direction: column; gap: 18px; }
 .dash-topo { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; justify-content: space-between; }
 .dash-periodo { font-weight: 600; color: var(--cinza-700); }
@@ -711,7 +711,7 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .ao-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 0.85rem; color: var(--texto-suave); }
 .ao-sync-falha { color: var(--vermelho-700); font-weight: 700; }
 .ao-novas { border: 1px solid var(--dourado); background: #fbf3dc; color: var(--ambar-800); border-radius: 999px; padding: 4px 12px; font-weight: 700; cursor: pointer; }
-.ao-filtros { display: grid; grid-template-columns: minmax(200px, 2fr) repeat(4, minmax(130px, 1fr)); gap: 8px; }
+.ao-filtros { display: grid; grid-template-columns: minmax(200px, 2fr) repeat(2, minmax(160px, 1fr)); gap: 8px; }
 .ao-tabela-wrap { overflow-x: auto; }
 .ao-tabela { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .ao-tabela th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cinza-600); padding: 10px 12px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
@@ -1266,3 +1266,43 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .pc-legenda i.faixa-amarelo { background: var(--faixa-amarelo); }
 .pc-legenda i.faixa-verde { background: var(--faixa-verde); }
 .lote-erp { display: block; font-size: 0.72rem; font-weight: 700; color: var(--dourado-escuro); margin-top: 2px; font-family: var(--mono); }
+.fsd-pix { border-left: 3px solid var(--dourado); padding-left: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+/* Dashboard Embarques · Modo TV: o mesmo dashboard em tela fixa, ampliado conforme a largura da tela */
+.dash-tv { font-size: 16px; }
+.dash-tv-corpo { flex: 1; min-height: 0; overflow-y: auto; zoom: 1.15; }
+@media (min-width: 1600px) { .dash-tv-corpo { zoom: 1.35; } }
+@media (min-width: 2400px) { .dash-tv-corpo { zoom: 1.8; } }
+@media (max-width: 900px) { .dash-tv-corpo { zoom: 1; } .dash-tv .tv-cab { flex-wrap: wrap; } }
+
+/* Painel Operacional · Estadias por situação (barras horizontais na ordem do fluxo; o clique abre a relação) */
+.po-est-total { font-size: 0.9rem; color: var(--cinza-700); }
+.po-est-total strong { font-family: var(--fonte-titulo); font-size: 1.5rem; color: var(--vinho-escuro); margin-right: 4px; }
+.po-est-barras { display: flex; flex-direction: column; gap: 2px; }
+.po-est-barra { display: grid; grid-template-columns: 210px minmax(0, 1fr) 92px; gap: 12px; align-items: center; width: 100%; padding: 6px 8px;
+  border: 0; border-radius: 8px; background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.po-est-barra:hover:not(:disabled) { background: var(--cinza-100); }
+.po-est-barra:focus-visible { outline: 2px solid var(--vinho); outline-offset: 1px; }
+.po-est-barra:disabled { cursor: default; }
+.po-est-barra.ativa { background: var(--vinho-50, #f7eef0); }
+.po-est-rot { font-size: 0.88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.po-est-trilho { height: 18px; background: var(--cinza-100); border-radius: 0 4px 4px 0; overflow: hidden; }
+.po-est-valor { display: block; height: 100%; background: var(--vinho); border-radius: 0 4px 4px 0; transition: opacity 0.15s; }
+.po-est-barra.apagada .po-est-valor { opacity: 0.35; }
+.po-est-barra:disabled .po-est-rot { color: var(--cinza-600); font-weight: 500; }
+.po-est-n { display: flex; gap: 6px; align-items: baseline; justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.po-est-n strong { font-size: 1rem; }
+.po-est-n small { font-size: 0.75rem; color: var(--cinza-600); }
+.po-est-det { border-top: 1px solid var(--borda); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.po-est-det-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.po-est-tab td, .po-est-tab th { white-space: nowrap; font-size: 0.85rem; }
+.po-est-tab .po-est-periodo { white-space: normal; min-width: 180px; }
+.tv .po-est-barra { padding: 0.25em 0.4em; grid-template-columns: 14em minmax(0, 1fr) 6em; }
+.tv .po-est-rot { font-size: 0.95em; }
+.tv .po-est-trilho { height: 1.2em; }
+.tv .po-est-n strong { font-size: 1.2em; }
+@media (max-width: 600px) {
+  .po-est-barra { grid-template-columns: minmax(0, 1fr) 72px; row-gap: 4px; }
+  .po-est-trilho { grid-column: 1 / -1; grid-row: 2; }
+}
+.po-est-placa { display: block; font-size: 0.75rem; color: var(--cinza-600); }

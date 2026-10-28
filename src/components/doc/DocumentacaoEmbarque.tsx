@@ -6,7 +6,7 @@ import { mensagemErro } from '../../data/api';
 import { useDetalheDoc, useDoc } from '../../data/documentacao';
 import { useApp } from '../../data/store';
 import {
-  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, OPERACAO, PAGAMENTO, PEDAGIO, TIPO_DOC, acaoDocumentacao, fmtFrete, fmtPlaca, rotaDoc, tempoDoc, vezDe,
+  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, OPERACAO, textoPagamento, PEDAGIO, TIPO_DOC, acaoDocumentacao, fmtFrete, fmtPlaca, rotaDoc, tempoDoc, vezDe,
 } from '../../lib/documentacao';
 import { fmtDataAsHora } from '../../lib/formato';
 import type { Embarque, SolicitacaoDoc } from '../../types';
@@ -215,7 +215,7 @@ function SolicitacaoComercial({ s, aoVoltar }: { s: SolicitacaoDoc; aoVoltar: ()
           <LinhaInfo rot="Frete empresa" valor={fmtFrete(s.frete_empresa, s.frete_empresa_unidade)} />
           <LinhaInfo rot="Frete motorista" valor={fmtFrete(s.frete_motorista, s.frete_motorista_unidade)} />
           {s.tipo_operacao && <LinhaInfo rot="Tipo de operação" valor={OPERACAO[s.tipo_operacao]} />}
-          <LinhaInfo rot="Pagamento" valor={PAGAMENTO[s.forma_pagamento]} />
+          <LinhaInfo rot="Pagamento" valor={textoPagamento(s)} />
           <LinhaInfo rot="Pedágio" valor={PEDAGIO[s.pedagio]} />
           <LinhaInfo rot="Observação no CT-e" valor={s.exige_obs_cte ? s.obs_cte : 'Não exigida'} />
           <LinhaInfo rot="Um CT-e por NF" valor={s.cte_por_nf ? 'Sim' : 'Não'} />

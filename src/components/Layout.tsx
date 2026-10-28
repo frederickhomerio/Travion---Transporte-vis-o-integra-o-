@@ -52,7 +52,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
           {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <Item to="/cadastro" icone="cadastro" rotulo="Cadastro" recolhido={r} />}
           {(pode('estadia.solicitar') || pode('estadia.ver')) && <Item to="/estadia" icone="relogio" rotulo="Estadia" recolhido={r} />}
           <div className="grupo"><span className="rotulo">Análise</span></div>
-          <Item to="/analise" end icone="painel" rotulo="Dashboard Operacional" recolhido={r} />
+          <Item to="/analise" end icone="painel" rotulo="Dashboard Embarques" recolhido={r} />
           {pode('analise.operacional') && <Item to="/analise/operacional" icone="analise" rotulo="Painel Operacional" recolhido={r} />}
           {admin && <><div className="grupo"><span className="rotulo">Gestão</span></div><Item to="/admin" icone="config" rotulo="Administração" recolhido={r} /></>}
         </nav>

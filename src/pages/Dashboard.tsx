@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState, useMemo } from 'react';
 import { Layout } from '../components/Layout';
 import { AbasAnalise } from './analise/AbasAnalise';
-import { Alerta, Carregando, EstadoVazio, Segmentado } from '../components/ui';
+import { Alerta, Carregando, EstadoVazio, Icone, Segmentado } from '../components/ui';
 import { mensagemErro } from '../data/api';
 import { linhasDaData, useApp, useIndices } from '../data/store';
 import { nome } from '../lib/cadastros';
@@ -35,6 +35,7 @@ export function Dashboard() {
   const [todosClientes, setTodosClientes] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [tv, setTv] = useState(false);
 
   const { inicio, fim } = intervaloPeriodo(hoje, tipo);
   const dias = useMemo(() => diasDoIntervalo(inicio, fim, hoje), [inicio, fim, hoje]);
@@ -82,9 +83,7 @@ export function Dashboard() {
     .map(([id, x]) => ({ id, nome: nome(idx.cliente, id), x }))
     .sort((a, b) => (b.x.faturamento ?? b.x.projetado_t) - (a.x.faturamento ?? a.x.projetado_t));
 
-  return (
-    <Layout titulo="Análise · Dashboard Operacional">
-      <AbasAnalise />
+  const conteudo = (
       <div className="dash">
         <div className="dash-topo">
           <span className="dash-periodo">{tituloData}</span>
@@ -106,6 +105,7 @@ export function Dashboard() {
                 <option value="mes">Mês · {fmtDataCurta(intervaloPeriodo(hoje, 'mes').inicio)} a {fmtDataCurta(intervaloPeriodo(hoje, 'mes').fim)}</option>
               </select>
             </label>
+            {!tv && <button type="button" className="btn" onClick={() => setTv(true)}><Icone nome="painel" tam={16} />Modo TV</button>}
           </div>
         </div>
 
@@ -208,7 +208,52 @@ export function Dashboard() {
           </>
         )}
       </div>
+  );
+
+  if (tv) return <TvDashboard aoSair={() => setTv(false)}>{conteudo}</TvDashboard>;
+  return (
+    <Layout titulo="Análise · Dashboard Embarques">
+      <AbasAnalise />
+      {conteudo}
     </Layout>
+  );
+}
+
+/** Modo TV do Dashboard Embarques: tela fixa, letras maiores, atualiza sozinho com o tempo real das posições. */
+function TvDashboard({ children, aoSair }: { children: ReactNode; aoSair: () => void }) {
+  const caixa = useRef<HTMLDivElement>(null);
+  const [cheia, setCheia] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  useEffect(() => {
+    const mudou = () => setCheia(!!document.fullscreenElement);
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.fullscreenElement) aoSair(); };
+    document.addEventListener('fullscreenchange', mudou);
+    window.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('fullscreenchange', mudou);
+      window.removeEventListener('keydown', esc);
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    };
+  }, [aoSair]);
+  const telaCheia = async () => {
+    setAviso(null);
+    if (document.fullscreenElement) { await document.exitFullscreen().catch(() => undefined); return; }
+    const el = caixa.current;
+    if (!el?.requestFullscreen) { setAviso('Este navegador não permite tela inteira por aqui. Use a tecla F11.'); return; }
+    try { await el.requestFullscreen(); } catch { setAviso('O navegador bloqueou a tela inteira. Use a tecla F11 para ocupar a tela toda.'); }
+  };
+  return (
+    <div className="tv dash-tv" ref={caixa}>
+      <header className="tv-cab">
+        <div><strong className="tv-titulo">Dashboard Embarques</strong><span className="tv-contexto">Posições do período · atualiza sozinho</span></div>
+        <div className="tv-acoes">
+          <button className="btn" onClick={() => void telaCheia()}>{cheia ? 'Sair da tela inteira' : 'Tela inteira'}</button>
+          <button className="btn primario" onClick={aoSair}>Voltar ao dashboard</button>
+        </div>
+      </header>
+      {aviso && <Alerta tipo="aviso">{aviso}</Alerta>}
+      <div className="dash-tv-corpo">{children}</div>
+    </div>
   );
 }
 
