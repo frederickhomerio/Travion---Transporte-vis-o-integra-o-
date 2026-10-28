@@ -5,7 +5,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { GraficoLinha, MapaCalorGrade } from '../../components/analise/Graficos';
 import { Layout } from '../../components/Layout';
-import { AcessoNegado, Alerta, Carregando, Segmentado } from '../../components/ui';
+import { AcessoNegado, Alerta, Carregando, Icone, Segmentado } from '../../components/ui';
 import { usePainel } from '../../data/painel';
 import { useApp } from '../../data/store';
 import { intervaloPeriodo } from '../../lib/dashboard';
@@ -32,7 +32,7 @@ const ROTULO_TIPO = Object.fromEntries(TIPOS_DEMANDA.map((t) => [t.id, t.rotulo]
 type Modo = 'normal' | 'expandido' | 'tv';
 
 interface Preferencias { atalho: Atalho; inicio: string; fim: string; tipos: TipoDemanda[]; filial: string; centro: string; colaborador: string;
-  solicitante: string; visaoEvol: VisaoEvolucao; tiposEvol: TipoDemanda[]; tv: IdQuadro[]; passoMapa: 1 | 2 }
+  solicitante: string; visaoEvol: VisaoEvolucao; tiposEvol: TipoDemanda[]; tv: IdQuadro[]; passoMapa: 1 | 2; filtrosRecolhidos: boolean }
 
 function periodoDoAtalho(a: Atalho, hoje: string, atual: { inicio: string; fim: string }) {
   if (a === 'hoje') return { inicio: hoje, fim: hoje };
@@ -43,7 +43,7 @@ function periodoDoAtalho(a: Atalho, hoje: string, atual: { inicio: string; fim: 
 
 function lerPreferencias(chave: string, hoje: string): Preferencias {
   const padrao: Preferencias = { atalho: 'mes', ...intervaloPeriodo(hoje, 'mes'), tipos: TIPOS_ATIVOS, filial: '', centro: '', colaborador: '',
-    solicitante: '', visaoEvol: 'dia', tiposEvol: TIPOS_ATIVOS, tv: ['filas', 'equipe', 'evolucao'], passoMapa: 2 };
+    solicitante: '', visaoEvol: 'dia', tiposEvol: TIPOS_ATIVOS, tv: ['filas', 'equipe', 'evolucao'], passoMapa: 2, filtrosRecolhidos: false };
   try {
     const p = JSON.parse(localStorage.getItem(chave) ?? 'null') as Partial<Preferencias> | null;
     if (!p) return padrao;
@@ -159,7 +159,7 @@ function Painel({ perfilId }: { perfilId: string }) {
         {dados && (
           <>
             {!expandido && (
-              <Filtros pref={pref} mudar={mudar} hoje={hoje} filiais={filiais} centros={centros} colaboradores={colaboradores} solicitantes={solicitantes} />
+              <Filtros pref={pref} mudar={mudar} hoje={hoje} txtPeriodo={txtPeriodo} txtTipos={txtTipos} filiais={filiais} centros={centros} colaboradores={colaboradores} solicitantes={solicitantes} />
             )}
             <p className="po-base pequeno">
               <strong>Filas:</strong> situação agora ({fmtHora(new Date(agora).toISOString())}). <strong>Demais quadros:</strong> chamados enviados de {txtPeriodo}, com a situação até agora.
@@ -209,14 +209,42 @@ function SeletorTipos({ valor, aoMudar, rotulo }: { valor: TipoDemanda[]; aoMuda
   );
 }
 
-function Filtros({ pref, mudar, hoje, filiais, centros, colaboradores, solicitantes }: {
-  pref: Preferencias; mudar: (p: Partial<Preferencias>) => void; hoje: string;
+function Filtros({ pref, mudar, hoje, txtPeriodo, txtTipos, filiais, centros, colaboradores, solicitantes }: {
+  pref: Preferencias; mudar: (p: Partial<Preferencias>) => void; hoje: string; txtPeriodo: string; txtTipos: string;
   filiais: Array<{ id: string; nome: string }>; centros: Array<{ id: string; nome: string }>;
   colaboradores: Array<[string, string]>; solicitantes: Array<[string, string]>;
 }) {
   const atalho = (a: Atalho) => mudar({ atalho: a, ...periodoDoAtalho(a, hoje, pref) });
+  const nome = (lista: Array<[string, string]>, id: string) => lista.find(([i]) => i === id)?.[1];
+  // Resumo do que está filtrado, para quando os filtros estão recolhidos.
+  const extras = [
+    pref.filial && (pref.filial === '-' ? 'Sem filial' : filiais.find((f) => f.id === pref.filial)?.nome),
+    pref.centro && (pref.centro === '-' ? 'Sem centro de custo' : centros.find((c) => c.id === pref.centro)?.nome),
+    pref.colaborador && nome(colaboradores, pref.colaborador),
+    pref.solicitante && nome(solicitantes, pref.solicitante),
+  ].filter(Boolean) as string[];
+  const resumo = (
+    <span className="po-filtros-resumo">
+      <strong>{txtPeriodo}</strong> · {txtTipos}{extras.length ? ` · ${extras.join(' · ')}` : ''}
+    </span>
+  );
+  if (pref.filtrosRecolhidos) {
+    return (
+      <section className="cartao po-filtros recolhido" aria-label="Filtros do painel (recolhidos)">
+        <div className="po-filtros-cab">
+          <span className="po-filtros-tit"><Icone nome="filtro" tam={16} />Filtros</span>
+          {resumo}
+          <button type="button" className="btn sutil peq" aria-expanded={false} onClick={() => mudar({ filtrosRecolhidos: false })}>Mostrar filtros</button>
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="cartao po-filtros" aria-label="Filtros do painel">
+      <div className="po-filtros-cab">
+        <span className="po-filtros-tit"><Icone nome="filtro" tam={16} />Filtros</span>
+        <button type="button" className="btn sutil peq" aria-expanded onClick={() => mudar({ filtrosRecolhidos: true })}>Recolher filtros</button>
+      </div>
       <div className="po-filtros-linha">
         <Segmentado rotulo="Período" valor={pref.atalho === 'personalizado' ? ('' as Atalho) : pref.atalho} aoMudar={atalho}
           opcoes={[{ valor: 'hoje', rotulo: 'Hoje' }, { valor: 'semana', rotulo: 'Semana' }, { valor: 'mes', rotulo: 'Mês' }]} />

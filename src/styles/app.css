@@ -1046,3 +1046,30 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
   .po-filtros-linha > .segmentado { flex: 1 1 100%; }
   .po-topo-acoes { width: 100%; justify-content: space-between; }
 }
+
+/* ---------- Menu lateral recolhível (só ícones) ---------- */
+.lateral { transition: width 0.18s ease; z-index: 25; }
+.lateral-alternar {
+  position: absolute; top: 26px; right: -13px; z-index: 5; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; padding: 0; cursor: pointer;
+  background: #fff; color: var(--vinho); border: 1px solid var(--cinza-200, #e6dfd8); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  opacity: 0; transition: opacity 0.15s ease;
+}
+/* O botão aparece ao passar o mouse sobre o menu (e ao navegar pelo teclado). */
+.lateral:hover .lateral-alternar, .lateral-alternar:focus-visible { opacity: 1; }
+@media (hover: none) { .lateral-alternar { opacity: 1; } }
+.menu-recolhido .lateral { width: 72px; }
+.menu-recolhido .lateral .rotulo { display: none; }
+.menu-recolhido .marca { justify-content: center; padding: 20px 0 16px; }
+.menu-recolhido .nav { padding: 6px 12px; }
+.menu-recolhido .nav a { justify-content: center; padding: 0; }
+.menu-recolhido .nav .grupo { padding: 10px 0 4px; margin: 4px 6px 0; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.menu-recolhido .lateral-rodape { padding: 12px 0 16px; display: flex; justify-content: center; }
+.menu-recolhido .lateral-sair { padding: 0 !important; margin-top: 0 !important; width: 40px; justify-content: center; }
+
+/* ---------- Filtros recolhíveis do Painel Operacional ---------- */
+.po-filtros-cab { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.po-filtros-cab > .btn { margin-left: auto; }
+.po-filtros-tit { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--vinho); font-size: 0.88rem; }
+.po-filtros-resumo { color: var(--cinza-600); font-size: 0.86rem; min-width: 0; }
+.po-filtros.recolhido { padding: 10px 16px; }

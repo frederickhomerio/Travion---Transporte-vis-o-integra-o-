@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { PERFIS_PREVIA } from '../data/localApi';
 import { useApp } from '../data/store';
@@ -6,6 +6,17 @@ import { ROTULO_PAPEL } from '../lib/formato';
 import { NovaVersao } from './NovaVersao';
 import { Sino } from './doc/Sino';
 import { Icone, Logo } from './ui';
+
+const CHAVE_MENU = 'travion-menu-recolhido';
+
+/** Item do menu lateral: com o menu recolhido fica só o ícone, e o nome aparece na dica. */
+function Item({ to, end, icone, rotulo, recolhido }: { to: string; end?: boolean; icone: string; rotulo: string; recolhido: boolean }) {
+  return (
+    <NavLink to={to} end={end} title={recolhido ? rotulo : undefined} aria-label={recolhido ? rotulo : undefined}>
+      <Icone nome={icone} /><span className="rotulo">{rotulo}</span>
+    </NavLink>
+  );
+}
 
 const ROTULO_CONEXAO = {
   conectando: 'Conectando…',
@@ -19,27 +30,39 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
   const nav = useNavigate();
   const s = estado.sessao!;
   const admin = (['usuarios.gerenciar', 'permissoes.gerenciar', 'cadastros.gerenciar', 'configuracoes.gerenciar', 'importacao.executar'] as const).some(pode);
+  const [recolhido, setRecolhido] = useState(() => { try { return localStorage.getItem(CHAVE_MENU) === '1'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem(CHAVE_MENU, recolhido ? '1' : '0'); } catch { /* preferência local */ } }, [recolhido]);
+  const r = recolhido;
 
   return (
-    <div className="app">
+    <div className={`app${r ? ' menu-recolhido' : ''}`}>
       <aside className="lateral">
-        <div className="marca"><Logo /><div>TRAVION<small>by Transpanorama</small></div></div>
+        <div className="marca"><Logo /><div className="rotulo">TRAVION<small>by Transpanorama</small></div></div>
+        <button type="button" className="lateral-alternar" onClick={() => setRecolhido(!r)}
+          aria-label={r ? 'Expandir menu' : 'Recolher menu'} title={r ? 'Expandir menu' : 'Recolher menu'} aria-expanded={!r}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d={r ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6'} />
+          </svg>
+        </button>
         <nav className="nav" aria-label="Principal">
-          <NavLink to="/" end><Icone nome="lista" />Lista de Fretes</NavLink>
-          {pode('posicoes.pagina') && <NavLink to="/posicoes"><Icone nome="caminhao" />Posições de Embarque</NavLink>}
-          {pode('compartilhamento.preparar') && <NavLink to="/posicao-cliente"><Icone nome="cliente" />Posição do Cliente</NavLink>}
-          {pode('apoio.pagina') && <NavLink to="/apoio"><Icone nome="lista" />Apoio Operacional</NavLink>}
-          {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <NavLink to="/cadastro"><Icone nome="cadastro" />Cadastro</NavLink>}
-          <div className="grupo">Análise</div>
-          <NavLink to="/analise" end><Icone nome="painel" />Dashboard Operacional</NavLink>
-          {pode('analise.operacional') && <NavLink to="/analise/operacional"><Icone nome="analise" />Painel Operacional</NavLink>}
-          {admin && <><div className="grupo">Gestão</div><NavLink to="/admin"><Icone nome="config" />Administração</NavLink></>}
+          <Item to="/" end icone="lista" rotulo="Lista de Fretes" recolhido={r} />
+          {pode('posicoes.pagina') && <Item to="/posicoes" icone="caminhao" rotulo="Posições de Embarque" recolhido={r} />}
+          {pode('compartilhamento.preparar') && <Item to="/posicao-cliente" icone="cliente" rotulo="Posição do Cliente" recolhido={r} />}
+          {pode('apoio.pagina') && <Item to="/apoio" icone="lista" rotulo="Apoio Operacional" recolhido={r} />}
+          {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <Item to="/cadastro" icone="cadastro" rotulo="Cadastro" recolhido={r} />}
+          <div className="grupo"><span className="rotulo">Análise</span></div>
+          <Item to="/analise" end icone="painel" rotulo="Dashboard Operacional" recolhido={r} />
+          {pode('analise.operacional') && <Item to="/analise/operacional" icone="analise" rotulo="Painel Operacional" recolhido={r} />}
+          {admin && <><div className="grupo"><span className="rotulo">Gestão</span></div><Item to="/admin" icone="config" rotulo="Administração" recolhido={r} /></>}
         </nav>
         <div className="lateral-rodape">
-          <div className="nome">{s.perfil.nome || s.perfil.email}</div>
-          <div style={{ color: 'var(--dourado-claro)' }}>{ROTULO_PAPEL[s.perfil.papel]}</div>
-          <button className="btn sutil peq" style={{ color: '#f3e6e8', paddingLeft: 0, marginTop: 6 }} onClick={() => { void api.sair(); nav('/login'); }}>
-            <Icone nome="sair" tam={16} />Sair
+          <div className="rotulo">
+            <div className="nome">{s.perfil.nome || s.perfil.email}</div>
+            <div style={{ color: 'var(--dourado-claro)' }}>{ROTULO_PAPEL[s.perfil.papel]}</div>
+          </div>
+          <button className="btn sutil peq lateral-sair" style={{ color: '#f3e6e8', paddingLeft: 0, marginTop: 6 }} title={r ? 'Sair' : undefined}
+            aria-label={r ? 'Sair' : undefined} onClick={() => { void api.sair(); nav('/login'); }}>
+            <Icone nome="sair" tam={16} /><span className="rotulo">Sair</span>
           </button>
         </div>
       </aside>
