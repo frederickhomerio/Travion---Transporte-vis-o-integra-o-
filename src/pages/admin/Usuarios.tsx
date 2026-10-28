@@ -9,14 +9,14 @@ import type { CentroCusto, Papel, Permissao, StatusUsuario } from '../../types';
 const PAPEIS: Papel[] = ['administrador', 'gestor', 'supervisor', 'embarcador', 'apoio', 'comercial', 'consulta'];
 /** Papéis que entram no centro de custo Gerencial (acesso a todas as filiais) por padrão. */
 const PAPEIS_GERENCIAL: Papel[] = ['apoio', 'comercial', 'gestor', 'administrador'];
-const ROTULO_SITUACAO: Record<StatusUsuario, string> = { pendente: 'Aguardando aprovação', ativo: 'Ativo', bloqueado: 'Bloqueado' };
+const ROTULO_SITUACAO: Record<StatusUsuario, string> = { pendente: 'Aguardando aprovação', ativo: 'Ativo', bloqueado: 'Inativo' };
 
 const textoEnviado = (modo: string, email: string) => (modo === 'supabase'
   ? `Convite enviado para ${email}. O link vale por 24 horas; depois disso, use Enviar por e-mail de novo.`
   : `Prévia: no app publicado, ${email} receberia agora o e-mail com o link para criar a senha.`);
 
 export function Usuarios() {
-  const { api, estado, atualizarSessao } = useApp();
+  const { api, estado, atualizarSessao, pode } = useApp();
   const idx = useIndices();
   const avisar = useAviso();
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[] | null>(null);
@@ -25,6 +25,8 @@ export function Usuarios() {
   const [erro, setErro] = useState<string | null>(null);
   const [editar, setEditar] = useState<UsuarioAdmin | null>(null);
   const [convidar, setConvidar] = useState(false);
+  const [acao, setAcao] = useState<{ u: UsuarioAdmin; tipo: 'inativar' | 'reativar' | 'excluir' } | null>(null);
+  const eu = estado.sessao?.perfil.id;
 
   const carregar = () => {
     setErro(null);
@@ -82,7 +84,13 @@ export function Usuarios() {
                   <td><span className={`badge ${u.status === 'ativo' ? 'liberado' : u.status === 'bloqueado' ? 'suspenso' : 'aviso'}`}>{ROTULO_SITUACAO[u.status]}</span></td>
                   <td>{centrosNomes(u.centros)}<div className="pequeno suave">{total(u.centros) || u.papel === 'administrador' ? 'Todas as filiais' : filiaisNomes(u.filiais)}</div></td>
                   <td className="pequeno">{Object.keys(u.permissoes).length ? `${Object.keys(u.permissoes).length} permissão(ões) individual(is)` : '—'}</td>
-                  <td className="td-acao"><button className="btn peq" onClick={() => setEditar(u)}>{u.status === 'pendente' ? 'Revisar' : 'Editar'}</button></td>
+                  <td className="td-acao"><span style={{ display: 'inline-flex', gap: 6 }}>
+                    <button className="btn peq" onClick={() => setEditar(u)}>{u.status === 'pendente' ? 'Revisar' : 'Editar'}</button>
+                    {u.id !== eu && pode('usuarios.inativar') && u.status !== 'pendente' && (u.status === 'bloqueado'
+                      ? <button className="btn peq" onClick={() => setAcao({ u, tipo: 'reativar' })}>Reativar</button>
+                      : <button className="btn peq" onClick={() => setAcao({ u, tipo: 'inativar' })}>Inativar</button>)}
+                    {u.id !== eu && pode('usuarios.excluir') && <button className="btn peq perigo" onClick={() => setAcao({ u, tipo: 'excluir' })}>Excluir</button>}
+                  </span></td>
                 </tr>
               ))}
             </tbody>
@@ -124,6 +132,7 @@ export function Usuarios() {
         </div>
       </div>
 
+      {acao && <AcaoUsuario {...acao} aoFechar={(feito) => { setAcao(null); if (feito) carregar(); }} />}
       {editar && <EditarUsuario u={editar} matriz={matriz} aoFechar={(salvou) => {
         setEditar(null);
         if (salvou) { carregar(); if (editar.id === estado.sessao?.perfil.id) void atualizarSessao(); }
@@ -165,7 +174,7 @@ function centrosDoPapel(papel: Papel, atuais: string[], centros: CentroCusto[]) 
 }
 
 function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: MatrizPermissoes; aoFechar: (salvou: boolean) => void }) {
-  const { api, estado } = useApp();
+  const { api, estado, pode } = useApp();
   const avisar = useAviso();
   const [d, setD] = useState({ nome: u.nome, telefone: u.telefone ?? '', papel: u.papel, status: u.status === 'pendente' ? 'ativo' as StatusUsuario : u.status, centros: u.centros });
   const [perm, setPerm] = useState<Record<string, boolean | null>>({ ...u.permissoes });
@@ -248,7 +257,8 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
         </label>
         <label className="campo"><span>Situação</span>
           <select className="entrada" value={d.status} disabled={proprio} onChange={(e) => setD({ ...d, status: e.target.value as StatusUsuario })}>
-            <option value="ativo">Ativo</option><option value="pendente">Aguardando aprovação</option><option value="bloqueado">Bloqueado</option>
+            <option value="ativo">Ativo</option><option value="pendente">Aguardando aprovação</option>
+            {(pode('usuarios.inativar') || u.status === 'bloqueado') && <option value="bloqueado">Inativo</option>}
           </select>
           {proprio && <small>Você não pode bloquear o próprio acesso.</small>}
         </label>
@@ -278,6 +288,36 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
           </details>
         </>
       )}
+      {erro && <Alerta tipo="erro">{erro}</Alerta>}
+    </Modal>
+  );
+}
+
+/** Confirmação de inativar, reativar ou excluir (sem caixa do navegador). */
+function AcaoUsuario({ u, tipo, aoFechar }: { u: UsuarioAdmin; tipo: 'inativar' | 'reativar' | 'excluir'; aoFechar: (feito: boolean) => void }) {
+  const { api } = useApp();
+  const avisar = useAviso();
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const titulo = { inativar: 'Inativar usuário', reativar: 'Reativar usuário', excluir: 'Excluir usuário' }[tipo];
+  async function confirmar() {
+    setSalvando(true); setErro(null);
+    try {
+      if (tipo === 'excluir') await api.excluirUsuario(u.id);
+      else await api.atualizarUsuario(u.id, { status: tipo === 'inativar' ? 'bloqueado' : 'ativo' });
+      avisar('ok', tipo === 'excluir' ? `${u.nome || u.email} foi excluído.` : tipo === 'inativar' ? `${u.nome || u.email} foi inativado e não entra mais no app.` : `${u.nome || u.email} foi reativado.`);
+      aoFechar(true);
+    } catch (e) { setErro(mensagemErro(e)); } finally { setSalvando(false); }
+  }
+  return (
+    <Modal titulo={titulo} aoFechar={() => aoFechar(false)} rodape={<>
+      <button className="btn" onClick={() => aoFechar(false)}>Cancelar</button>
+      <button className={`btn ${tipo === 'reativar' ? 'primario' : 'perigo'}`} disabled={salvando} onClick={confirmar}>{salvando ? 'Salvando…' : titulo.split(' ')[0]}</button>
+    </>}>
+      <p style={{ margin: 0 }}><strong>{u.nome || u.email}</strong> · {u.email}</p>
+      {tipo === 'inativar' && <p className="suave" style={{ margin: 0 }}>A pessoa deixa de entrar no app na hora. Tudo o que ela fez continua no histórico, e você pode reativar depois.</p>}
+      {tipo === 'reativar' && <p className="suave" style={{ margin: 0 }}>A pessoa volta a entrar com a mesma função, centro de custo e senha.</p>}
+      {tipo === 'excluir' && <p className="suave" style={{ margin: 0 }}>Apaga o usuário de vez, sem volta. Só é possível para quem ainda não registrou nada no app; quem já tem embarques, demandas ou histórico deve ser inativado, para não perder quem fez o quê.</p>}
       {erro && <Alerta tipo="erro">{erro}</Alerta>}
     </Modal>
   );

@@ -139,11 +139,11 @@ export function AguardandoAprovacao() {
     <div className="tela-centro">
       <div className="caixa-login">
         <Logo tam={40} />
-        <h1>{p.status === 'bloqueado' ? 'Acesso bloqueado' : 'Aguardando aprovação'}</h1>
+        <h1>{p.status === 'bloqueado' ? 'Acesso inativo' : 'Aguardando aprovação'}</h1>
         <p>
           {p.status === 'bloqueado'
-            ? 'Seu acesso foi bloqueado por um administrador.'
-            : `Sua conta (${p.email}) foi criada. Um administrador precisa aprovar o acesso e definir seu perfil e suas filiais.`}
+            ? 'Seu acesso foi inativado pelo administrador. Se for engano, fale com ele.'
+            : `Sua conta (${p.email}) foi criada. Um administrador precisa aprovar o acesso e definir sua função e seu centro de custo.`}
         </p>
         <div className="grupo-btn">
           <button className="btn" onClick={() => void atualizarSessao()}>Verificar novamente</button>

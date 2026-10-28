@@ -192,6 +192,8 @@ export interface Api {
   enviarLinkSenha(email: string): Promise<void>;
   /** Troca o e-mail de entrada do usuário; a senha, o acesso e o histórico continuam. */
   alterarEmailUsuario(perfilId: string, email: string): Promise<void>;
+  /** Só sem registros no app (migração 2600); com registros, inativar. */
+  excluirUsuario(perfilId: string): Promise<void>;
   /** Trata o link do e-mail de convite ao abrir o app; devolve 'convite' quando a pessoa precisa criar a senha. */
   confirmarLinkEmail(): Promise<'convite' | null>;
   matrizPermissoes(): Promise<MatrizPermissoes>;

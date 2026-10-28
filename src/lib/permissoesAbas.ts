@@ -15,7 +15,7 @@ export const ABAS_APP: Array<{ id: string; rotulo: string; chaves: Permissao[] }
   { id: 'apoio', rotulo: 'Apoio Operacional', chaves: ['apoio.pagina', 'apoio.atender', 'documentacao.ver', 'documentacao.cancelar', 'estadia.ver'] },
   { id: 'cadastro', rotulo: 'Cadastro', chaves: ['cadastro.solicitar', 'cadastro.ver'] },
   { id: 'estadia', rotulo: 'Estadia', chaves: ['estadia.solicitar', 'estadia.ver', 'estadia.reabrir'] },
-  { id: 'admin', rotulo: 'Administração', chaves: ['usuarios.gerenciar', 'permissoes.gerenciar', 'cadastros.gerenciar', 'importacao.executar', 'configuracoes.gerenciar'] },
+  { id: 'admin', rotulo: 'Administração', chaves: ['usuarios.gerenciar', 'usuarios.inativar', 'usuarios.excluir', 'permissoes.gerenciar', 'cadastros.gerenciar', 'importacao.executar', 'configuracoes.gerenciar'] },
 ];
 
 export const abasDaPermissao = (c: Permissao) => ABAS_APP.filter((a) => a.chaves.includes(c)).map((a) => a.rotulo);

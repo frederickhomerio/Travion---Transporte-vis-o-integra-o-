@@ -60,6 +60,8 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['apoio.atender', 'Documentação', 'Assumir e atender demandas: registrar lote, pedir ajuste, anexar e liberar documentos'],
   ['cadastro.solicitar', 'Cadastro', 'Enviar cadastro de motorista e veículos ao apoio e responder pendências'],
   ['cadastro.ver', 'Cadastro', 'Acompanhar os cadastros do seu centro de custo (os próprios sempre aparecem)'],
+  ['usuarios.inativar', 'Administração', 'Inativar e reativar usuários'],
+  ['usuarios.excluir', 'Administração', 'Excluir usuários que ainda não têm registros no app'],
   ['permissoes.gerenciar', 'Administração', 'Definir as permissões de cada usuário em Administração → Permissões'],
   ['analise.operacional', 'Análise', 'Ver o Painel Operacional (filas, atendimento por colaborador e evolução das demandas do Apoio)'],
   ['analise.fila', 'Análise', 'Ver o tempo de fila do Apoio (Cadastro, Emissão e Estadia) no Dashboard Embarques'],
@@ -1062,6 +1064,7 @@ export function criarLocalApi(): Api {
       if (!p) erro('Usuário não encontrado.');
       const admins = db.perfis.filter((x) => x.papel === 'administrador' && x.status === 'ativo');
       if (p.papel === 'administrador' && admins.length <= 1 && ((d.papel && d.papel !== 'administrador') || (d.status && d.status !== 'ativo'))) erro('Não é possível remover o último administrador ativo.');
+      if (d.status && d.status !== p.status && (d.status === 'bloqueado' || p.status === 'bloqueado') && !tem('usuarios.inativar')) erro('Somente o administrador pode inativar ou reativar usuários.');
       if (d.nome !== undefined) p.nome = d.nome;
       if (d.telefone !== undefined) p.telefone = d.telefone?.trim().slice(0, 40) || null;
       if (d.papel) p.papel = d.papel;
@@ -1107,6 +1110,24 @@ export function criarLocalApi(): Api {
       if (db.convites.some((c) => c.email === novo && !c.usado_em)) erro('Há um convite aberto para este e-mail. Exclua o convite antes.');
       if (p!.papel === 'administrador' && perfil()?.papel !== 'administrador') erro('Somente administradores podem alterar o e-mail de um administrador.');
       p!.email = novo;
+      salvar();
+    },
+    async excluirUsuario(id) {
+      exigir('usuarios.excluir');
+      const p = db.perfis.find((x) => x.id === id);
+      if (!p) erro('Usuário não encontrado.');
+      if (id === perfilId) erro('Você não pode excluir o seu próprio usuário.');
+      const admins = db.perfis.filter((x) => x.papel === 'administrador' && x.status === 'ativo');
+      if (p!.papel === 'administrador' && p!.status === 'ativo' && admins.length <= 1) erro('Não é possível excluir o último administrador ativo.');
+      if (db.historico.some((h) => h.usuario_nome === p!.nome) || db.embarques.some((e) => (e as { criado_por?: string | null }).criado_por === id)) {
+        erro('Este usuário já tem registros no app (embarques, posições, demandas ou histórico). Para manter quem fez o quê, use Inativar.');
+      }
+      registrar({ entidade: 'usuario', registro_id: id, campo: 'excluido', valor_anterior: `${p!.nome} (${p!.email}, ${p!.papel})` });
+      db.convites = db.convites.filter((c) => c.email !== p!.email?.toLowerCase());
+      db.perfis = db.perfis.filter((x) => x.id !== id);
+      db.perfilFiliais = db.perfilFiliais.filter((x) => x.perfil_id !== id);
+      db.perfilCentros = (db.perfilCentros ?? []).filter((x) => x.perfil_id !== id);
+      db.perfilPermissoes = db.perfilPermissoes.filter((x) => x.perfil_id !== id);
       salvar();
     },
     async confirmarLinkEmail() { return null; },

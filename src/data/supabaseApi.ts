@@ -266,6 +266,9 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
     async alterarEmailUsuario(perfilId, email) {
       await chamarFuncao('alterar-email-usuario', { perfil_id: perfilId, email });
     },
+    async excluirUsuario(perfilId) {
+      await chamarFuncao('excluir-usuario', { perfil_id: perfilId });
+    },
     async enviarLinkSenha(email) {
       const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
       if (error) throw new Error(error.message);
