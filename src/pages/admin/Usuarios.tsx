@@ -4,9 +4,11 @@ import { type Convite, type MatrizPermissoes, mensagemErro, type UsuarioAdmin } 
 import { useApp, useIndices } from '../../data/store';
 import { nome } from '../../lib/cadastros';
 import { fmtDataHora, ROTULO_PAPEL } from '../../lib/formato';
-import type { Papel, Permissao, StatusUsuario } from '../../types';
+import type { CentroCusto, Papel, Permissao, StatusUsuario } from '../../types';
 
 const PAPEIS: Papel[] = ['administrador', 'gestor', 'supervisor', 'embarcador', 'apoio', 'comercial', 'consulta'];
+/** Papéis que entram no centro de custo Gerencial (acesso a todas as filiais) por padrão. */
+const PAPEIS_GERENCIAL: Papel[] = ['apoio', 'comercial', 'gestor', 'administrador'];
 const ROTULO_SITUACAO: Record<StatusUsuario, string> = { pendente: 'Aguardando aprovação', ativo: 'Ativo', bloqueado: 'Bloqueado' };
 
 const textoEnviado = (modo: string, email: string) => (modo === 'supabase'
@@ -34,6 +36,16 @@ export function Usuarios() {
 
   const pendentes = usuarios?.filter((u) => u.status === 'pendente') ?? [];
   const filiaisNomes = (ids: string[]) => ids.length ? ids.map((f) => nome(idx.filial, f)).join(', ') : 'Nenhuma';
+  const centros = estado.cadastros.centros_custo;
+  const centrosNomes = (ids: string[] | null) => ids?.length ? ids.map((c) => centros.find((x) => x.id === c)?.nome ?? '—').join(', ') : 'Nenhum';
+  const total = (ids: string[]) => ids.some((c) => centros.find((x) => x.id === c)?.acesso_total);
+  const contagem = useMemo(() => {
+    const lista = [...centros].filter((c) => c.ativo || usuarios?.some((u) => u.centros.includes(c.id)))
+      .sort((a, b) => Number(!!b.acesso_total) - Number(!!a.acesso_total) || a.nome.localeCompare(b.nome, 'pt-BR'))
+      .map((c) => ({ id: c.id, nome: c.nome, total: !!c.acesso_total, n: usuarios?.filter((u) => u.centros.includes(c.id)).length ?? 0 }));
+    const sem = usuarios?.filter((u) => !u.centros.length).length ?? 0;
+    return sem ? [...lista, { id: '-', nome: 'Sem centro de custo', total: false, n: sem }] : lista;
+  }, [centros, usuarios]);
 
   if (erro) return <Alerta tipo="erro">{erro}</Alerta>;
   if (!usuarios || !matriz) return <Carregando />;
@@ -42,23 +54,33 @@ export function Usuarios() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Alerta tipo="info">
         Usuários internos entram por convite (o papel é aplicado ao criar a conta com o e-mail convidado) ou pedem acesso e aguardam aprovação.
-        Quem pede acesso começa como Consulta, sem filiais.
+        O acesso vale pelo centro de custo: a pessoa vê as filiais dos centros marcados, e o Gerencial dá acesso a todas. Quem pede acesso começa como Consulta, sem centro de custo.
       </Alerta>
-      {pendentes.length > 0 && <Alerta tipo="aviso">{pendentes.length} pessoa(s) aguardando aprovação. Revise o papel e as filiais antes de aprovar.</Alerta>}
+      {pendentes.length > 0 && <Alerta tipo="aviso">{pendentes.length} pessoa(s) aguardando aprovação. Revise o papel e o centro de custo antes de aprovar.</Alerta>}
+
+      <div className="cartao">
+        <div className="cartao-cab"><h3 style={{ margin: 0 }}>Usuários por centro de custo</h3><span className="pequeno suave">{usuarios.length} usuário(s)</span></div>
+        <div className="cc-contagem">
+          {contagem.map((c) => (
+            <div key={c.id} className={`cc-cont${c.total ? ' gerencial' : ''}${c.id === '-' ? ' sem' : ''}`} title={c.total ? 'Acesso a todas as filiais' : undefined}>
+              <span className="cc-n">{c.n}</span><span className="cc-nome">{c.nome}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="cartao">
         <div className="cartao-cab"><h3 style={{ margin: 0 }}>Usuários</h3></div>
         <div className="rolagem-x">
           <table className="tabela">
-            <thead><tr><th>Nome</th><th>Papel</th><th>Situação</th><th>Filiais</th><th>Carteira</th><th>Ajustes</th><th /></tr></thead>
+            <thead><tr><th>Nome</th><th>Papel</th><th>Situação</th><th>Centro de custo</th><th>Ajustes</th><th /></tr></thead>
             <tbody>
               {usuarios.map((u) => (
                 <tr key={u.id}>
                   <td><strong>{u.nome}</strong><div className="pequeno suave">{u.email}</div></td>
                   <td>{ROTULO_PAPEL[u.papel]}</td>
                   <td><span className={`badge ${u.status === 'ativo' ? 'liberado' : u.status === 'bloqueado' ? 'suspenso' : 'aviso'}`}>{ROTULO_SITUACAO[u.status]}</span></td>
-                  <td className="pequeno">{u.papel === 'administrador' ? 'Todas' : filiaisNomes(u.filiais)}</td>
-                  <td className="pequeno">{nome(idx.comercial, u.comercial_id, '—')}</td>
+                  <td>{centrosNomes(u.centros)}<div className="pequeno suave">{total(u.centros) || u.papel === 'administrador' ? 'Todas as filiais' : filiaisNomes(u.filiais)}</div></td>
                   <td className="pequeno">{Object.keys(u.permissoes).length ? `${Object.keys(u.permissoes).length} permissão(ões) individual(is)` : '—'}</td>
                   <td className="td-acao"><button className="btn peq" onClick={() => setEditar(u)}>{u.status === 'pendente' ? 'Revisar' : 'Editar'}</button></td>
                 </tr>
@@ -73,13 +95,13 @@ export function Usuarios() {
         {convites.length === 0 ? <div className="cartao-corpo suave">Nenhum convite.</div> : (
           <div className="rolagem-x">
             <table className="tabela">
-              <thead><tr><th>E-mail</th><th>Papel</th><th>Filiais</th><th>Situação</th><th /></tr></thead>
+              <thead><tr><th>E-mail</th><th>Papel</th><th>Centro de custo</th><th>Situação</th><th /></tr></thead>
               <tbody>
                 {convites.map((c) => (
                   <tr key={c.id}>
                     <td>{c.email}{c.nome && <div className="pequeno suave">{c.nome}</div>}</td>
                     <td>{ROTULO_PAPEL[c.papel]}</td>
-                    <td className="pequeno">{filiaisNomes(c.filiais)}</td>
+                    <td className="pequeno">{c.centros?.length ? centrosNomes(c.centros) : c.filiais.length ? `Filiais: ${filiaisNomes(c.filiais)}` : 'Nenhum'}</td>
                     <td className="pequeno">{c.usado_em ? `Usado em ${fmtDataHora(c.usado_em)}` : c.expira_em < new Date().toISOString() ? 'Expirado' : `Válido até ${fmtDataHora(c.expira_em)}`}</td>
                     <td className="td-acao">{!c.usado_em && <span style={{ display: 'inline-flex', gap: 6 }}>
                       {c.expira_em >= new Date().toISOString() && <button className="btn peq" onClick={async () => {
@@ -97,7 +119,7 @@ export function Usuarios() {
         )}
         <div className="cartao-corpo pequeno suave">
           {api.modo === 'supabase'
-            ? 'O convite guarda a função, as filiais e a carteira. Pelo e-mail, a pessoa recebe um link para criar a própria senha e já entra com esse acesso. Sem e-mail, mande o endereço do app e ela usa "Solicitar acesso" com o mesmo e-mail.'
+            ? 'O convite guarda a função e o centro de custo. Pelo e-mail, a pessoa recebe um link para criar a própria senha e já entra com esse acesso. Sem e-mail, mande o endereço do app e ela usa "Solicitar acesso" com o mesmo e-mail.'
             : 'Na prévia local nenhum e-mail sai daqui: o envio é só ilustrativo.'}
         </div>
       </div>
@@ -111,25 +133,41 @@ export function Usuarios() {
   );
 }
 
-function SeletorFiliais({ valor, aoMudar }: { valor: string[]; aoMudar: (v: string[]) => void }) {
+function SeletorCentros({ valor, aoMudar }: { valor: string[]; aoMudar: (v: string[]) => void }) {
   const { estado } = useApp();
+  const filiais = estado.cadastros.filiais.filter((f) => f.ativo);
+  const centros = estado.cadastros.centros_custo.filter((c) => c.ativo || valor.includes(c.id))
+    .sort((a, b) => Number(!!b.acesso_total) - Number(!!a.acesso_total) || a.nome.localeCompare(b.nome, 'pt-BR'));
   return (
     <fieldset className="campo" style={{ border: 0, padding: 0, margin: 0 }}>
-      <span>Filiais autorizadas</span>
-      <div className="grupo-btn">
-        {estado.cadastros.filiais.filter((f) => f.ativo).map((f) => (
-          <label key={f.id} className="check"><input type="checkbox" checked={valor.includes(f.id)}
-            onChange={(e) => aoMudar(e.target.checked ? [...valor, f.id] : valor.filter((x) => x !== f.id))} />{f.nome}</label>
-        ))}
+      <span>Centro de custo (acesso)</span>
+      <div className="cc-escolha">
+        {centros.map((c) => {
+          const fs = filiais.filter((f) => f.centro_custo_id === c.id).map((f) => f.nome);
+          return (
+            <label key={c.id} className={`check cc-opcao${c.acesso_total ? ' gerencial' : ''}`}>
+              <input type="checkbox" checked={valor.includes(c.id)} onChange={(e) => aoMudar(e.target.checked ? [...valor, c.id] : valor.filter((x) => x !== c.id))} />
+              <span><strong>{c.nome}</strong><small>{c.acesso_total ? 'Acesso a todas as filiais' : fs.length ? fs.join(', ') : 'Sem filiais ligadas'}</small></span>
+            </label>
+          );
+        })}
       </div>
+      <small>As filiais vêm do centro de custo: ao mudar uma filial de centro em Cadastros, o acesso acompanha.</small>
     </fieldset>
   );
+}
+
+/** Ao trocar o papel: Apoio, Coordenador, Gestor e Administrador entram no Gerencial; os demais saem dele. */
+function centrosDoPapel(papel: Papel, atuais: string[], centros: CentroCusto[]) {
+  const ger = centros.filter((c) => c.acesso_total).map((c) => c.id);
+  if (PAPEIS_GERENCIAL.includes(papel)) return ger.length ? ger : atuais;
+  return atuais.filter((x) => !ger.includes(x));
 }
 
 function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: MatrizPermissoes; aoFechar: (salvou: boolean) => void }) {
   const { api, estado } = useApp();
   const avisar = useAviso();
-  const [d, setD] = useState({ nome: u.nome, papel: u.papel, status: u.status === 'pendente' ? 'ativo' as StatusUsuario : u.status, comercial_id: u.comercial_id ?? '', filiais: u.filiais });
+  const [d, setD] = useState({ nome: u.nome, papel: u.papel, status: u.status === 'pendente' ? 'ativo' as StatusUsuario : u.status, centros: u.centros });
   const [perm, setPerm] = useState<Record<string, boolean | null>>({ ...u.permissoes });
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -154,7 +192,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
         if (antes !== depois) mudou[c.chave] = depois;
       }
       await api.atualizarUsuario(u.id, {
-        nome: d.nome.trim(), papel: d.papel, status: d.status, comercial_id: d.comercial_id || null, filiais: d.filiais,
+        nome: d.nome.trim(), papel: d.papel, status: d.status, centros: d.centros,
         ...(Object.keys(mudou).length ? { permissoes: mudou } : {}),
       });
       avisar('ok', 'Usuário atualizado.');
@@ -169,7 +207,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
   return (
     <Modal titulo={u.status === 'pendente' ? 'Aprovar acesso' : 'Editar usuário'} aoFechar={() => aoFechar(false)} rodape={<>
       <button className="btn" onClick={() => aoFechar(false)}>Cancelar</button>
-      <button className="btn primario" disabled={salvando || !d.nome.trim()} onClick={salvar}>{salvando ? 'Salvando…' : u.status === 'pendente' && d.status === 'ativo' ? 'Aprovar' : 'Salvar'}</button>
+      <button className="btn primario" disabled={salvando || !d.nome.trim() || (!d.centros.length && d.papel !== 'administrador')} onClick={salvar}>{salvando ? 'Salvando…' : u.status === 'pendente' && d.status === 'ativo' ? 'Aprovar' : 'Salvar'}</button>
     </>}>
       <div className="pequeno suave" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>{u.email}</span>
@@ -186,7 +224,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
           <label className="campo"><span>Novo e-mail de entrada</span>
             <input className="entrada" type="email" value={novoEmail.valor} autoFocus onChange={(e) => setNovoEmail({ ...novoEmail, valor: e.target.value })} />
           </label>
-          <span className="pequeno suave">A senha, a função, as filiais e o histórico continuam os mesmos. A pessoa passa a entrar com o e-mail novo.</span>
+          <span className="pequeno suave">A senha, a função, o centro de custo e o histórico continuam os mesmos. A pessoa passa a entrar com o e-mail novo.</span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="btn primario peq" disabled={novoEmail.salvando || !novoEmail.valor.trim()} onClick={async () => {
               setNovoEmail({ ...novoEmail, salvando: true });
@@ -203,7 +241,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
       <div className="grade-campos">
         <label className="campo"><span>Nome</span><input className="entrada" value={d.nome} onChange={(e) => setD({ ...d, nome: e.target.value })} /></label>
         <label className="campo"><span>Papel</span>
-          <select className="entrada" value={d.papel} onChange={(e) => setD({ ...d, papel: e.target.value as Papel })}>
+          <select className="entrada" value={d.papel} onChange={(e) => { const papel = e.target.value as Papel; setD({ ...d, papel, centros: centrosDoPapel(papel, d.centros, estado.cadastros.centros_custo) }); }}>
             {PAPEIS.map((p) => <option key={p} value={p}>{ROTULO_PAPEL[p]}</option>)}
           </select>
         </label>
@@ -213,17 +251,10 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
           </select>
           {proprio && <small>Você não pode bloquear o próprio acesso.</small>}
         </label>
-        <label className="campo"><span>Carteira (comercial vinculado)</span>
-          <select className="entrada" value={d.comercial_id} onChange={(e) => setD({ ...d, comercial_id: e.target.value })}>
-            <option value="">Nenhuma</option>
-            {estado.cadastros.comerciais.filter((c) => c.ativo).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-          </select>
-          <small>O usuário vê os embarques desta carteira, além das filiais marcadas.</small>
-        </label>
       </div>
+      <SeletorCentros valor={d.centros} aoMudar={(c) => setD({ ...d, centros: c })} />
       {d.papel === 'administrador' ? <Alerta tipo="info">Administradores veem todas as filiais e têm todas as permissões.</Alerta> : (
         <>
-          <SeletorFiliais valor={d.filiais} aoMudar={(f) => setD({ ...d, filiais: f })} />
           <details>
             <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Permissões individuais (exceções ao papel)</summary>
             <p className="pequeno suave">“Padrão do papel” segue a matriz de permissões. Use “Permitir” ou “Negar” só para exceções; elas ficam registradas no histórico.</p>
@@ -254,7 +285,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
 function NovoConvite({ aoFechar }: { aoFechar: (salvou: boolean) => void }) {
   const { api, estado } = useApp();
   const avisar = useAviso();
-  const [d, setD] = useState({ email: '', nome: '', papel: 'apoio' as Papel, comercial_id: '', filiais: [] as string[] });
+  const [d, setD] = useState(() => ({ email: '', nome: '', papel: 'apoio' as Papel, centros: centrosDoPapel('apoio', [], estado.cadastros.centros_custo) }));
   const [enviar, setEnviar] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -263,7 +294,7 @@ function NovoConvite({ aoFechar }: { aoFechar: (salvou: boolean) => void }) {
     setErro(null);
     try {
       const email = d.email.trim();
-      await api.criarConvite({ email, nome: d.nome.trim() || undefined, papel: d.papel, comercial_id: d.comercial_id || null, filiais: d.filiais });
+      await api.criarConvite({ email, nome: d.nome.trim() || undefined, papel: d.papel, centros: d.centros });
       if (enviar) {
         try { await api.enviarConviteEmail(email.toLowerCase()); avisar('ok', textoEnviado(api.modo, email)); }
         catch (e) { avisar('erro', `Convite registrado, mas o e-mail não saiu: ${mensagemErro(e)} Tente de novo em Convites → Enviar por e-mail.`); }
@@ -278,24 +309,18 @@ function NovoConvite({ aoFechar }: { aoFechar: (salvou: boolean) => void }) {
   return (
     <Modal titulo="Novo convite" aoFechar={() => aoFechar(false)} rodape={<>
       <button className="btn" onClick={() => aoFechar(false)}>Cancelar</button>
-      <button className="btn primario" disabled={salvando || !d.email.trim()} onClick={salvar}>{salvando ? 'Salvando…' : enviar ? 'Registrar e enviar' : 'Registrar convite'}</button>
+      <button className="btn primario" disabled={salvando || !d.email.trim() || (!d.centros.length && d.papel !== 'administrador')} onClick={salvar}>{salvando ? 'Salvando…' : enviar ? 'Registrar e enviar' : 'Registrar convite'}</button>
     </>}>
       <div className="grade-campos">
         <label className="campo"><span>E-mail *</span><input className="entrada" type="email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} /></label>
         <label className="campo"><span>Nome</span><input className="entrada" value={d.nome} onChange={(e) => setD({ ...d, nome: e.target.value })} /></label>
         <label className="campo"><span>Papel</span>
-          <select className="entrada" value={d.papel} onChange={(e) => setD({ ...d, papel: e.target.value as Papel })}>
+          <select className="entrada" value={d.papel} onChange={(e) => { const papel = e.target.value as Papel; setD({ ...d, papel, centros: centrosDoPapel(papel, d.centros, estado.cadastros.centros_custo) }); }}>
             {PAPEIS.map((p) => <option key={p} value={p}>{ROTULO_PAPEL[p]}</option>)}
           </select>
         </label>
-        <label className="campo"><span>Carteira</span>
-          <select className="entrada" value={d.comercial_id} onChange={(e) => setD({ ...d, comercial_id: e.target.value })}>
-            <option value="">Nenhuma</option>
-            {estado.cadastros.comerciais.filter((c) => c.ativo).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-          </select>
-        </label>
       </div>
-      {d.papel !== 'administrador' && <SeletorFiliais valor={d.filiais} aoMudar={(f) => setD({ ...d, filiais: f })} />}
+      <SeletorCentros valor={d.centros} aoMudar={(c) => setD({ ...d, centros: c })} />
       <label className="check"><input type="checkbox" checked={enviar} onChange={(e) => setEnviar(e.target.checked)} />
         Enviar o convite por e-mail agora (a pessoa recebe o link para criar a senha)</label>
       {erro && <Alerta tipo="erro">{erro}</Alerta>}

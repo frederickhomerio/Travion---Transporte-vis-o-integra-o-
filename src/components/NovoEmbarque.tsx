@@ -162,7 +162,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
         </label>
         {sel('comercial_id', 'Carteira', c.comerciais, 'Sem carteira', !pode('carteira.editar'),
           d.cliente_id ? `Sugerida pelo cadastro do cliente: ${nome(idx.comercial, carteiraSugerida, 'sem carteira')}.${pode('carteira.editar') ? '' : ' Alterar exige permissão.'}` : undefined)}
-        {sel('filial_id', 'Filial *', filiais, 'Selecione', false, filiais.length === 0 ? 'Você não tem filiais autorizadas.' : undefined)}
+        {sel('filial_id', 'Filial *', filiais, 'Selecione', false, filiais.length === 0 ? 'Seu centro de custo ainda não tem filiais. Fale com o administrador.' : undefined)}
         {sel('produto_id', 'Produto', c.produtos.filter((x) => x.ativo), 'Não informado')}
         {cidade('origem', 'Cidade de origem *')}
         {txt('origem_uf', 'UF de origem', { maxLength: 2, style: { textTransform: 'uppercase' } })}

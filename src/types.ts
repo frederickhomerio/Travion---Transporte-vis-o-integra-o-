@@ -21,7 +21,7 @@ export type Permissao =
   | 'estadia.solicitar' | 'estadia.ver' | 'estadia.reabrir';
 
 export interface Filial { id: string; nome: string; codigo: string | null; supervisor?: string | null; centro_custo_id?: string | null; ativo: boolean; is_demo: boolean }
-export interface CentroCusto { id: string; nome: string; ativo: boolean; is_demo: boolean }
+export interface CentroCusto { id: string; nome: string; ativo: boolean; is_demo: boolean; acesso_total?: boolean }
 export interface Comercial { id: string; nome: string; email: string | null; telefone?: string | null; ativo: boolean; is_demo: boolean }
 export interface Cliente {
   id: string; nome: string; documento: string | null; comercial_id: string | null;

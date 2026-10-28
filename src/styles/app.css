@@ -1306,3 +1306,16 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
   .po-est-trilho { grid-column: 1 / -1; grid-row: 2; }
 }
 .po-est-placa { display: block; font-size: 0.75rem; color: var(--cinza-600); }
+
+/* Administração · Usuários por centro de custo (contagem) e escolha do centro */
+.cc-contagem { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 16px; }
+.cc-cont { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border: 1px solid var(--cinza-200); border-radius: 10px; background: var(--branco, #fff); min-width: 120px; }
+.cc-cont .cc-n { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 1.25rem; color: var(--vinho, #580F1B); font-variant-numeric: tabular-nums; }
+.cc-cont .cc-nome { font-size: 0.85rem; color: var(--cinza-700); }
+.cc-cont.gerencial { border-color: var(--dourado, #C6A044); background: rgba(198, 160, 68, 0.08); }
+.cc-cont.sem .cc-n { color: var(--cinza-600); }
+.cc-escolha { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; margin-top: 4px; }
+.cc-opcao { align-items: flex-start; padding: 8px 10px; border: 1px solid var(--cinza-200); border-radius: 8px; }
+.cc-opcao > span { display: flex; flex-direction: column; gap: 2px; }
+.cc-opcao small { color: var(--cinza-600); font-weight: 400; }
+.cc-opcao.gerencial { border-color: var(--dourado, #C6A044); }

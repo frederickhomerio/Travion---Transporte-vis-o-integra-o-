@@ -53,7 +53,7 @@ select admin_atualizar_usuario('00000000-0000-0000-0000-00000000000b',
 select admin_atualizar_usuario('00000000-0000-0000-0000-00000000000c',
   jsonb_build_object('papel', 'operacao', 'status', 'ativo', 'filiais', jsonb_build_array(:'filial_a'))) is not null;
 select admin_atualizar_usuario('00000000-0000-0000-0000-00000000000d',
-  jsonb_build_object('papel', 'comercial', 'status', 'ativo', 'comercial_id', :'com_frederick')) is not null;
+  jsonb_build_object('papel', 'comercial', 'status', 'ativo', 'centros', (select jsonb_agg(id) from centros_custo where acesso_total))) is not null;
 select admin_atualizar_usuario('00000000-0000-0000-0000-00000000000e',
   jsonb_build_object('papel', 'operacao', 'status', 'ativo', 'filiais', jsonb_build_array(:'filial_b'))) is not null;
 
@@ -209,16 +209,16 @@ do $$ begin
     assert false, 'fora do escopo deveria falhar'; exception when sqlstate 'P0002' then null; end;
 end $$;
 
--- Comercial vê apenas a própria carteira e o financeiro dela
+-- Desde a migração 2400 o acesso é por centro de custo: o coordenador no Gerencial vê todas as filiais.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000d', false);
 do $$ begin
-  assert (select count(*) from embarques) = 1, 'comercial vê só a carteira FREDERICK';
-  assert (select count(*) from embarque_financeiro) = 1, 'comercial vê financeiro da carteira';
+  assert (select count(*) from embarques) >= 2, 'coordenador no Gerencial vê as filiais A e B';
+  assert (select count(*) from embarque_financeiro) = (select count(*) from embarques), 'coordenador vê o financeiro';
   -- Desde a migração 1310 o comercial cadastra embarques, então enxerga a lista de clientes para escolher o cliente.
   assert (select count(*) from clientes) > 1, 'comercial que cadastra embarque vê a lista de clientes';
   -- Desde a migração 1510 o coordenador comercial edita contadores (ajustável em Administração → Permissões).
   assert (select atualizar_posicao(p.id, jsonb_build_object('porta', coalesce(p.porta, 0) + 1), jsonb_build_object('porta', p.porta)) ->> 'status'
-          from posicoes_diarias p limit 1) = 'ok', 'coordenador comercial edita contador da própria carteira';
+          from posicoes_diarias p limit 1) = 'ok', 'coordenador comercial edita contador';
 end $$;
 
 -- Usuário pendente não vê nada

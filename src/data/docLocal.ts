@@ -415,7 +415,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
     const pessoa = (id: string, nome: string) => ({ id, nome } as Perfil);
     const gestor = pessoa('perfil-1', 'Gestor Rio Verde (prévia)');
     const sup = pessoa('perfil-5', 'Supervisor Jataí (prévia)');
-    const com = pessoa('perfil-6', 'Comercial de Fretes (prévia)');
+    const com = pessoa('perfil-6', 'Embarcador (prévia)');
     const apoio = pessoa('perfil-2', 'Apoio Operacional (prévia)');
     const min = (m: number) => new Date(Date.now() - m * 60e3).toISOString();
     const dia = (d: number) => dataSP(Date.now() - d * 86400e3);
@@ -1174,7 +1174,7 @@ const COLABORADORES_PREVIA: Array<[string, string, number]> = [
   ['previa-diego', 'Diego Rocha (prévia)', 3], ['perfil-2', 'Apoio Operacional (prévia)', 2],
 ];
 const SOLICITANTES_PREVIA: Array<[string, string]> = [
-  ['perfil-1', 'Gestor Rio Verde (prévia)'], ['perfil-5', 'Supervisor Jataí (prévia)'], ['perfil-6', 'Comercial de Fretes (prévia)'],
+  ['perfil-1', 'Gestor Rio Verde (prévia)'], ['perfil-5', 'Supervisor Jataí (prévia)'], ['perfil-6', 'Embarcador (prévia)'],
   ['perfil-3', 'Coordenador Comercial (prévia)'],
 ];
 const MOTIVOS_PREVIA: MotivoDevolucao[] = ['documento_ausente', 'documento_ausente', 'documento_ilegivel', 'divergencia_dados', 'divergencia_dados', 'informacao_incompleta', 'outro'];

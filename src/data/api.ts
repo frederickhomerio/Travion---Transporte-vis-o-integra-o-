@@ -25,13 +25,15 @@ export type EventoTempoReal =
 export type UsuarioPermissoes = Pick<Perfil, 'id' | 'nome' | 'email' | 'papel' | 'status'> & { permissoes: Partial<Record<Permissao, boolean>> };
 
 export interface UsuarioAdmin extends Perfil {
+  /** Centros de custo do usuário (o acesso); as filiais vêm deles. */
+  centros: string[];
   filiais: string[];
   permissoes: Partial<Record<Permissao, boolean>>;
 }
 
 export interface Convite {
   id: string; email: string; nome: string | null; papel: Papel; comercial_id: string | null;
-  filiais: string[]; permissoes: Record<string, boolean>; expira_em: string; usado_em: string | null; criado_em: string;
+  centros: string[] | null; filiais: string[]; permissoes: Record<string, boolean>; expira_em: string; usado_em: string | null; criado_em: string;
 }
 
 export interface MatrizPermissoes {
@@ -178,9 +180,9 @@ export interface Api {
 
   // Administração
   listarUsuarios(): Promise<UsuarioAdmin[]>;
-  atualizarUsuario(id: string, dados: { nome?: string; papel?: Papel; status?: StatusUsuario; comercial_id?: string | null; filiais?: string[]; permissoes?: Record<string, boolean | null> }): Promise<void>;
+  atualizarUsuario(id: string, dados: { nome?: string; papel?: Papel; status?: StatusUsuario; centros?: string[]; permissoes?: Record<string, boolean | null> }): Promise<void>;
   listarConvites(): Promise<Convite[]>;
-  criarConvite(dados: { email: string; nome?: string; papel: Papel; comercial_id?: string | null; filiais: string[] }): Promise<void>;
+  criarConvite(dados: { email: string; nome?: string; papel: Papel; centros: string[] }): Promise<void>;
   excluirConvite(id: string): Promise<void>;
   /** Manda por e-mail o convite já registrado (o link leva à tela de criar a senha). */
   enviarConviteEmail(email: string): Promise<void>;

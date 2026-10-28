@@ -122,7 +122,7 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
         todos((a, b) => sb.from('produtos').select('id,nome,valor_pauta_kg,valor_pauta_data,cna_produto,preco_fonte,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
         todos((a, b) => sb.from('locais').select('id,nome,cidade,uf,tipo,link_mapa,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
         todos((a, b) => sb.from('cidades').select('id,nome,uf,uso,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
-        todos((a, b) => sb.from('centros_custo').select('id,nome,ativo,is_demo').eq('is_demo', demo).order('nome').range(a, b)),
+        todos((a, b) => sb.from('centros_custo').select('id,nome,ativo,is_demo,acesso_total').eq('is_demo', demo).order('nome').range(a, b)),
       ]);
       return { filiais, comerciais, clientes, produtos, locais, cidades, centros_custo } as unknown as Cadastros;
     },
@@ -236,13 +236,15 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
     },
 
     async listarUsuarios() {
-      const [perfis, filiais, perms] = await Promise.all([
+      const [perfis, filiais, perms, centros] = await Promise.all([
         todos((a, b) => sb.from('perfis').select('id,nome,email,papel,status,comercial_id,criado_em').order('nome').range(a, b)),
         todos((a, b) => sb.from('perfil_filiais').select('perfil_id,filial_id').range(a, b)),
         todos((a, b) => sb.from('perfil_permissoes').select('perfil_id,chave,permitido').range(a, b)),
+        todos((a, b) => sb.from('perfil_centros').select('perfil_id,centro_custo_id').range(a, b)),
       ]);
       return (perfis as never[]).map((p: { id: string }) => ({
         ...(p as object),
+        centros: (centros as Array<{ perfil_id: string; centro_custo_id: string }>).filter((c) => c.perfil_id === p.id).map((c) => c.centro_custo_id),
         filiais: (filiais as Array<{ perfil_id: string; filial_id: string }>).filter((f) => f.perfil_id === p.id).map((f) => f.filial_id),
         permissoes: Object.fromEntries((perms as Array<{ perfil_id: string; chave: string; permitido: boolean }>)
           .filter((x) => x.perfil_id === p.id).map((x) => [x.chave, x.permitido])),

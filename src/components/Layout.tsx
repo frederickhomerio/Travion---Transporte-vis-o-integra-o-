@@ -45,15 +45,17 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
           </svg>
         </button>
         <nav className="nav" aria-label="Principal">
+          <div className="grupo"><span className="rotulo">Embarques</span></div>
           <Item to="/" end icone="lista" rotulo="Lista de Fretes" recolhido={r} />
           {pode('posicoes.pagina') && <Item to="/posicoes" icone="caminhao" rotulo="Posições de Embarque" recolhido={r} />}
           {pode('compartilhamento.preparar') && <Item to="/posicao-cliente" icone="cliente" rotulo="Posição do Cliente" recolhido={r} />}
-          {pode('apoio.pagina') && <Item to="/apoio" icone="lista" rotulo="Apoio Operacional" recolhido={r} />}
           {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <Item to="/cadastro" icone="cadastro" rotulo="Cadastro" recolhido={r} />}
           {(pode('estadia.solicitar') || pode('estadia.ver')) && <Item to="/estadia" icone="relogio" rotulo="Estadia" recolhido={r} />}
+          {(pode('apoio.pagina') || pode('analise.operacional')) && <div className="grupo"><span className="rotulo">Apoio Operacional</span></div>}
+          {pode('apoio.pagina') && <Item to="/apoio" icone="lista" rotulo="Apoio Operacional" recolhido={r} />}
+          {pode('analise.operacional') && <Item to="/analise/operacional" icone="analise" rotulo="Painel Operacional" recolhido={r} />}
           <div className="grupo"><span className="rotulo">Análise</span></div>
           <Item to="/analise" end icone="painel" rotulo="Dashboard Embarques" recolhido={r} />
-          {pode('analise.operacional') && <Item to="/analise/operacional" icone="analise" rotulo="Painel Operacional" recolhido={r} />}
           {admin && <><div className="grupo"><span className="rotulo">Gestão</span></div><Item to="/admin" icone="config" rotulo="Administração" recolhido={r} /></>}
         </nav>
         <div className="lateral-rodape">

@@ -381,7 +381,7 @@ function FormEstadia() {
                 <li key={x.codigo}>
                   {x.codigo} · placa {fmtPlaca(x.placa)} · {fmtDataHora(x.inicio)} → {fmtDataHora(x.saida)} · {STATUS_DOC[x.status]}
                   {' '}({x.motivo === 'periodo' ? 'mesma placa com período sobreposto' : 'mesmo documento do mesmo cliente'})
-                  {x.id ? <> <button className="btn peq" onClick={() => nav(`/estadia/consultar?s=${x.id}`)}>Abrir {x.codigo}</button></> : ' · aberta por outra filial ou carteira'}
+                  {x.id ? <> <button className="btn peq" onClick={() => nav(`/estadia/consultar?s=${x.id}`)}>Abrir {x.codigo}</button></> : ' · aberta fora do seu centro de custo'}
                 </li>
               ))}
             </ul>
@@ -467,7 +467,7 @@ function ConsultarEstadia({ aoAbrir }: { aoAbrir: (id: string) => void }) {
       <ListaEstadias titulo="Estadias recentes" lista={recentes} aoAbrir={aoAbrir}
         sub={desatualizada ? <span className="ao-sync-falha">Sem conexão: a lista pode estar desatualizada.</span>
           : estado.ultimaSync ? `Atualizado às ${fmtHora(new Date(estado.ultimaSync).toISOString())}` : 'Conectando…'}
-        vazio={!estado.carregado ? <Carregando /> : <p>As estadias que você enviou, e as da sua filial ou carteira, aparecem aqui.</p>} />
+        vazio={!estado.carregado ? <Carregando /> : <p>As estadias que você enviou, e as do seu centro de custo, aparecem aqui.</p>} />
     </>
   );
 }

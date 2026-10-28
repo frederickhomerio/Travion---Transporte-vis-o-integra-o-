@@ -247,7 +247,7 @@ function FormCadastro({ aoAbrir }: { aoAbrir: (id: string) => void }) {
       )}
       {aberto && (
         <Alerta tipo="aviso"><span><strong>Já existe o cadastro nº {aberto.numero} em aberto para esta placa</strong> ({aberto.situacao}). Nada novo foi criado.{' '}
-          {aberto.id ? <button className="btn peq" onClick={() => aoAbrir(aberto.id!)}>Acompanhar cadastro nº {aberto.numero}</button> : 'Ele foi aberto por outra filial ou carteira: fale com o apoio.'}</span></Alerta>
+          {aberto.id ? <button className="btn peq" onClick={() => aoAbrir(aberto.id!)}>Acompanhar cadastro nº {aberto.numero}</button> : 'Ele foi aberto fora do seu centro de custo: fale com o apoio.'}</span></Alerta>
       )}
       {tentou && !valido && <Alerta tipo="erro">Confira os campos destacados.</Alerta>}
       {erro && <Alerta tipo="erro"><span><strong>Não enviado.</strong> {erro} Os dados e anexos continuam aqui.</span></Alerta>}
@@ -304,7 +304,7 @@ function Acompanhamento({ aoAbrir }: { aoAbrir: (id: string) => void }) {
         <div className="cartao-corpo"><Alerta tipo="erro">{estado.erro}</Alerta></div>
       ) : !lista.length ? (
         <EstadoVazio titulo={todos.length ? 'Nenhum cadastro com este filtro' : 'Nenhum cadastro ainda'}>
-          <p>{todos.length ? 'Troque o filtro ou a busca.' : pode('cadastro.solicitar') ? 'Envie o primeiro pelo formulário acima. Ele aparece aqui e na fila do apoio.' : 'Os cadastros da sua filial ou carteira aparecem aqui.'}</p>
+          <p>{todos.length ? 'Troque o filtro ou a busca.' : pode('cadastro.solicitar') ? 'Envie o primeiro pelo formulário acima. Ele aparece aqui e na fila do apoio.' : 'Os cadastros do seu centro de custo aparecem aqui.'}</p>
         </EstadoVazio>
       ) : (
         <div className="ao-tabela-wrap">

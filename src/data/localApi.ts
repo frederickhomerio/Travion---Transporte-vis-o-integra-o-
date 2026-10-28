@@ -106,7 +106,9 @@ interface Banco {
   cidades?: Cidade[];
   centros_custo?: CentroCusto[];
   perfis: Perfil[];
+  /** Escopo materializado (derivado dos centros de custo, como no servidor). */
   perfilFiliais: Array<{ perfil_id: string; filial_id: string }>;
+  perfilCentros?: Array<{ perfil_id: string; centro_custo_id: string }>;
   perfilPermissoes: Array<{ perfil_id: string; chave: Permissao; permitido: boolean }>;
   papelPermissoes: Array<{ papel: Papel; chave: Permissao }>;
   embarques: Embarque[];
@@ -153,7 +155,7 @@ function semear(): Banco {
   const perfis: Perfil[] = [
     ['Administrador (prévia)', 'administrador'], ['Gestor Rio Verde (prévia)', 'gestor'], ['Apoio Operacional (prévia)', 'apoio'],
     ['Coordenador Comercial Ana (prévia)', 'comercial'], ['Consulta interna (prévia)', 'consulta'],
-    ['Supervisor Jataí (prévia)', 'supervisor'], ['Comercial de Fretes Montividiu (prévia)', 'embarcador'],
+    ['Supervisor Jataí (prévia)', 'supervisor'], ['Embarcador Montividiu (prévia)', 'embarcador'],
   ].map(([nome, papel], i) => ({
     id: `perfil-${i}`, nome, email: `${papel}@previa.local`, papel: papel as Papel, status: 'ativo',
     comercial_id: papel === 'comercial' ? comerciais[0].id : null, criado_em: agora(),
@@ -256,6 +258,35 @@ function completarEquipe(db: Banco): Banco {
     const escolhidas = fs.length || x.filiais === 'todas' || !x.filiais.length ? fs : db.filiais.slice(0, 1);
     for (const f of escolhidas) db.perfilFiliais.push({ perfil_id: x.id, filial_id: f.id });
   }
+  return db;
+}
+
+const PAPEIS_GERENCIAL: Papel[] = ['apoio', 'comercial', 'gestor', 'administrador'];
+
+/** Filiais que os centros de custo do usuário liberam (Gerencial: todas). */
+function sincronizarEscopo(db: Banco, perfilId: string) {
+  const meus = new Set((db.perfilCentros ?? []).filter((x) => x.perfil_id === perfilId).map((x) => x.centro_custo_id));
+  const total = (db.centros_custo ?? []).some((c) => c.acesso_total && meus.has(c.id));
+  const fs = db.filiais.filter((f) => total || (!!f.centro_custo_id && meus.has(f.centro_custo_id)));
+  db.perfilFiliais = db.perfilFiliais.filter((x) => x.perfil_id !== perfilId).concat(fs.map((f) => ({ perfil_id: perfilId, filial_id: f.id })));
+}
+const sincronizarTodos = (db: Banco) => { for (const p of db.perfis) sincronizarEscopo(db, p.id); };
+
+/** Como a migração 2400: cria o centro Gerencial, liga cada usuário aos centros das filiais que já tinha e tira a carteira do usuário. */
+function migrarCentros(db: Banco): Banco {
+  if (db.perfilCentros) return db;
+  db.centros_custo ??= [];
+  let ger = db.centros_custo.find((c) => c.acesso_total);
+  if (!ger) { ger = { id: uid(), nome: 'Gerencial', ativo: true, is_demo: true, acesso_total: true }; db.centros_custo.push(ger); }
+  db.perfilCentros = [];
+  for (const p of db.perfis) {
+    const ids = PAPEIS_GERENCIAL.includes(p.papel) ? [ger.id]
+      : [...new Set(db.perfilFiliais.filter((x) => x.perfil_id === p.id).map((x) => db.filiais.find((f) => f.id === x.filial_id)?.centro_custo_id).filter((x): x is string => !!x))];
+    for (const c of ids) db.perfilCentros.push({ perfil_id: p.id, centro_custo_id: c });
+    p.comercial_id = null;
+  }
+  for (const c of db.convites) c.comercial_id = null;
+  sincronizarTodos(db);
   return db;
 }
 
@@ -378,6 +409,7 @@ export function criarLocalApi(): Api {
     db.centros_custo.push(...cc);
     db.filiais.filter((f) => f.is_demo && !f.centro_custo_id).forEach((f, i) => { f.centro_custo_id = cc[i % 2].id; });
   }
+  if (!db.perfilCentros) { migrarCentros(db); gravarStorage(CHAVE, JSON.stringify(db)); }
   // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
   for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio'] as Permissao[]) {
     if (db.papelPermissoes.some((x) => x.chave === nova)) continue;
@@ -402,15 +434,14 @@ export function criarLocalApi(): Api {
     if (!ativo()) erro('Seu acesso ainda não foi aprovado ou está bloqueado.');
     if (!tem(c)) erro(`Você não tem permissão para esta ação (${CATALOGO.find((x) => x.chave === c)?.descricao}).`);
   };
-  const noEscopo = (filial: string, comercial: string | null) => {
+  const noEscopo = (filial: string, _comercial: string | null) => {
     const p = perfil();
     if (!p || p.status !== 'ativo') return false;
     if (p.papel === 'administrador') return true;
-    return db.perfilFiliais.some((x) => x.perfil_id === p.id && x.filial_id === filial) || (!!p.comercial_id && p.comercial_id === comercial);
+    return db.perfilFiliais.some((x) => x.perfil_id === p.id && x.filial_id === filial);
   };
   const veEmbarque = (e: Embarque) => tem('embarques.ver') && noEscopo(e.filial_id, e.comercial_id);
   const veCliente = (c: Cliente) => ativo() && (tem('cadastros.gerenciar') || tem('embarques.criar')
-    || (!!perfil()?.comercial_id && c.comercial_id === perfil()?.comercial_id)
     || db.embarques.some((e) => e.cliente_id === c.id && noEscopo(e.filial_id, e.comercial_id)));
   const nomeUsuario = () => perfil()?.nome ?? 'Sistema';
   const registrar = (h: Partial<Historico> & { entidade: string; campo: string }) => {
@@ -856,6 +887,7 @@ export function criarLocalApi(): Api {
           registrar({ entidade: 'cliente', registro_id: id, cliente_id: id, campo: 'comercial_id', valor_anterior: txt(x.comercial_id), valor_novo: txt(dados.comercial_id) });
         }
         Object.assign(x, dados);
+        if (tipo === 'filial') sincronizarTodos(db);
         salvar();
         return clone(x);
       }
@@ -864,6 +896,7 @@ export function criarLocalApi(): Api {
         cliente: { documento: null, comercial_id: null, restricao_comercial: null } }[tipo]!;
       const novo = { id: uid(), ativo: true, is_demo: demo, ...base, ...dados };
       (lista as unknown[]).push(novo);
+      if (tipo === 'filial') sincronizarTodos(db);
       salvar();
       return clone(novo);
     },
@@ -1018,7 +1051,8 @@ export function criarLocalApi(): Api {
 
     async listarUsuarios(): Promise<UsuarioAdmin[]> {
       exigir('usuarios.gerenciar');
-      return db.perfis.map((p) => ({ ...clone(p), filiais: db.perfilFiliais.filter((x) => x.perfil_id === p.id).map((x) => x.filial_id),
+      return db.perfis.map((p) => ({ ...clone(p), centros: (db.perfilCentros ?? []).filter((x) => x.perfil_id === p.id).map((x) => x.centro_custo_id),
+        filiais: db.perfilFiliais.filter((x) => x.perfil_id === p.id).map((x) => x.filial_id),
         permissoes: Object.fromEntries(db.perfilPermissoes.filter((x) => x.perfil_id === p.id).map((x) => [x.chave, x.permitido])) }));
     },
     async atualizarUsuario(id, d) {
@@ -1030,8 +1064,11 @@ export function criarLocalApi(): Api {
       if (d.nome !== undefined) p.nome = d.nome;
       if (d.papel) p.papel = d.papel;
       if (d.status) p.status = d.status;
-      if (d.comercial_id !== undefined) p.comercial_id = d.comercial_id;
-      if (d.filiais) { db.perfilFiliais = db.perfilFiliais.filter((x) => x.perfil_id !== id).concat(d.filiais.map((f) => ({ perfil_id: id, filial_id: f }))); }
+      if (d.centros) {
+        if (!d.centros.length && p.papel !== 'administrador') erro('Escolha ao menos um centro de custo.');
+        db.perfilCentros = (db.perfilCentros ?? []).filter((x) => x.perfil_id !== id).concat(d.centros.map((c) => ({ perfil_id: id, centro_custo_id: c })));
+        sincronizarEscopo(db, id);
+      }
       if (d.permissoes) {
         for (const [k, v] of Object.entries(d.permissoes)) {
           db.perfilPermissoes = db.perfilPermissoes.filter((x) => !(x.perfil_id === id && x.chave === k));
@@ -1046,8 +1083,9 @@ export function criarLocalApi(): Api {
     async criarConvite(d) {
       exigir('usuarios.gerenciar');
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) erro('Informe um e-mail válido.');
-      db.convites.push({ id: uid(), email: d.email.toLowerCase(), nome: d.nome ?? null, papel: d.papel, comercial_id: d.comercial_id ?? null,
-        filiais: d.filiais, permissoes: {}, expira_em: new Date(Date.now() + 14 * 864e5).toISOString(), usado_em: null, criado_em: agora() });
+      if (!d.centros.length && d.papel !== 'administrador') erro('Escolha ao menos um centro de custo.');
+      db.convites.push({ id: uid(), email: d.email.toLowerCase(), nome: d.nome ?? null, papel: d.papel, comercial_id: null, centros: d.centros,
+        filiais: [], permissoes: {}, expira_em: new Date(Date.now() + 14 * 864e5).toISOString(), usado_em: null, criado_em: agora() });
       salvar();
     },
     async excluirConvite(id) { exigir('usuarios.gerenciar'); db.convites = db.convites.filter((c) => c.id !== id); salvar(); },
@@ -1145,15 +1183,15 @@ export function criarLocalApi(): Api {
 
 const PERFIS_DEMO = [
   { email: 'administrador@previa.local', papel: 'administrador', rotulo: 'Administrador', descricao: 'Acesso completo' },
-  { email: 'gestor@previa.local', papel: 'gestor', rotulo: 'Gestor', descricao: 'Filiais Rio Verde e Montividiu: cadastra, suspende e encerra embarques, com financeiro' },
-  { email: 'supervisor@previa.local', papel: 'supervisor', rotulo: 'Supervisor', descricao: 'Filiais Jataí e Itumbiara: posições de embarque e cadastro de embarques' },
-  { email: 'embarcador@previa.local', papel: 'embarcador', rotulo: 'Comercial de Fretes', descricao: 'Filial Montividiu: cadastra embarques, pede lote e emissão, vê frete motorista e margem' },
-  { email: 'apoio@previa.local', papel: 'apoio', rotulo: 'Apoio Operacional', descricao: 'Todas as filiais: fila de lote e emissão, contadores e observação operacional' },
-  { email: 'comercial@previa.local', papel: 'comercial', rotulo: 'Coordenador Comercial', descricao: 'Carteira [DEMO] Ana: cadastra embarques e suspende fretes' },
-  { email: 'consulta@previa.local', papel: 'consulta', rotulo: 'Consulta interna', descricao: 'Somente leitura nas filiais Rio Verde e Jataí' },
+  { email: 'gestor@previa.local', papel: 'gestor', rotulo: 'Gestor', descricao: 'Centro Gerencial (todas as filiais): cadastra, suspende e encerra embarques, com financeiro' },
+  { email: 'supervisor@previa.local', papel: 'supervisor', rotulo: 'Supervisor', descricao: 'Centros de custo das filiais Jataí e Itumbiara: posições de embarque e cadastro de embarques' },
+  { email: 'embarcador@previa.local', papel: 'embarcador', rotulo: 'Embarcador', descricao: 'Centro de custo da filial Montividiu: cadastra embarques, pede lote e emissão, vê frete motorista e margem' },
+  { email: 'apoio@previa.local', papel: 'apoio', rotulo: 'Apoio Operacional', descricao: 'Centro Gerencial (todas as filiais): fila de lote e emissão, contadores e observação operacional' },
+  { email: 'comercial@previa.local', papel: 'comercial', rotulo: 'Coordenador Comercial', descricao: 'Centro Gerencial (todas as filiais): cadastra embarques e suspende fretes' },
+  { email: 'consulta@previa.local', papel: 'consulta', rotulo: 'Consulta interna', descricao: 'Somente leitura nos centros de custo das filiais Rio Verde e Jataí' },
 ] as const;
 const ESCOPO_EQUIPE = (x: (typeof EQUIPE_PREVIA)[number]) =>
-  x.filiais === 'todas' ? 'Todas as filiais' : x.papel === 'administrador' ? 'Acesso completo' : x.papel === 'comercial' ? 'Carteira própria' : `Filial ${x.filiais.join(' e ')}`;
+  PAPEIS_GERENCIAL.includes(x.papel) ? 'Centro Gerencial (todas as filiais)' : `Centro de custo da filial ${(x.filiais as string[]).join(' e ')}`;
 /** Perfis para simular na prévia, agrupados pela função (3 por função). */
 export const PERFIS_PREVIA: Array<{ email: string; papel: Papel; rotulo: string; descricao: string }> = PERFIS_DEMO.flatMap((d) => [
   { email: d.email, papel: d.papel as Papel, rotulo: `${d.rotulo} (demonstração)`, descricao: d.descricao },
