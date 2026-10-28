@@ -25,6 +25,10 @@ create policy leitura on public.perfil_centros for select to authenticated
 
 alter table public.convites add column if not exists centros uuid[] not null default '{}';
 
+-- Telefone de contato do usuário (pedido de 28/10/2026), também no convite.
+alter table public.perfis add column if not exists telefone text;
+alter table public.convites add column if not exists telefone text;
+
 -- Escopo de filiais de um usuário a partir dos centros de custo.
 create or replace function private.sincronizar_escopo(p_perfil_id uuid)
 returns void
@@ -116,9 +120,10 @@ begin
   where lower(email) = lower(new.email) and usado_em is null and expira_em > now()
   order by criado_em desc limit 1;
 
-  insert into public.perfis (id, email, nome, papel, status, aprovado_por, aprovado_em)
+  insert into public.perfis (id, email, nome, telefone, papel, status, aprovado_por, aprovado_em)
   values (new.id, new.email,
           coalesce(cv.nome, new.raw_user_meta_data ->> 'nome', new.raw_user_meta_data ->> 'full_name', ''),
+          nullif(trim(coalesce(cv.telefone, new.raw_user_meta_data ->> 'telefone', '')), ''),
           coalesce(cv.papel, 'consulta'),
           case when cv.id is not null then 'ativo'::public.status_usuario else 'pendente'::public.status_usuario end,
           cv.criado_por, case when cv.id is not null then now() end)
@@ -170,8 +175,9 @@ begin
     raise exception using errcode = '22023', message = 'Centro de custo não encontrado.';
   end if;
   delete from public.convites where lower(email) = lower(p_dados ->> 'email') and usado_em is null;
-  insert into public.convites (email, nome, papel, centros, permissoes, criado_por)
-  values (lower(trim(p_dados ->> 'email')), p_dados ->> 'nome', (p_dados ->> 'papel')::public.papel_usuario,
+  insert into public.convites (email, nome, telefone, papel, centros, permissoes, criado_por)
+  values (lower(trim(p_dados ->> 'email')), p_dados ->> 'nome', nullif(left(trim(coalesce(p_dados ->> 'telefone', '')), 40), ''),
+          (p_dados ->> 'papel')::public.papel_usuario,
           v_centros, coalesce(p_dados -> 'permissoes', '{}'), auth.uid())
   returning * into n;
   perform private.registrar('usuario', n.id, null, null, null, null, 'convite', null,
@@ -200,7 +206,7 @@ begin
   end if;
   for k in select jsonb_object_keys(p_dados) loop
     -- 'filiais' fica só por compatibilidade (escopo direto, sem centro de custo); o app usa 'centros'.
-    if not (k = any (array['nome', 'papel', 'status', 'centros', 'filiais', 'permissoes'])) then
+    if not (k = any (array['nome', 'telefone', 'papel', 'status', 'centros', 'filiais', 'permissoes'])) then
       raise exception using errcode = '22023', message = format('Campo "%s" não reconhecido.', k);
     end if;
   end loop;
@@ -218,12 +224,12 @@ begin
   end if;
 
   update public.perfis set
-    nome = n.nome, papel = n.papel, status = n.status, comercial_id = null, atualizado_em = now(),
+    nome = n.nome, telefone = nullif(left(trim(coalesce(n.telefone, '')), 40), ''), papel = n.papel, status = n.status, comercial_id = null, atualizado_em = now(),
     aprovado_por = case when r.status = 'pendente' and n.status = 'ativo' then auth.uid() else aprovado_por end,
     aprovado_em = case when r.status = 'pendente' and n.status = 'ativo' then now() else aprovado_em end
   where id = r.id returning * into n;
 
-  for k in select unnest(array['nome', 'papel', 'status']) loop
+  for k in select unnest(array['nome', 'telefone', 'papel', 'status']) loop
     if (to_jsonb(r) -> k) is distinct from (to_jsonb(n) -> k) then
       perform private.registrar('usuario', r.id, null, null, null, null, k,
         private.json_texto(to_jsonb(r) -> k), private.json_texto(to_jsonb(n) -> k));

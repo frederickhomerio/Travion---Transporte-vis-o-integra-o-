@@ -30,7 +30,8 @@ do $$ begin
   exception when sqlstate '22023' then null; end;
   begin perform criar_convite('{"email":"novo99@teste.local","papel":"supervisor"}'); assert false, 'convite sem centro';
   exception when sqlstate '22023' then null; end;
-  perform criar_convite('{"email":"novo99@teste.local","papel":"embarcador","centros":["00000000-0000-0000-0000-0000000099c2"]}');
+  perform criar_convite('{"email":"novo99@teste.local","papel":"embarcador","telefone":"(64) 99999-0000","centros":["00000000-0000-0000-0000-0000000099c2"]}');
+  perform admin_atualizar_usuario('00000000-0000-0000-0000-0000000099a2', '{"telefone":" (64) 3611-0000 "}');
 end $$;
 reset role;
 
@@ -54,6 +55,8 @@ end $$;
 insert into auth.users (id, email, raw_user_meta_data) values ('00000000-0000-0000-0000-0000000099a4', 'novo99@teste.local', '{}');
 do $$ begin
   assert (select papel from perfis where id = '00000000-0000-0000-0000-0000000099a4') = 'embarcador', 'papel do convite';
+  assert (select telefone from perfis where id = '00000000-0000-0000-0000-0000000099a4') = '(64) 99999-0000', 'telefone do convite';
+  assert (select telefone from perfis where id = '00000000-0000-0000-0000-0000000099a2') = '(64) 3611-0000', 'telefone editado';
   assert exists (select 1 from perfil_centros where perfil_id = '00000000-0000-0000-0000-0000000099a4' and centro_custo_id = '00000000-0000-0000-0000-0000000099c2'), 'centro do convite';
   assert (select count(*) from perfil_filiais where perfil_id = '00000000-0000-0000-0000-0000000099a4') = 2, 'filiais do centro B (B1 e A2)';
 end $$;

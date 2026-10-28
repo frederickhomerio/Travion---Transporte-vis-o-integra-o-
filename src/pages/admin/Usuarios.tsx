@@ -77,7 +77,7 @@ export function Usuarios() {
             <tbody>
               {usuarios.map((u) => (
                 <tr key={u.id}>
-                  <td><strong>{u.nome}</strong><div className="pequeno suave">{u.email}</div></td>
+                  <td><strong>{u.nome}</strong><div className="pequeno suave">{u.email}{u.telefone ? ` · ${u.telefone}` : ''}</div></td>
                   <td>{ROTULO_PAPEL[u.papel]}</td>
                   <td><span className={`badge ${u.status === 'ativo' ? 'liberado' : u.status === 'bloqueado' ? 'suspenso' : 'aviso'}`}>{ROTULO_SITUACAO[u.status]}</span></td>
                   <td>{centrosNomes(u.centros)}<div className="pequeno suave">{total(u.centros) || u.papel === 'administrador' ? 'Todas as filiais' : filiaisNomes(u.filiais)}</div></td>
@@ -167,7 +167,7 @@ function centrosDoPapel(papel: Papel, atuais: string[], centros: CentroCusto[]) 
 function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: MatrizPermissoes; aoFechar: (salvou: boolean) => void }) {
   const { api, estado } = useApp();
   const avisar = useAviso();
-  const [d, setD] = useState({ nome: u.nome, papel: u.papel, status: u.status === 'pendente' ? 'ativo' as StatusUsuario : u.status, centros: u.centros });
+  const [d, setD] = useState({ nome: u.nome, telefone: u.telefone ?? '', papel: u.papel, status: u.status === 'pendente' ? 'ativo' as StatusUsuario : u.status, centros: u.centros });
   const [perm, setPerm] = useState<Record<string, boolean | null>>({ ...u.permissoes });
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -192,7 +192,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
         if (antes !== depois) mudou[c.chave] = depois;
       }
       await api.atualizarUsuario(u.id, {
-        nome: d.nome.trim(), papel: d.papel, status: d.status, centros: d.centros,
+        nome: d.nome.trim(), telefone: d.telefone.trim() || null, papel: d.papel, status: d.status, centros: d.centros,
         ...(Object.keys(mudou).length ? { permissoes: mudou } : {}),
       });
       avisar('ok', 'Usuário atualizado.');
@@ -240,6 +240,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
       )}
       <div className="grade-campos">
         <label className="campo"><span>Nome</span><input className="entrada" value={d.nome} onChange={(e) => setD({ ...d, nome: e.target.value })} /></label>
+        <label className="campo"><span>Telefone</span><input className="entrada" type="tel" inputMode="tel" maxLength={40} placeholder="(64) 99999-0000" value={d.telefone} onChange={(e) => setD({ ...d, telefone: e.target.value })} /></label>
         <label className="campo"><span>Papel</span>
           <select className="entrada" value={d.papel} onChange={(e) => { const papel = e.target.value as Papel; setD({ ...d, papel, centros: centrosDoPapel(papel, d.centros, estado.cadastros.centros_custo) }); }}>
             {PAPEIS.map((p) => <option key={p} value={p}>{ROTULO_PAPEL[p]}</option>)}
@@ -285,7 +286,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
 function NovoConvite({ aoFechar }: { aoFechar: (salvou: boolean) => void }) {
   const { api, estado } = useApp();
   const avisar = useAviso();
-  const [d, setD] = useState(() => ({ email: '', nome: '', papel: 'apoio' as Papel, centros: centrosDoPapel('apoio', [], estado.cadastros.centros_custo) }));
+  const [d, setD] = useState(() => ({ email: '', nome: '', telefone: '', papel: 'apoio' as Papel, centros: centrosDoPapel('apoio', [], estado.cadastros.centros_custo) }));
   const [enviar, setEnviar] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -294,7 +295,7 @@ function NovoConvite({ aoFechar }: { aoFechar: (salvou: boolean) => void }) {
     setErro(null);
     try {
       const email = d.email.trim();
-      await api.criarConvite({ email, nome: d.nome.trim() || undefined, papel: d.papel, centros: d.centros });
+      await api.criarConvite({ email, nome: d.nome.trim() || undefined, telefone: d.telefone.trim() || null, papel: d.papel, centros: d.centros });
       if (enviar) {
         try { await api.enviarConviteEmail(email.toLowerCase()); avisar('ok', textoEnviado(api.modo, email)); }
         catch (e) { avisar('erro', `Convite registrado, mas o e-mail não saiu: ${mensagemErro(e)} Tente de novo em Convites → Enviar por e-mail.`); }
@@ -314,6 +315,7 @@ function NovoConvite({ aoFechar }: { aoFechar: (salvou: boolean) => void }) {
       <div className="grade-campos">
         <label className="campo"><span>E-mail *</span><input className="entrada" type="email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} /></label>
         <label className="campo"><span>Nome</span><input className="entrada" value={d.nome} onChange={(e) => setD({ ...d, nome: e.target.value })} /></label>
+        <label className="campo"><span>Telefone</span><input className="entrada" type="tel" inputMode="tel" maxLength={40} placeholder="(64) 99999-0000" value={d.telefone} onChange={(e) => setD({ ...d, telefone: e.target.value })} /></label>
         <label className="campo"><span>Papel</span>
           <select className="entrada" value={d.papel} onChange={(e) => { const papel = e.target.value as Papel; setD({ ...d, papel, centros: centrosDoPapel(papel, d.centros, estado.cadastros.centros_custo) }); }}>
             {PAPEIS.map((p) => <option key={p} value={p}>{ROTULO_PAPEL[p]}</option>)}

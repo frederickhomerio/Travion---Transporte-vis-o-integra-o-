@@ -237,7 +237,7 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
 
     async listarUsuarios() {
       const [perfis, filiais, perms, centros] = await Promise.all([
-        todos((a, b) => sb.from('perfis').select('id,nome,email,papel,status,comercial_id,criado_em').order('nome').range(a, b)),
+        todos((a, b) => sb.from('perfis').select('id,nome,email,telefone,papel,status,comercial_id,criado_em').order('nome').range(a, b)),
         todos((a, b) => sb.from('perfil_filiais').select('perfil_id,filial_id').range(a, b)),
         todos((a, b) => sb.from('perfil_permissoes').select('perfil_id,chave,permitido').range(a, b)),
         todos((a, b) => sb.from('perfil_centros').select('perfil_id,centro_custo_id').range(a, b)),

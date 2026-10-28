@@ -32,7 +32,7 @@ export interface UsuarioAdmin extends Perfil {
 }
 
 export interface Convite {
-  id: string; email: string; nome: string | null; papel: Papel; comercial_id: string | null;
+  id: string; email: string; nome: string | null; telefone?: string | null; papel: Papel; comercial_id: string | null;
   centros: string[] | null; filiais: string[]; permissoes: Record<string, boolean>; expira_em: string; usado_em: string | null; criado_em: string;
 }
 
@@ -182,9 +182,9 @@ export interface Api {
 
   // Administração
   listarUsuarios(): Promise<UsuarioAdmin[]>;
-  atualizarUsuario(id: string, dados: { nome?: string; papel?: Papel; status?: StatusUsuario; centros?: string[]; permissoes?: Record<string, boolean | null> }): Promise<void>;
+  atualizarUsuario(id: string, dados: { nome?: string; telefone?: string | null; papel?: Papel; status?: StatusUsuario; centros?: string[]; permissoes?: Record<string, boolean | null> }): Promise<void>;
   listarConvites(): Promise<Convite[]>;
-  criarConvite(dados: { email: string; nome?: string; papel: Papel; centros: string[] }): Promise<void>;
+  criarConvite(dados: { email: string; nome?: string; telefone?: string | null; papel: Papel; centros: string[] }): Promise<void>;
   excluirConvite(id: string): Promise<void>;
   /** Manda por e-mail o convite já registrado (o link leva à tela de criar a senha). */
   enviarConviteEmail(email: string): Promise<void>;

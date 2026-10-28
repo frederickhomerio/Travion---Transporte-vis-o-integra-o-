@@ -54,7 +54,7 @@ export interface Local {
 }
 
 export interface Perfil {
-  id: string; nome: string; email: string | null; papel: Papel; status: StatusUsuario;
+  id: string; nome: string; email: string | null; telefone?: string | null; papel: Papel; status: StatusUsuario;
   comercial_id: string | null; criado_em: string;
 }
 

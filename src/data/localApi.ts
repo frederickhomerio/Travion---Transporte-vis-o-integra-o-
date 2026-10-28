@@ -1063,6 +1063,7 @@ export function criarLocalApi(): Api {
       const admins = db.perfis.filter((x) => x.papel === 'administrador' && x.status === 'ativo');
       if (p.papel === 'administrador' && admins.length <= 1 && ((d.papel && d.papel !== 'administrador') || (d.status && d.status !== 'ativo'))) erro('Não é possível remover o último administrador ativo.');
       if (d.nome !== undefined) p.nome = d.nome;
+      if (d.telefone !== undefined) p.telefone = d.telefone?.trim().slice(0, 40) || null;
       if (d.papel) p.papel = d.papel;
       if (d.status) p.status = d.status;
       if (d.centros) {
@@ -1085,7 +1086,7 @@ export function criarLocalApi(): Api {
       exigir('usuarios.gerenciar');
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) erro('Informe um e-mail válido.');
       if (!d.centros.length && d.papel !== 'administrador') erro('Escolha ao menos um centro de custo.');
-      db.convites.push({ id: uid(), email: d.email.toLowerCase(), nome: d.nome ?? null, papel: d.papel, comercial_id: null, centros: d.centros,
+      db.convites.push({ id: uid(), email: d.email.toLowerCase(), nome: d.nome ?? null, telefone: d.telefone?.trim() || null, papel: d.papel, comercial_id: null, centros: d.centros,
         filiais: [], permissoes: {}, expira_em: new Date(Date.now() + 14 * 864e5).toISOString(), usado_em: null, criado_em: agora() });
       salvar();
     },
