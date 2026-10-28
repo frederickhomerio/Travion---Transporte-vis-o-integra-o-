@@ -1,4 +1,4 @@
-// Troca o e-mail de entrada de um usuário do Travion, mantendo acesso, filiais e histórico.
+// Troca o e-mail de entrada de um usuário do Travion, mantendo acesso, centro de custo e histórico.
 // A regra (quem pode, e-mail livre) fica no banco: public.alterar_email_usuario, chamada com o login de quem pediu.
 // 1) confere  2) troca no login (auth), já confirmado  3) grava no perfil e no histórico.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';

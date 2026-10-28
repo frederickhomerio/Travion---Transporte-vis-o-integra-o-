@@ -1,5 +1,5 @@
 // Envia por e-mail o convite de acesso ao Travion.
-// Só quem tem usuarios.gerenciar consegue: o convite (papel, filiais e carteira) precisa existir e estar aberto,
+// Só quem tem usuarios.gerenciar consegue: o convite (papel e centro de custo) precisa existir e estar aberto,
 // e a leitura dele é feita com o login de quem pediu (a regra de acesso da tabela decide).
 // O e-mail sai pelo SMTP configurado no Supabase; o link leva ao app, onde a pessoa cria a própria senha.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
