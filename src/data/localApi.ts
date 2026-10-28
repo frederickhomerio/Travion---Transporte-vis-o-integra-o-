@@ -1056,6 +1056,19 @@ export function criarLocalApi(): Api {
       if (!db.convites.some((c) => c.email === email.toLowerCase() && !c.usado_em)) erro('Não há convite aberto para este e-mail.');
     },
     async enviarLinkSenha() { exigir('usuarios.gerenciar'); },
+    async alterarEmailUsuario(id, email) {
+      exigir('usuarios.gerenciar');
+      const p = db.perfis.find((x) => x.id === id);
+      if (!p) erro('Usuário não encontrado.');
+      const novo = email.trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(novo)) erro('Informe um e-mail válido.');
+      if (p!.email?.toLowerCase() === novo) erro('Este já é o e-mail do usuário.');
+      if (db.perfis.some((x) => x.id !== id && x.email?.toLowerCase() === novo)) erro('Este e-mail já é usado por outro usuário.');
+      if (db.convites.some((c) => c.email === novo && !c.usado_em)) erro('Há um convite aberto para este e-mail. Exclua o convite antes.');
+      if (p!.papel === 'administrador' && perfil()?.papel !== 'administrador') erro('Somente administradores podem alterar o e-mail de um administrador.');
+      p!.email = novo;
+      salvar();
+    },
     async confirmarLinkEmail() { return null; },
     async listarPermissoesUsuarios() {
       exigir('permissoes.gerenciar');

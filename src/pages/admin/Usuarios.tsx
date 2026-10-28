@@ -134,6 +134,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const proprio = u.id === estado.sessao?.perfil.id;
+  const [novoEmail, setNovoEmail] = useState<{ valor: string; salvando: boolean } | null>(null);
 
   const doPapel = useMemo(() => new Set(matriz.papeis.filter((p) => p.papel === d.papel).map((p) => p.chave)), [matriz, d.papel]);
   const grupos = useMemo(() => {
@@ -172,13 +173,33 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
     </>}>
       <div className="pequeno suave" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>{u.email}</span>
-        {u.status !== 'pendente' && u.email && <button type="button" className="btn sutil peq" onClick={async () => {
+        {u.email && !novoEmail && <button type="button" className="btn sutil peq" onClick={() => setNovoEmail({ valor: u.email ?? '', salvando: false })}>Alterar e-mail</button>}
+        {u.status !== 'pendente' && u.email && !novoEmail && <button type="button" className="btn sutil peq" onClick={async () => {
           try {
             await api.enviarLinkSenha(u.email!);
             avisar('ok', api.modo === 'supabase' ? `Link de troca de senha enviado para ${u.email}.` : `Prévia: no app publicado, ${u.email} receberia o link de troca de senha.`);
           } catch (e) { avisar('erro', mensagemErro(e)); }
         }}>Enviar link para trocar a senha</button>}
       </div>
+      {novoEmail && (
+        <div className="cartao" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label className="campo"><span>Novo e-mail de entrada</span>
+            <input className="entrada" type="email" value={novoEmail.valor} autoFocus onChange={(e) => setNovoEmail({ ...novoEmail, valor: e.target.value })} />
+          </label>
+          <span className="pequeno suave">A senha, a função, as filiais e o histórico continuam os mesmos. A pessoa passa a entrar com o e-mail novo.</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="btn primario peq" disabled={novoEmail.salvando || !novoEmail.valor.trim()} onClick={async () => {
+              setNovoEmail({ ...novoEmail, salvando: true });
+              try {
+                await api.alterarEmailUsuario(u.id, novoEmail.valor);
+                avisar('ok', `E-mail alterado. ${u.nome || 'A pessoa'} passa a entrar com ${novoEmail.valor.trim().toLowerCase()}.`);
+                aoFechar(true);
+              } catch (e) { avisar('erro', mensagemErro(e)); setNovoEmail({ ...novoEmail, salvando: false }); }
+            }}>{novoEmail.salvando ? 'Salvando…' : 'Salvar e-mail'}</button>
+            <button type="button" className="btn sutil peq" onClick={() => setNovoEmail(null)}>Cancelar</button>
+          </div>
+        </div>
+      )}
       <div className="grade-campos">
         <label className="campo"><span>Nome</span><input className="entrada" value={d.nome} onChange={(e) => setD({ ...d, nome: e.target.value })} /></label>
         <label className="campo"><span>Papel</span>

@@ -41,6 +41,17 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
   });
 
   const rpc = async <T>(fn: string, args: Record<string, unknown>): Promise<T> => ok(await sb.rpc(fn, args)) as T;
+  /** Funções de borda do Travion: a explicação do erro vem no corpo da resposta ({ erro }). */
+  const chamarFuncao = async (nome: string, body: Record<string, unknown>) => {
+    const { data, error } = await sb.functions.invoke(nome, { body });
+    if (error) {
+      let msg = error.message;
+      try { const c = await (error as { context?: Response }).context?.json(); if (c?.erro) msg = c.erro; } catch { /* mantém a mensagem */ }
+      throw new Error(msg);
+    }
+    if (data?.erro) throw new Error(data.erro);
+    return data;
+  };
 
   const api: Api = {
     modo: 'supabase',
@@ -248,14 +259,10 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
     },
     excluirConvite: (id) => rpc('excluir_convite', { p_id: id }),
     async enviarConviteEmail(email) {
-      const { data, error } = await sb.functions.invoke('convidar-usuario', { body: { email, redirectTo: window.location.origin + window.location.pathname } });
-      if (error) {
-        // A função devolve a explicação no corpo da resposta de erro.
-        let msg = error.message;
-        try { const c = await (error as { context?: Response }).context?.json(); if (c?.erro) msg = c.erro; } catch { /* mantém a mensagem */ }
-        throw new Error(msg);
-      }
-      if (data?.erro) throw new Error(data.erro);
+      await chamarFuncao('convidar-usuario', { email, redirectTo: window.location.origin + window.location.pathname });
+    },
+    async alterarEmailUsuario(perfilId, email) {
+      await chamarFuncao('alterar-email-usuario', { perfil_id: perfilId, email });
     },
     async enviarLinkSenha(email) {
       const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });

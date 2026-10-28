@@ -186,6 +186,8 @@ export interface Api {
   enviarConviteEmail(email: string): Promise<void>;
   /** Manda à pessoa o link de troca de senha (o mesmo do "Esqueci a senha"). */
   enviarLinkSenha(email: string): Promise<void>;
+  /** Troca o e-mail de entrada do usuário; a senha, o acesso e o histórico continuam. */
+  alterarEmailUsuario(perfilId: string, email: string): Promise<void>;
   /** Trata o link do e-mail de convite ao abrir o app; devolve 'convite' quando a pessoa precisa criar a senha. */
   confirmarLinkEmail(): Promise<'convite' | null>;
   matrizPermissoes(): Promise<MatrizPermissoes>;
