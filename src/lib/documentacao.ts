@@ -169,11 +169,11 @@ export function noAtalho(s: SolicitacaoDoc, atalho: Atalho, eu: string): boolean
   }
 }
 
-export function filtrarFila(ss: SolicitacaoDoc[], f: FiltrosFila, eu: string): SolicitacaoDoc[] {
+/** Filtros da fila sem o atalho: valem para a lista e para os números de cada atalho. */
+export function filtrarSemAtalho(ss: SolicitacaoDoc[], f: Omit<FiltrosFila, 'atalho'>): SolicitacaoDoc[] {
   const t = normalizar(f.busca);
   const tPlaca = normalizarPlaca(f.busca);
   return ss
-    .filter((s) => noAtalho(s, f.atalho, eu))
     .filter((s) => !f.tipo || s.tipo === f.tipo)
     .filter((s) => !f.filial || s.retrato.filial_id === f.filial)
     .filter((s) => !f.centro || (s.retrato.centro_custo_id ?? '') === f.centro)
@@ -181,7 +181,12 @@ export function filtrarFila(ss: SolicitacaoDoc[], f: FiltrosFila, eu: string): S
     .filter((s) => !t || (tPlaca.length >= 3 && [s.placa, ...s.placas_reboque].some((p) => p.includes(tPlaca)))
       || normalizar(s.retrato.lote_numero ?? '').includes(t) || normalizar(s.retrato.cliente ?? '').includes(t)
       || String(s.numero) === f.busca.trim() || (s.nomes_nf ?? []).some((n) => normalizar(n).includes(t))
-      || normalizar(s.est_codigo ?? '') === t || [...(s.est_documentos ?? []), ...(s.est_nfs_carga ?? [])].some((n) => normalizar(n) === t))
+      || normalizar(s.est_codigo ?? '') === t || [...(s.est_documentos ?? []), ...(s.est_nfs_carga ?? [])].some((n) => normalizar(n) === t));
+}
+
+export function filtrarFila(ss: SolicitacaoDoc[], f: FiltrosFila, eu: string): SolicitacaoDoc[] {
+  return filtrarSemAtalho(ss, f)
+    .filter((s) => noAtalho(s, f.atalho, eu))
     .sort((a, b) => (f.atalho === 'concluidas'
       ? (b.concluido_em ?? b.cancelado_em ?? b.atualizado_em).localeCompare(a.concluido_em ?? a.cancelado_em ?? a.atualizado_em)
       : a.enviado_em.localeCompare(b.enviado_em)));

@@ -15,7 +15,7 @@ import {
   DIAS_CURTOS, DIAS_SEMANA, type FiltrosPainel, type LinhaChamado, OPERACOES, type SituacaoPrazo, TIPOS_DEMANDA, type TipoDemanda, type VisaoEvolucao,
   dataSP, evolucao, filaAtual, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo, situacaoPrazo,
 } from '../../lib/painelOperacional';
-import type { MotivoDevolucao, TipoSolicitacaoDoc } from '../../types';
+import type { MotivoDevolucao } from '../../types';
 import { AbasAnalise } from './AbasAnalise';
 
 type IdQuadro = 'filas' | 'equipe' | 'mapa' | 'evolucao' | 'resumo';
@@ -331,9 +331,10 @@ const fmtPrazo = (min: number) => (min >= 60 && min % 60 === 0 ? `${min / 60} h`
 function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   return (
     <Quadro id="filas" titulo="Tempo de fila por operação" sub="Situação agora: chamados aguardando o apoio assumir ou retomar" modo={c.modo} aoExpandir={aoExpandir}>
+      <SemTipos tipos={c.pref.tipos} />
       <div className="po-filas">
-        {OPERACOES.map((op) => {
-          const f = filaAtual(c.linhas, op.tipos as TipoSolicitacaoDoc[], c.agora);
+        {OPERACOES.filter((op) => op.tipos.some((t) => c.pref.tipos.includes(t as TipoDemanda))).map((op) => {
+          const f = filaAtual(c.linhas.filter((l) => !c.pref.solicitante || l.s.solicitante_id === c.pref.solicitante), op.tipos.filter((t) => c.pref.tipos.includes(t as TipoDemanda)), c.agora);
           const sit = situacaoPrazo(f.media_ms, op.prazo_min);
           const sitAntigo = situacaoPrazo(f.mais_antigo_ms, op.prazo_min);
           return (
@@ -452,7 +453,10 @@ function QMapa({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
 function QEvolucao({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   const visao = c.pref.visaoEvol;
   const tipos = c.pref.tiposEvol;
-  const envios = useMemo(() => c.linhas.filter((l) => tipos.includes(l.s.tipo)).map((l) => Date.parse(l.s.enviado_em)), [c.linhas, tipos]);
+  const { solicitante, colaborador } = c.pref;
+  const envios = useMemo(() => c.linhas.filter((l) => tipos.includes(l.s.tipo)
+    && (!solicitante || l.s.solicitante_id === solicitante)
+    && (!colaborador || l.assumiram.has(colaborador) || l.s.responsavel_id === colaborador)).map((l) => Date.parse(l.s.enviado_em)), [c.linhas, tipos, solicitante, colaborador]);
   const r = useMemo(() => evolucao(envios, visao, c.dataEvol, c.agora, c.inicioDados), [envios, visao, c.dataEvol, c.agora, c.inicioDados]);
   const cmp = r.comparavel;
   const rotAnterior = visao === 'dia' ? 'Dia anterior' : visao === 'semana' ? 'Semana anterior' : 'Mês anterior';

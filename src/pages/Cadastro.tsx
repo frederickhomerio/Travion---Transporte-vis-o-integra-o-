@@ -271,15 +271,16 @@ function Acompanhamento({ aoAbrir }: { aoAbrir: (id: string) => void }) {
   const [filtro, setFiltro] = useState<FiltroAc>('abertos');
   const [busca, setBusca] = useState('');
   const todos = useMemo(() => Object.values(estado.solicitacoes).filter((s) => s.tipo === 'cadastro'), [estado.solicitacoes]);
-  const lista = useMemo(() => {
+  // A busca vale para a lista e para os números de cada situação.
+  const buscados = useMemo(() => {
     const t = normalizar(busca);
     const tp = normalizarPlaca(busca);
-    return todos
-      .filter((s) => filtro === 'todos' || (filtro === 'abertos' ? ABERTOS.includes(s.status) : !ABERTOS.includes(s.status)))
-      .filter((s) => !t || (tp && s.placa.includes(tp)) || normalizar(s.retrato.cliente ?? '').includes(t) || String(s.numero) === busca.trim())
-      .sort((a, b) => b.enviado_em.localeCompare(a.enviado_em));
-  }, [todos, filtro, busca]);
-  const n = (f: FiltroAc) => todos.filter((s) => f === 'todos' || (f === 'abertos' ? ABERTOS.includes(s.status) : !ABERTOS.includes(s.status))).length;
+    return todos.filter((s) => !t || (tp && s.placa.includes(tp)) || normalizar(s.retrato.cliente ?? '').includes(t) || String(s.numero) === busca.trim());
+  }, [todos, busca]);
+  const lista = useMemo(() => buscados
+    .filter((s) => filtro === 'todos' || (filtro === 'abertos' ? ABERTOS.includes(s.status) : !ABERTOS.includes(s.status)))
+    .sort((a, b) => b.enviado_em.localeCompare(a.enviado_em)), [buscados, filtro]);
+  const n = (f: FiltroAc) => buscados.filter((s) => f === 'todos' || (f === 'abertos' ? ABERTOS.includes(s.status) : !ABERTOS.includes(s.status))).length;
   const desatualizada = estado.falhaSync || app.conexao === 'offline';
 
   return (
@@ -295,7 +296,7 @@ function Acompanhamento({ aoAbrir }: { aoAbrir: (id: string) => void }) {
         <Segmentado rotulo="Situação" valor={filtro} aoMudar={setFiltro} opcoes={[
           { valor: 'abertos', rotulo: `Em aberto (${n('abertos')})` },
           { valor: 'concluidos', rotulo: `Concluídos e cancelados (${n('concluidos')})` },
-          { valor: 'todos', rotulo: 'Todos' },
+          { valor: 'todos', rotulo: `Todos (${n('todos')})` },
         ]} />
         <input className="entrada" type="search" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar placa, cliente ou nº" aria-label="Buscar cadastro" />
       </div>

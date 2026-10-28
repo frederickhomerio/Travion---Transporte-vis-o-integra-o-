@@ -9,7 +9,7 @@ import { AcessoNegado, Alerta, Carregando, EstadoVazio, Segmentado, useAviso } f
 import { mensagemErro } from '../data/api';
 import { useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
-import { type Atalho, FILTROS_FILA, type FiltrosFila, TIPO_DOC, filtrarFila, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
+import { type Atalho, FILTROS_FILA, type FiltrosFila, TIPO_DOC, filtrarFila, filtrarSemAtalho, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
 import { fmtHora } from '../lib/formato';
 import { documentosEstadia, periodoEstadia } from '../lib/estadia';
 import type { SolicitacaoDoc, TipoSolicitacaoDoc } from '../types';
@@ -59,7 +59,9 @@ export function ApoioOperacional() {
     return { filiais: ord(filiais), centros: ord(centros), resp: ord(resp) };
   }, [todas]);
 
-  const contagem = (a: Atalho) => todas.filter((s) => noAtalho(s, a, eu)).length;
+  // Os números dos atalhos seguem os filtros escolhidos (tipo, filial, centro, responsável e busca).
+  const filtradas = useMemo(() => filtrarSemAtalho(todas, f), [todas, f.tipo, f.filial, f.centro, f.responsavel, f.busca]); // eslint-disable-line react-hooks/exhaustive-deps
+  const contagem = (a: Atalho) => filtradas.filter((s) => noAtalho(s, a, eu)).length;
 
   if (!pode('apoio.pagina')) return <Layout titulo="Apoio Operacional"><AcessoNegado /></Layout>;
 
@@ -97,7 +99,7 @@ export function ApoioOperacional() {
           { valor: 'minhas', rotulo: `Minhas em atendimento (${contagem('minhas')})` },
           { valor: 'aguardando', rotulo: `Aguardando informação (${contagem('aguardando')})` },
           { valor: 'cliente', rotulo: `Aguardando cliente (${contagem('cliente')})` },
-          { valor: 'concluidas', rotulo: 'Concluídas' },
+          { valor: 'concluidas', rotulo: `Concluídas (${contagem('concluidas')})` },
         ]} />
 
         <div className="ao-filtros">
