@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState, useMemo } from 'react';
+import { FilaApoioDashboard } from '../components/analise/FilasOperacao';
 import { Layout } from '../components/Layout';
 import { AbasAnalise } from './analise/AbasAnalise';
 import { Alerta, Carregando, EstadoVazio, Icone, Segmentado } from '../components/ui';
@@ -123,6 +124,8 @@ export function Dashboard() {
               </Alerta>
             )}
 
+            {pode('analise.fila') && <FilaApoioDashboard />}
+
             <Destaque r={r} tipo={tipo} fin={exibirRs} />
 
             <div className="dash-kpis">
@@ -212,7 +215,7 @@ export function Dashboard() {
 
   if (tv) return <TvDashboard aoSair={() => setTv(false)}>{conteudo}</TvDashboard>;
   return (
-    <Layout titulo="Análise · Dashboard Embarques">
+    <Layout titulo="Dashboard Embarques">
       <AbasAnalise />
       {conteudo}
     </Layout>

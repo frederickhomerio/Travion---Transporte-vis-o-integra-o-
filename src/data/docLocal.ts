@@ -744,6 +744,18 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       evento(s, 'evento', `Atendimento retomado por ${eu().nome}`);
       return fim(s);
     }),
+    async filaApoio() {
+      await pronto;
+      exigir('analise.fila');
+      const na = db.solicitacoes.filter((s) => s.status === 'enviado' || s.status === 'correcao_recebida');
+      const ids = new Set(na.map((s) => s.id));
+      return {
+        agora: new Date().toISOString(),
+        solicitacoes: na.map((s): SolPainel => ({ id: s.id, numero: s.numero, tipo: s.tipo, status: s.status, filial_id: null, centro_custo_id: null,
+          solicitante_id: '', solicitante_nome: '', responsavel_id: null, responsavel_nome: null, enviado_em: s.enviado_em })),
+        eventos: (db.eventos ?? []).filter((e) => ids.has(e.s)).map((e) => ({ ...e, responsavel_id: null, responsavel_nome: null, motivo: null })),
+      };
+    },
     async painel(desde, ate, alteradosDesde) {
       await pronto;
       exigir('analise.operacional');

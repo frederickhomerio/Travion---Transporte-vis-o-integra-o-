@@ -100,6 +100,7 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
     solicitarAjuste: (id, texto, referencia, motivo, motivoOutro) => rpc<ResultadoDoc>('solicitar_ajuste_doc',
       { p_id: id, p_texto: texto, p_referencia: referencia, p_motivo: motivo, p_motivo_outro: motivoOutro }),
     retomar: (id) => rpc<ResultadoDoc>('retomar_atendimento_doc', { p_id: id }),
+    filaApoio: () => rpc<Pick<DadosPainel, 'agora' | 'solicitacoes' | 'eventos'>>('fila_apoio', {}),
     painel: (desde, ate, alteradosDesde) => rpc<DadosPainel>('painel_operacional', { p_desde: desde, p_ate: ate, p_alterados_desde: alteradosDesde }),
     responder: (id, texto, anexos) => rpc<ResultadoDoc>('responder_ajuste_doc', { p_id: id, p_texto: texto, p_anexos: anexos }),
     anexarEmitidos: (id, anexos) => rpc<ResultadoDoc>('anexar_documentos_doc', { p_id: id, p_anexos: anexos }),

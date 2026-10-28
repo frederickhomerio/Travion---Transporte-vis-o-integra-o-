@@ -96,6 +96,8 @@ export interface ApiDoc {
   retomar(id: string): Promise<ResultadoDoc>;
   /** Painel Operacional (migração 1900): chamados enviados em [desde, ate) ou ainda abertos, e seus eventos. */
   painel(desde: string, ate: string, alteradosDesde: string | null): Promise<DadosPainel>;
+  /** Fila atual do Apoio inteiro, sem nomes, para o Dashboard Embarques (migração 2500). */
+  filaApoio(): Promise<Pick<DadosPainel, 'agora' | 'solicitacoes' | 'eventos'>>;
   responder(id: string, texto: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   anexarEmitidos(id: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   concluir(id: string): Promise<ResultadoDoc>;

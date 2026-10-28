@@ -876,7 +876,7 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 @media (max-width: 720px) { .pu-aba { width: 100%; } }
 
 /* ---------------------------------------------------------------------------
-   Análise · Painel Operacional
+   Painel Operacional
    --------------------------------------------------------------------------- */
 .abas-analise { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--borda); overflow-x: auto; }
 .abas-analise a { padding: 8px 14px; font-weight: 600; color: var(--cinza-700); text-decoration: none; border-bottom: 3px solid transparent; white-space: nowrap; }

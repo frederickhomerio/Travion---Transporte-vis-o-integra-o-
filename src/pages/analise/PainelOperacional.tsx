@@ -4,6 +4,7 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FilasOperacao } from '../../components/analise/FilasOperacao';
 import { GraficoLinha, MapaCalorGrade } from '../../components/analise/Graficos';
 import { Layout } from '../../components/Layout';
 import { AcessoNegado, Alerta, Carregando, Icone, Segmentado } from '../../components/ui';
@@ -15,8 +16,8 @@ import { MOTIVO_DEVOLUCAO, STATUS_DOC, duracao, fmtPlaca } from '../../lib/docum
 import { documentosEstadia, fmtReais, periodoEstadia } from '../../lib/estadia';
 import { fmtDataCurta, fmtDataHora, fmtHora, fmtNum, fmtPct, hojeSP } from '../../lib/formato';
 import {
-  DIAS_CURTOS, DIAS_SEMANA, type FiltrosPainel, type LinhaChamado, OPERACOES, type SituacaoPrazo, TIPOS_DEMANDA, type TipoDemanda, type VisaoEvolucao,
-  dataSP, evolucao, filaAtual, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo, situacaoPrazo,
+  DIAS_CURTOS, DIAS_SEMANA, type FiltrosPainel, type LinhaChamado, TIPOS_DEMANDA, type TipoDemanda, type VisaoEvolucao,
+  dataSP, evolucao, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo,
 } from '../../lib/painelOperacional';
 import type { MotivoDevolucao, StatusDoc } from '../../types';
 import { ResultadoPill } from '../Estadia';
@@ -71,7 +72,7 @@ const fmtDur = (ms: number | null) => (ms === null ? '—' : duracao(ms));
 export function PainelOperacional() {
   const { pode, estado } = useApp();
   const ok = pode('analise.operacional');
-  if (!ok) return <Layout titulo="Análise · Painel Operacional"><AbasAnalise /><AcessoNegado motivo="Seu usuário não tem acesso ao Painel Operacional (Administração → Permissões)." /></Layout>;
+  if (!ok) return <Layout titulo="Painel Operacional"><AbasAnalise /><AcessoNegado motivo="Seu usuário não tem acesso ao Painel Operacional (Administração → Permissões)." /></Layout>;
   return <Painel perfilId={estado.sessao!.perfil.id} />;
 }
 
@@ -149,7 +150,7 @@ function Painel({ perfilId }: { perfilId: string }) {
   }
 
   return (
-    <Layout titulo="Análise · Painel Operacional">
+    <Layout titulo="Painel Operacional">
       <AbasAnalise />
       <div className="po">
         <div className="po-topo">
@@ -328,38 +329,11 @@ function SemTipos({ tipos }: { tipos: TipoDemanda[] }) {
   return null;
 }
 
-const ROTULO_SITUACAO: Record<SituacaoPrazo, string> = {
-  no_prazo: '● Dentro do prazo', atencao: '▲ Atraso de até 5 min', atrasado: '■ Atraso acima de 5 min',
-};
-
-const fmtPrazo = (min: number) => (min >= 60 && min % 60 === 0 ? `${min / 60} h` : `${min} min`);
-
 function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   return (
     <Quadro id="filas" titulo="Tempo de fila por operação" sub="Situação agora: chamados aguardando o apoio assumir ou retomar" modo={c.modo} aoExpandir={aoExpandir}>
       <SemTipos tipos={c.pref.tipos} />
-      <div className="po-filas">
-        {OPERACOES.filter((op) => op.tipos.some((t) => c.pref.tipos.includes(t as TipoDemanda))).map((op) => {
-          const f = filaAtual(c.linhas.filter((l) => !c.pref.solicitante || l.s.solicitante_id === c.pref.solicitante), op.tipos.filter((t) => c.pref.tipos.includes(t as TipoDemanda)), c.agora);
-          const sit = situacaoPrazo(f.media_ms, op.prazo_min);
-          const sitAntigo = situacaoPrazo(f.mais_antigo_ms, op.prazo_min);
-          return (
-            <div key={op.id} className={`po-fila${sit ? ` prazo-${sit}` : ''}`}>
-              <div className="po-fila-cab">{op.rotulo}{op.prazo_min && <span className="po-prazo">Prazo {fmtPrazo(op.prazo_min)}</span>}</div>
-              <div className="po-fila-corpo">
-                <span className="po-fila-rot">Espera média atual</span>
-                <span className="po-fila-val">{fmtDur(f.media_ms)}</span>
-                <span className={`po-sit${sit ? ` prazo-${sit}` : ''}`}>{sit ? ROTULO_SITUACAO[sit] : f.quantidade ? 'Sem horário de entrada' : 'Fila vazia'}</span>
-                <div className="po-fila-linha"><span>Chamados na fila</span><strong>{f.quantidade}</strong></div>
-                <div className="po-fila-linha"><span>Mais antigo aguardando</span><strong className={sitAntigo ? `txt-prazo-${sitAntigo}` : undefined}>{fmtDur(f.mais_antigo_ms)}</strong></div>
-                {op.composicao && <span className="po-fila-nota">{op.composicao}</span>}
-                {f.retorno > 0 && <span className="po-fila-nota">{f.retorno} na fila de retorno (correção recebida)</span>}
-                {f.sem_registro > 0 && <span className="po-fila-nota">{f.sem_registro} sem registro do horário de entrada</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <FilasOperacao linhas={c.linhas.filter((l) => !c.pref.solicitante || l.s.solicitante_id === c.pref.solicitante)} tipos={c.pref.tipos} agora={c.agora} />
     </Quadro>
   );
 }
