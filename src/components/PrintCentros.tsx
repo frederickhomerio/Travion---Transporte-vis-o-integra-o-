@@ -6,7 +6,7 @@ import { useDoc } from '../data/documentacao';
 import type { Indices } from '../lib/cadastros';
 import { fmtData, fmtDataAsHora, fmtHora } from '../lib/formato';
 import { type PrintCentro, printPorCentro } from '../lib/posicoes';
-import type { Configuracoes, LinhaFrete } from '../types';
+import type { LinhaFrete } from '../types';
 import { Alerta, Icone, Modal } from './ui';
 
 const fmtT = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} t`;
@@ -21,11 +21,11 @@ async function gerarPng(el: HTMLElement): Promise<Blob> {
   return blob;
 }
 
-export function PrintCentros({ linhas, idx, cfg, data, aoFechar }: {
-  linhas: LinhaFrete[]; idx: Indices; cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>; data: string; aoFechar: () => void;
+export function PrintCentros({ linhas, idx, data, aoFechar }: {
+  linhas: LinhaFrete[]; idx: Indices; data: string; aoFechar: () => void;
 }) {
   const { estado: doc } = useDoc();
-  const [grupos] = useState(() => printPorCentro(linhas, idx, cfg, doc.lotes));
+  const [grupos] = useState(() => printPorCentro(linhas, idx, doc.lotes));
   const [geradoEm] = useState(() => new Date().toISOString());
   const refs = useRef<Record<string, HTMLDivElement | null>>({});
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro' | 'aviso'; txt: string } | null>(null);

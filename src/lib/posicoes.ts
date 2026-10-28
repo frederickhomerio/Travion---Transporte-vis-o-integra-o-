@@ -1,7 +1,7 @@
 // Regras das telas Posições de Embarque (supervisores) e Posição do Cliente (mesa comercial).
 // Funções puras: a autorização real está no banco; aqui só se organiza o que o servidor já liberou.
 
-import type { Configuracoes, LinhaFrete, Posicao, StatusLiberacao } from '../types';
+import type { LinhaFrete, Posicao, StatusLiberacao } from '../types';
 import { metaDaPosicao, volumes } from './calculos';
 import { type Indices, cidadeUF, nome } from './cadastros';
 import { type FaixaBarra, faixaBarra } from './dashboard';
@@ -227,7 +227,7 @@ export interface PrintCentro {
 }
 
 /** Agrupa as posições (já filtradas) por centro de custo, na ordem de origem, coleta e destino. */
-export function printPorCentro(linhas: LinhaFrete[], idx: Indices, cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>, lotes: Record<string, { numero: string }> = {}): PrintCentro[] {
+export function printPorCentro(linhas: LinhaFrete[], idx: Indices, lotes: Record<string, { numero: string }> = {}): PrintCentro[] {
   const grupos = new Map<string, LinhaFrete[]>();
   for (const l of linhas) {
     if (!l.posicao) continue;
@@ -244,7 +244,7 @@ export function printPorCentro(linhas: LinhaFrete[], idx: Indices, cfg: Pick<Con
         const e = l.embarque;
         const p = l.posicao!;
         const v = volumes(p);
-        const meta = metaDaPosicao(p, cfg).volume_t;
+        const meta = metaDaPosicao(p).volume_t;
         const pct = meta && meta > 0 ? (v.carregado_t / meta) * 100 : null;
         return {
           chave: p.id, cliente: nome(idx.cliente, e.cliente_id), lote: lotes[e.id]?.numero ?? null,

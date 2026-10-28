@@ -77,7 +77,7 @@ function Resumo({ e, idx }: { e: Embarque; idx: Indices }) {
   const { estado } = useApp();
   const posicao = Object.values(estado.posicoes).find((p) => p.embarque_id === e.id && p.data_operacional === estado.data) ?? null;
   const v = posicao ? volumes(posicao) : null;
-  const meta = posicao ? metaDaPosicao(posicao, estado.config) : metaDoEmbarque(e, estado.config);
+  const meta = posicao ? metaDaPosicao(posicao) : metaDoEmbarque(e);
   const cliente = idx.cliente.get(e.cliente_id);
   return (
     <>
@@ -90,7 +90,7 @@ function Resumo({ e, idx }: { e: Embarque; idx: Indices }) {
           <dt>Origem / coleta</dt><dd>{cidadeUF(e.origem_cidade, e.origem_uf)} — {nome(idx.local, e.local_coleta_id, 'não informado')}</dd>
           <dt>Destino / entrega</dt><dd>{cidadeUF(e.destino_cidade, e.destino_uf)} — {nome(idx.local, e.local_entrega_id, 'não informado')}</dd>
           <dt>Liberação</dt><dd><BadgeStatus status={e.status_liberacao} />{e.data_liberacao && <span className="suave"> desde {fmtData(e.data_liberacao)}</span>}</dd>
-          <dt>Meta diária</dt><dd>{e.cadencia_valor ? `${fmtNum(e.cadencia_valor, 1)} ${ROTULO_CADENCIA[e.cadencia_unidade]}` : `Sem meta própria (usa a meta padrão de ${estado.config.meta_veiculos_lote_padrao} veículos/lote até alguém preencher)`}</dd>
+          <dt>Meta diária</dt><dd>{e.cadencia_valor ? `${fmtNum(e.cadencia_valor, 1)} ${ROTULO_CADENCIA[e.cadencia_unidade]}` : 'Sem meta: preencha a meta diária do embarque'}</dd>
           <dt>Toneladas médias por veículo</dt><dd>{fmtT(e.toneladas_por_veiculo)}</dd>
           <dt>Lote no ERP</dt><dd><LoteDoEmbarque embarqueId={e.id} /></dd>
           <dt>Situação cadastral</dt><dd>{e.situacao === 'ativo' ? 'Ativo' : 'Arquivado'}</dd>
@@ -110,7 +110,7 @@ function Resumo({ e, idx }: { e: Embarque; idx: Indices }) {
               <dt>Total operacional</dt><dd>{v.total_veiculos} veículos <span className="suave pequeno">(soma das posições informadas)</span></dd>
               <dt>Volume projetado</dt><dd>{fmtT(v.projetado_t)} <span className="suave pequeno">(porta + carregado; sem trânsito)</span></dd>
               <dt>Potencial com trânsito</dt><dd>{fmtT(v.potencial_t)}</dd>
-              <dt>Meta do lote</dt><dd>{meta.volume_t === null ? 'Sem meta definida' : `${fmtNum(meta.veiculos, 1)} veículos = ${fmtT(meta.volume_t)} (${meta.origem === 'cadencia' ? 'meta do embarque' : 'meta padrão'})`}</dd>
+              <dt>Meta do lote</dt><dd>{meta.volume_t === null ? 'Sem meta definida' : `${fmtNum(meta.veiculos, 1)} veículos = ${fmtT(meta.volume_t)} (meta do embarque)`}</dd>
               {v.nao_informados > 0 && <><dt>Atenção</dt><dd>{v.nao_informados} contador(es) não informado(s)</dd></>}
             </dl>
           )}

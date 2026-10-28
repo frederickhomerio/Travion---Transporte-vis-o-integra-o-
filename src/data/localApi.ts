@@ -52,7 +52,7 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['importacao.executar', 'Administração', 'Importar planilhas e ver dados de referência da origem'],
   ['cadastros.gerenciar', 'Administração', 'Gerenciar clientes, filiais, comerciais, produtos e locais'],
   ['usuarios.gerenciar', 'Administração', 'Gerenciar usuários, convites e matriz de permissões'],
-  ['configuracoes.gerenciar', 'Administração', 'Alterar configurações gerais (capacidade padrão, meta padrão etc.)'],
+  ['configuracoes.gerenciar', 'Administração', 'Alterar configurações gerais (capacidade padrão, validade de links etc.)'],
   ['documentacao.ver', 'Documentação', 'Consultar a documentação dos embarques (solicitações, pendências e documentos emitidos)'],
   ['documentacao.solicitar', 'Documentação', 'Pedir geração de lote e emissão de documentos e responder pendências do apoio'],
   ['documentacao.cancelar', 'Documentação', 'Cancelar solicitações de documentação (com motivo)'],

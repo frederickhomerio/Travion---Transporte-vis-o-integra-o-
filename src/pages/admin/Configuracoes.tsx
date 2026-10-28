@@ -13,7 +13,6 @@ export function Configuracoes() {
   const c = estado.config;
   const [d, setD] = useState({
     capacidade_padrao_t: String(c.capacidade_padrao_t).replace('.', ','),
-    meta_veiculos_lote_padrao: String(c.meta_veiculos_lote_padrao).replace('.', ','),
     link_validade_padrao_horas: String(c.link_validade_padrao_horas),
     cadencia_unidade_padrao: c.cadencia_unidade_padrao,
     ticket_inclui_frete_zero: c.ticket_inclui_frete_zero,
@@ -24,7 +23,7 @@ export function Configuracoes() {
   async function salvar() {
     setErro(null);
     const novos: Partial<Config> = {};
-    for (const k of ['capacidade_padrao_t', 'meta_veiculos_lote_padrao', 'link_validade_padrao_horas'] as const) {
+    for (const k of ['capacidade_padrao_t', 'link_validade_padrao_horas'] as const) {
       const n = parseNumeroBR(d[k]);
       if (!n || n <= 0) { setErro('Os valores numéricos devem ser maiores que zero.'); return; }
       if (n !== c[k]) novos[k] = n;
@@ -54,10 +53,6 @@ export function Configuracoes() {
             <input className="entrada" inputMode="decimal" value={d.capacidade_padrao_t} onChange={(e) => setD({ ...d, capacidade_padrao_t: e.target.value })} />
             <small>Usado em embarques novos. Cada embarque pode ter o seu valor; posições já registradas guardam o valor da época.</small>
           </label>
-          <label className="campo"><span>Meta de veículos por lote (padrão)</span>
-            <input className="entrada" inputMode="decimal" value={d.meta_veiculos_lote_padrao} onChange={(e) => setD({ ...d, meta_veiculos_lote_padrao: e.target.value })} />
-            <small>Vale para lotes sem cadência. Meta do lote = veículos × toneladas por veículo.</small>
-          </label>
           <label className="campo"><span>Unidade padrão da cadência</span>
             <select className="entrada" value={d.cadencia_unidade_padrao} onChange={(e) => setD({ ...d, cadencia_unidade_padrao: e.target.value as Config['cadencia_unidade_padrao'] })}>
               <option value="veiculos_dia">Veículos por dia</option><option value="toneladas_dia">Toneladas por dia</option>
@@ -69,7 +64,7 @@ export function Configuracoes() {
         </div>
         <label className="check"><input type="checkbox" checked={d.ticket_inclui_frete_zero} onChange={(e) => setD({ ...d, ticket_inclui_frete_zero: e.target.checked })} />
           Incluir fretes iguais a zero no ticket médio (a planilha incluía)</label>
-        <p className="pequeno suave" style={{ margin: 0 }}>Valores atuais: {fmtT(c.capacidade_padrao_t)} por veículo · meta {c.meta_veiculos_lote_padrao} veículos/lote ({fmtT(c.capacidade_padrao_t * c.meta_veiculos_lote_padrao)}). Toda alteração fica no histórico.</p>
+        <p className="pequeno suave" style={{ margin: 0 }}>Valores atuais: {fmtT(c.capacidade_padrao_t)} por veículo. A meta diária é obrigatória em cada embarque. Toda alteração fica no histórico.</p>
         {erro && <Alerta tipo="erro">{erro}</Alerta>}
         <div><button className="btn primario" disabled={salvando} onClick={salvar}>{salvando ? 'Salvando…' : 'Salvar configurações'}</button></div>
       </div>

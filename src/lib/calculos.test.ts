@@ -5,14 +5,14 @@ import { aderencia, mediaSimples, metaLote, resumir, resumirPeriodo, resumoFinan
 const emb = (over: Partial<Embarque> = {}): Embarque => ({
   id: 'e1', codigo: 1, cliente_id: 'c1', comercial_id: null, filial_id: 'f1', produto_id: null,
   origem_cidade: 'RIO VERDE', origem_uf: 'GO', local_coleta_id: null, destino_cidade: 'SANTOS', destino_uf: 'SP',
-  local_entrega_id: null, status_liberacao: 'liberado', data_liberacao: null, cadencia_valor: null,
+  local_entrega_id: null, status_liberacao: 'liberado', data_liberacao: null, cadencia_valor: 2,
   cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: 40, observacao_interna: null, situacao: 'ativo',
   is_demo: false, chave_importacao: null, versao: 1, atualizado_em: '2026-10-26T12:00:00Z', atualizado_por_nome: null,
   ...over,
 });
 const pos = (over: Partial<Posicao> = {}): Posicao => ({
   id: 'p1', embarque_id: 'e1', data_operacional: '2026-10-26', porta: 3, transito: 2, carregados: 4,
-  toneladas_por_veiculo: 40, meta_valor: null, meta_unidade: 'veiculos_dia', obs_operacional: null, obs_cliente: null,
+  toneladas_por_veiculo: 40, meta_valor: 2, meta_unidade: 'veiculos_dia', obs_operacional: null, obs_cliente: null,
   is_demo: false, origem: 'app', versao: 1, atualizado_em: '2026-10-26T12:00:00Z', atualizado_por_nome: null,
   ...over,
 });
@@ -39,21 +39,21 @@ describe('critério de aceite: volumes', () => {
 });
 
 describe('critério de aceite: metas e aderência', () => {
-  it('lote com meta padrão de 2 veículos e 40 t tem meta de 80 t', () => {
-    expect(metaLote({ valor: null, unidade: 'veiculos_dia', capacidade: 40 }, { meta_veiculos_lote_padrao: 2 }).volume_t).toBe(80);
+  it('lote sem meta diária fica sem meta (não há meta padrão)', () => {
+    expect(metaLote({ valor: null, unidade: 'veiculos_dia', capacidade: 40 }).volume_t).toBeNull();
   });
   it('cadência específica substitui a meta padrão', () => {
-    const m = metaLote({ valor: 3, unidade: 'veiculos_dia', capacidade: 40 }, { meta_veiculos_lote_padrao: 2 });
+    const m = metaLote({ valor: 3, unidade: 'veiculos_dia', capacidade: 40 });
     expect(m).toMatchObject({ veiculos: 3, volume_t: 120, origem: 'cadencia' });
   });
   it('cadência em toneladas/dia', () => {
-    const m = metaLote({ valor: 100, unidade: 'toneladas_dia', capacidade: 40 }, { meta_veiculos_lote_padrao: 2 });
+    const m = metaLote({ valor: 100, unidade: 'toneladas_dia', capacidade: 40 });
     expect(m).toMatchObject({ veiculos: 2.5, volume_t: 100 });
   });
   it('meta ausente não causa divisão por zero', () => {
     expect(aderencia(280, 0)).toBeNull();
     expect(aderencia(280, null)).toBeNull();
-    const r = resumir([{ embarque: emb(), posicao: pos(), financeiro: null }], { ...CONFIG_PADRAO, meta_veiculos_lote_padrao: 0 }, false);
+    const r = resumir([{ embarque: emb({ cadencia_valor: null }), posicao: pos({ meta_valor: null }), financeiro: null }], CONFIG_PADRAO, false);
     expect(r.disponibilizado_t).toBeNull();
     expect(r.aderencia_pct).toBeNull();
   });
@@ -124,7 +124,7 @@ describe('período de vários dias', () => {
       pos({ id: 'b', data_operacional: '2026-10-25', porta: 4, transito: 2, carregados: 2 }),
       pos({ id: 'c', data_operacional: '2026-10-26', porta: 3, transito: 2, carregados: 4 }),
     ];
-    const r = resumirPeriodo([e], ps, '2026-10-24', '2026-10-26', CONFIG_PADRAO);
+    const r = resumirPeriodo([e], ps, '2026-10-24', '2026-10-26');
     expect(r.porta_saldo).toBe(3); // não soma 5 + 4 + 3
     expect(r.transito_saldo).toBe(2);
     expect(r.carregados_acumulados).toBe(9);

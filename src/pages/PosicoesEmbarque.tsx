@@ -14,7 +14,7 @@ import { cidadeUF, nome, type Indices } from '../lib/cadastros';
 import { faixaBarra } from '../lib/dashboard';
 import { fmtDataAsHora, fmtData, hojeSP, ROTULO_PAPEL } from '../lib/formato';
 import { ajustarFiltros, centroDaLinha, FILTROS_SUPERVISOR_VAZIOS, type FiltrosSupervisor, filtrarSupervisor, type Opcao, opcoesSupervisor, SEM_CENTRO } from '../lib/posicoes';
-import type { Configuracoes, LinhaFrete } from '../types';
+import type { LinhaFrete } from '../types';
 
 const CHAVE_RASCUNHOS = 'travion-rascunhos-posicoes';
 
@@ -165,7 +165,7 @@ export function PosicoesEmbarque() {
             </nav>
             {rascunhoAlterado(rascunhos[atual.posicao!.id]) && <p className="pe-dica"><Icone nome="atualizar" tam={14} /> Rascunho deste embarque guardado nesta aba, ainda não salvo.</p>}
           </div>
-          <MiniBlocos lista={lista} atualId={atual.embarque.id} idx={idx} cfg={estado.config} pendentes={pendentes}
+          <MiniBlocos lista={lista} atualId={atual.embarque.id} idx={idx} pendentes={pendentes}
             aoEscolher={(id) => { setAtualId(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
           </div>
         )}
@@ -175,7 +175,7 @@ export function PosicoesEmbarque() {
           <button className="btn primario" disabled={!lista.length} onClick={() => setPrint(true)}><Icone nome="baixar" tam={18} />Imagem por centro de custo</button>
         </div>
       </div>
-      {print && <PrintCentros linhas={lista} idx={idx} cfg={estado.config} data={hoje} aoFechar={() => setPrint(false)} />}
+      {print && <PrintCentros linhas={lista} idx={idx} data={hoje} aoFechar={() => setPrint(false)} />}
       {abrir && <AbrirPosicoes dataInicial={hoje} aoFechar={() => setAbrir(false)} />}
     </Layout>
   );
@@ -194,8 +194,8 @@ function FiltroBotao({ rotulo, todos, valor, opcoes, aoMudar }: { rotulo: string
 }
 
 /** Computador: miniatura de todos os blocos do filtro, ao lado do cartão. Clicar abre o bloco para preencher. */
-function MiniBlocos({ lista, atualId, idx, cfg, pendentes, aoEscolher }: {
-  lista: LinhaFrete[]; atualId: string; idx: Indices; cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>; pendentes: string[]; aoEscolher: (embarqueId: string) => void;
+function MiniBlocos({ lista, atualId, idx, pendentes, aoEscolher }: {
+  lista: LinhaFrete[]; atualId: string; idx: Indices; pendentes: string[]; aoEscolher: (embarqueId: string) => void;
 }) {
   return (
     <aside className="pe-minis" aria-label="Todos os blocos do filtro">
@@ -212,7 +212,7 @@ function MiniBlocos({ lista, atualId, idx, cfg, pendentes, aoEscolher }: {
           const e = l.embarque;
           const p = l.posicao!;
           const v = volumes(p);
-          const meta = metaDaPosicao(p, cfg).volume_t;
+          const meta = metaDaPosicao(p).volume_t;
           const faixa = faixaBarra(meta && meta > 0 ? (v.carregado_t / meta) * 100 : null);
           const cc = centroDaLinha(l, idx);
           const ativo = e.id === atualId;

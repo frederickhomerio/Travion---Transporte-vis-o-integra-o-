@@ -49,18 +49,15 @@ export function volumes(p: ContadoresCapacidade): Volumes {
 export interface MetaLote {
   veiculos: number | null;
   volume_t: number | null;
-  origem: 'cadencia' | 'padrao' | 'sem_meta';
+  origem: 'cadencia' | 'sem_meta';
   unidade: UnidadeCadencia | null;
 }
 
 /**
- * Meta do lote no dia. Cadência específica (preservada na posição) tem prioridade;
- * sem cadência, usa a meta padrão de veículos por lote × capacidade.
+ * Meta do lote no dia: a meta diária do embarque (obrigatória desde a migração 2100; preservada na posição).
+ * Sem meta informada, fica "sem meta" (não há mais meta padrão por lote).
  */
-export function metaLote(
-  meta: { valor: number | null; unidade: UnidadeCadencia; capacidade: number },
-  cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>,
-): MetaLote {
+export function metaLote(meta: { valor: number | null; unidade: UnidadeCadencia; capacidade: number }): MetaLote {
   const cap = meta.capacidade;
   if (meta.valor !== null && meta.valor > 0) {
     if (meta.unidade === 'toneladas_dia') {
@@ -68,17 +65,15 @@ export function metaLote(
     }
     return { veiculos: meta.valor, volume_t: meta.valor * cap, origem: 'cadencia', unidade: 'veiculos_dia' };
   }
-  const padrao = cfg.meta_veiculos_lote_padrao;
-  if (padrao > 0) return { veiculos: padrao, volume_t: padrao * cap, origem: 'padrao', unidade: 'veiculos_dia' };
   return { veiculos: null, volume_t: null, origem: 'sem_meta', unidade: null };
 }
 
-export function metaDaPosicao(p: Posicao, cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>): MetaLote {
-  return metaLote({ valor: p.meta_valor, unidade: p.meta_unidade, capacidade: p.toneladas_por_veiculo }, cfg);
+export function metaDaPosicao(p: Posicao): MetaLote {
+  return metaLote({ valor: p.meta_valor, unidade: p.meta_unidade, capacidade: p.toneladas_por_veiculo });
 }
 
-export function metaDoEmbarque(e: Embarque, cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>): MetaLote {
-  return metaLote({ valor: e.cadencia_valor, unidade: e.cadencia_unidade, capacidade: e.toneladas_por_veiculo }, cfg);
+export function metaDoEmbarque(e: Embarque): MetaLote {
+  return metaLote({ valor: e.cadencia_valor, unidade: e.cadencia_unidade, capacidade: e.toneladas_por_veiculo });
 }
 
 /** Aderência % = projetado ÷ disponibilizado × 100. Sem denominador válido → null ("Sem meta definida"). Sem teto de 100%. */
@@ -182,7 +177,7 @@ export function resumir(linhas: LinhaFrete[], cfg: Configuracoes, comFinanceiro:
     for (const k of Object.keys(acc) as Array<keyof Volumes>) acc[k] += v[k];
     if (v.nao_informados === 3) semInfo++;
     if (l.embarque.status_liberacao === 'suspenso' && v.total_veiculos > 0) suspensosComVeiculos++;
-    const m = metaDaPosicao(p, cfg);
+    const m = metaDaPosicao(p);
     if (m.origem === 'cadencia') cadPropria++;
     if (m.volume_t === null) semMeta++;
     else {
@@ -253,7 +248,6 @@ export function resumirPeriodo(
   posicoes: Posicao[],
   inicio: string,
   fim: string,
-  cfg: Configuracoes,
 ): ResumoPeriodo {
   const ids = new Set(embarques.map((e) => e.id));
   const doPeriodo = posicoes.filter((p) => ids.has(p.embarque_id) && p.data_operacional >= inicio && p.data_operacional <= fim);
@@ -273,7 +267,7 @@ export function resumirPeriodo(
     for (const p of ps) {
       carr += n0(p.carregados);
       carrT += n0(p.carregados) * p.toneladas_por_veiculo;
-      const m = metaDaPosicao(p, cfg);
+      const m = metaDaPosicao(p);
       if (m.volume_t === null) semMeta++;
       else meta += m.volume_t;
     }

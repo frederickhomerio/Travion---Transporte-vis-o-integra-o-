@@ -5,13 +5,13 @@ import { diasDoIntervalo, faixaBarra, indicadores, indicadoresPorGrupo, interval
 const emb = (id: string, filial: string): Embarque => ({
   id, codigo: 1, cliente_id: 'c1', comercial_id: null, filial_id: filial, produto_id: null,
   origem_cidade: 'RIO VERDE', origem_uf: 'GO', local_coleta_id: null, destino_cidade: 'SANTOS', destino_uf: 'SP',
-  local_entrega_id: null, status_liberacao: 'liberado', data_liberacao: null, cadencia_valor: null,
+  local_entrega_id: null, status_liberacao: 'liberado', data_liberacao: null, cadencia_valor: 2,
   cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: 40, observacao_interna: null, situacao: 'ativo',
   is_demo: false, chave_importacao: null, versao: 1, atualizado_em: '', atualizado_por_nome: null,
 });
 const pos = (eid: string, data: string, porta: number, carregados: number): Posicao => ({
   id: `${eid}-${data}`, embarque_id: eid, data_operacional: data, porta, transito: 1, carregados,
-  toneladas_por_veiculo: 40, meta_valor: null, meta_unidade: 'veiculos_dia', obs_operacional: null, obs_cliente: null,
+  toneladas_por_veiculo: 40, meta_valor: 2, meta_unidade: 'veiculos_dia', obs_operacional: null, obs_cliente: null,
   is_demo: false, origem: 'app', versao: 1, atualizado_em: '', atualizado_por_nome: null,
 });
 const fin = (eid: string, fe: number, fm: number): Financeiro => ({
@@ -43,7 +43,7 @@ describe('indicadores do dashboard', () => {
     expect(r.margem_bruta).toBeCloseTo(4000);
     expect(r.margem_liquida).toBeCloseTo(4000 - 720);
     expect(r.margem_liquida_pct).toBeCloseTo(8.2);
-    // meta padrão 2 veículos × 40 t = 80 t disponibilizado → R$ 16.000
+    // meta diária 2 veículos × 40 t = 80 t disponibilizado → R$ 16.000
     expect(r.faturamento_disponibilizado).toBeCloseTo(16000);
   });
   it('soma os dias: carregados acumulam, porta é o saldo do último dia', () => {
