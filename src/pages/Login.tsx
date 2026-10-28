@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { mensagemErro } from '../data/api';
 import { PERFIS_PREVIA } from '../data/localApi';
 import { ROTULO_PAPEL } from '../lib/formato';
@@ -111,6 +111,7 @@ export function Login() {
 export function NovaSenha() {
   const { api } = useApp();
   const nav = useNavigate();
+  const convite = new URLSearchParams(useLocation().search).get('convite') === '1';
   const [senha, setSenha] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   return (
@@ -119,7 +120,8 @@ export function NovaSenha() {
         e.preventDefault();
         try { await api.definirNovaSenha(senha); nav('/'); } catch (err) { setMsg(mensagemErro(err)); }
       }}>
-        <h1>Nova senha</h1>
+        <h1>{convite ? 'Crie sua senha' : 'Nova senha'}</h1>
+        {convite && <p className="suave">Bem-vindo ao Travion. Seu acesso já está liberado com a função e as filiais do convite; falta só a senha.</p>}
         <label className="campo"><span>Nova senha (mínimo 8 caracteres)</span>
           <input className="entrada" type="password" minLength={8} value={senha} onChange={(e) => setSenha(e.target.value)} required autoComplete="new-password" />
         </label>

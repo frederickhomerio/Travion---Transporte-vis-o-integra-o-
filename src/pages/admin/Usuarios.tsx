@@ -9,6 +9,10 @@ import type { Papel, Permissao, StatusUsuario } from '../../types';
 const PAPEIS: Papel[] = ['administrador', 'gestor', 'supervisor', 'embarcador', 'apoio', 'comercial', 'consulta'];
 const ROTULO_SITUACAO: Record<StatusUsuario, string> = { pendente: 'Aguardando aprovação', ativo: 'Ativo', bloqueado: 'Bloqueado' };
 
+const textoEnviado = (modo: string, email: string) => (modo === 'supabase'
+  ? `Convite enviado para ${email}. O link vale por 24 horas; depois disso, use Enviar por e-mail de novo.`
+  : `Prévia: no app publicado, ${email} receberia agora o e-mail com o link para criar a senha.`);
+
 export function Usuarios() {
   const { api, estado, atualizarSessao } = useApp();
   const idx = useIndices();
@@ -77,9 +81,14 @@ export function Usuarios() {
                     <td>{ROTULO_PAPEL[c.papel]}</td>
                     <td className="pequeno">{filiaisNomes(c.filiais)}</td>
                     <td className="pequeno">{c.usado_em ? `Usado em ${fmtDataHora(c.usado_em)}` : c.expira_em < new Date().toISOString() ? 'Expirado' : `Válido até ${fmtDataHora(c.expira_em)}`}</td>
-                    <td className="td-acao">{!c.usado_em && <button className="btn peq perigo" onClick={async () => {
-                      try { await api.excluirConvite(c.id); avisar('ok', 'Convite excluído.'); carregar(); } catch (e) { avisar('erro', mensagemErro(e)); }
-                    }}>Excluir</button>}</td>
+                    <td className="td-acao">{!c.usado_em && <span style={{ display: 'inline-flex', gap: 6 }}>
+                      {c.expira_em >= new Date().toISOString() && <button className="btn peq" onClick={async () => {
+                        try { await api.enviarConviteEmail(c.email); avisar('ok', textoEnviado(api.modo, c.email)); } catch (e) { avisar('erro', mensagemErro(e)); }
+                      }}>Enviar por e-mail</button>}
+                      <button className="btn peq perigo" onClick={async () => {
+                        try { await api.excluirConvite(c.id); avisar('ok', 'Convite excluído.'); carregar(); } catch (e) { avisar('erro', mensagemErro(e)); }
+                      }}>Excluir</button>
+                    </span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -88,8 +97,8 @@ export function Usuarios() {
         )}
         <div className="cartao-corpo pequeno suave">
           {api.modo === 'supabase'
-            ? 'O convite registra o papel. Envie à pessoa o endereço do app para ela criar a conta com este e-mail (o app não envia e-mails de convite).'
-            : 'Na prévia local o convite é só ilustrativo.'}
+            ? 'O convite guarda a função, as filiais e a carteira. Pelo e-mail, a pessoa recebe um link para criar a própria senha e já entra com esse acesso. Sem e-mail, mande o endereço do app e ela usa "Solicitar acesso" com o mesmo e-mail.'
+            : 'Na prévia local nenhum e-mail sai daqui: o envio é só ilustrativo.'}
         </div>
       </div>
 
@@ -161,7 +170,15 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
       <button className="btn" onClick={() => aoFechar(false)}>Cancelar</button>
       <button className="btn primario" disabled={salvando || !d.nome.trim()} onClick={salvar}>{salvando ? 'Salvando…' : u.status === 'pendente' && d.status === 'ativo' ? 'Aprovar' : 'Salvar'}</button>
     </>}>
-      <div className="pequeno suave">{u.email}</div>
+      <div className="pequeno suave" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span>{u.email}</span>
+        {u.status !== 'pendente' && u.email && <button type="button" className="btn sutil peq" onClick={async () => {
+          try {
+            await api.enviarLinkSenha(u.email!);
+            avisar('ok', api.modo === 'supabase' ? `Link de troca de senha enviado para ${u.email}.` : `Prévia: no app publicado, ${u.email} receberia o link de troca de senha.`);
+          } catch (e) { avisar('erro', mensagemErro(e)); }
+        }}>Enviar link para trocar a senha</button>}
+      </div>
       <div className="grade-campos">
         <label className="campo"><span>Nome</span><input className="entrada" value={d.nome} onChange={(e) => setD({ ...d, nome: e.target.value })} /></label>
         <label className="campo"><span>Papel</span>
@@ -217,14 +234,19 @@ function NovoConvite({ aoFechar }: { aoFechar: (salvou: boolean) => void }) {
   const { api, estado } = useApp();
   const avisar = useAviso();
   const [d, setD] = useState({ email: '', nome: '', papel: 'apoio' as Papel, comercial_id: '', filiais: [] as string[] });
+  const [enviar, setEnviar] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   async function salvar() {
     setSalvando(true);
     setErro(null);
     try {
-      await api.criarConvite({ email: d.email.trim(), nome: d.nome.trim() || undefined, papel: d.papel, comercial_id: d.comercial_id || null, filiais: d.filiais });
-      avisar('ok', 'Convite registrado.');
+      const email = d.email.trim();
+      await api.criarConvite({ email, nome: d.nome.trim() || undefined, papel: d.papel, comercial_id: d.comercial_id || null, filiais: d.filiais });
+      if (enviar) {
+        try { await api.enviarConviteEmail(email.toLowerCase()); avisar('ok', textoEnviado(api.modo, email)); }
+        catch (e) { avisar('erro', `Convite registrado, mas o e-mail não saiu: ${mensagemErro(e)} Tente de novo em Convites → Enviar por e-mail.`); }
+      } else avisar('ok', 'Convite registrado.');
       aoFechar(true);
     } catch (e) {
       setErro(mensagemErro(e));
@@ -235,7 +257,7 @@ function NovoConvite({ aoFechar }: { aoFechar: (salvou: boolean) => void }) {
   return (
     <Modal titulo="Novo convite" aoFechar={() => aoFechar(false)} rodape={<>
       <button className="btn" onClick={() => aoFechar(false)}>Cancelar</button>
-      <button className="btn primario" disabled={salvando || !d.email.trim()} onClick={salvar}>{salvando ? 'Salvando…' : 'Registrar convite'}</button>
+      <button className="btn primario" disabled={salvando || !d.email.trim()} onClick={salvar}>{salvando ? 'Salvando…' : enviar ? 'Registrar e enviar' : 'Registrar convite'}</button>
     </>}>
       <div className="grade-campos">
         <label className="campo"><span>E-mail *</span><input className="entrada" type="email" value={d.email} onChange={(e) => setD({ ...d, email: e.target.value })} /></label>
@@ -253,6 +275,8 @@ function NovoConvite({ aoFechar }: { aoFechar: (salvou: boolean) => void }) {
         </label>
       </div>
       {d.papel !== 'administrador' && <SeletorFiliais valor={d.filiais} aoMudar={(f) => setD({ ...d, filiais: f })} />}
+      <label className="check"><input type="checkbox" checked={enviar} onChange={(e) => setEnviar(e.target.checked)} />
+        Enviar o convite por e-mail agora (a pessoa recebe o link para criar a senha)</label>
       {erro && <Alerta tipo="erro">{erro}</Alerta>}
     </Modal>
   );

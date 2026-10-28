@@ -1051,6 +1051,12 @@ export function criarLocalApi(): Api {
       salvar();
     },
     async excluirConvite(id) { exigir('usuarios.gerenciar'); db.convites = db.convites.filter((c) => c.id !== id); salvar(); },
+    async enviarConviteEmail(email) {
+      exigir('usuarios.gerenciar');
+      if (!db.convites.some((c) => c.email === email.toLowerCase() && !c.usado_em)) erro('Não há convite aberto para este e-mail.');
+    },
+    async enviarLinkSenha() { exigir('usuarios.gerenciar'); },
+    async confirmarLinkEmail() { return null; },
     async listarPermissoesUsuarios() {
       exigir('permissoes.gerenciar');
       return db.perfis.map((p) => ({ id: p.id, nome: p.nome, email: p.email, papel: p.papel, status: p.status,

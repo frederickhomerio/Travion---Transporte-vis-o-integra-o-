@@ -247,6 +247,30 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
       await rpc('criar_convite', { p_dados: dados });
     },
     excluirConvite: (id) => rpc('excluir_convite', { p_id: id }),
+    async enviarConviteEmail(email) {
+      const { data, error } = await sb.functions.invoke('convidar-usuario', { body: { email, redirectTo: window.location.origin + window.location.pathname } });
+      if (error) {
+        // A função devolve a explicação no corpo da resposta de erro.
+        let msg = error.message;
+        try { const c = await (error as { context?: Response }).context?.json(); if (c?.erro) msg = c.erro; } catch { /* mantém a mensagem */ }
+        throw new Error(msg);
+      }
+      if (data?.erro) throw new Error(data.erro);
+    },
+    async enviarLinkSenha(email) {
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+      if (error) throw new Error(error.message);
+    },
+    async confirmarLinkEmail() {
+      // Modelo do e-mail de convite: {{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=invite
+      const q = new URLSearchParams(window.location.search);
+      const token = q.get('token_hash');
+      if (!token || q.get('type') !== 'invite') return null;
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+      const { error } = await sb.auth.verifyOtp({ token_hash: token, type: 'invite' });
+      if (error) throw new Error('O link do convite expirou ou já foi usado. Peça um novo convite.');
+      return 'convite';
+    },
     async matrizPermissoes() {
       const [catalogo, papeis] = await Promise.all([
         sb.from('permissoes').select('chave,grupo,descricao').order('grupo'),

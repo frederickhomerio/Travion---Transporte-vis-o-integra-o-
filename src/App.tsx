@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { HashRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
-import { Carregando, ProvedorToast } from './components/ui';
+import { Carregando, ProvedorToast, useAviso } from './components/ui';
 import type { Api } from './data/api';
 import { ProvedorDoc } from './data/documentacao';
 import { ProvedorDados, useApp } from './data/store';
@@ -30,7 +30,13 @@ function Protegido({ children }: { children: ReactNode }) {
 function OuvinteRecuperacao() {
   const { api } = useApp();
   const nav = useNavigate();
+  const avisar = useAviso();
   useEffect(() => api.aoMudarAutenticacao((ev) => { if (ev === 'PASSWORD_RECOVERY') nav('/nova-senha'); }), [api, nav]);
+  // Link do e-mail de convite: abre a sessão e leva a pessoa a criar a senha.
+  useEffect(() => {
+    api.confirmarLinkEmail().then((r) => { if (r === 'convite') nav('/nova-senha?convite=1'); })
+      .catch((e: Error) => { avisar('erro', e.message); nav('/login'); });
+  }, [api, nav]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 

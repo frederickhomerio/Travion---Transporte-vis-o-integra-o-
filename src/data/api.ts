@@ -182,6 +182,12 @@ export interface Api {
   listarConvites(): Promise<Convite[]>;
   criarConvite(dados: { email: string; nome?: string; papel: Papel; comercial_id?: string | null; filiais: string[] }): Promise<void>;
   excluirConvite(id: string): Promise<void>;
+  /** Manda por e-mail o convite já registrado (o link leva à tela de criar a senha). */
+  enviarConviteEmail(email: string): Promise<void>;
+  /** Manda à pessoa o link de troca de senha (o mesmo do "Esqueci a senha"). */
+  enviarLinkSenha(email: string): Promise<void>;
+  /** Trata o link do e-mail de convite ao abrir o app; devolve 'convite' quando a pessoa precisa criar a senha. */
+  confirmarLinkEmail(): Promise<'convite' | null>;
   matrizPermissoes(): Promise<MatrizPermissoes>;
   salvarPermissaoPapel(papel: Papel, chave: Permissao, permitido: boolean): Promise<void>;
   /** Permissões por usuário (Administrador e Gestor, via permissoes.gerenciar). */
