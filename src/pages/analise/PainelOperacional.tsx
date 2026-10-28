@@ -317,6 +317,8 @@ const ROTULO_SITUACAO: Record<SituacaoPrazo, string> = {
   no_prazo: '● Dentro do prazo', atencao: '▲ Atraso de até 5 min', atrasado: '■ Atraso acima de 5 min',
 };
 
+const fmtPrazo = (min: number) => (min >= 60 && min % 60 === 0 ? `${min / 60} h` : `${min} min`);
+
 function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   return (
     <Quadro id="filas" titulo="Tempo de fila por operação" sub="Situação agora: chamados aguardando o apoio assumir ou retomar" modo={c.modo} aoExpandir={aoExpandir}>
@@ -325,7 +327,7 @@ function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
           if (op.futura) {
             return (
               <div key={op.id} className="po-fila futura">
-                <div className="po-fila-cab">{op.rotulo}<span className="po-breve">Em breve</span></div>
+                <div className="po-fila-cab">{op.rotulo}<span className="po-fila-selos">{op.prazo_min && <span className="po-prazo">Prazo {fmtPrazo(op.prazo_min)}</span>}<span className="po-breve">Em breve</span></span></div>
                 <div className="po-fila-corpo">
                   <span className="po-fila-rot">Espera média atual</span>
                   <span className="po-fila-val">—</span>
@@ -341,7 +343,7 @@ function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
           const sitAntigo = situacaoPrazo(f.mais_antigo_ms, op.prazo_min);
           return (
             <div key={op.id} className={`po-fila${sit ? ` prazo-${sit}` : ''}`}>
-              <div className="po-fila-cab">{op.rotulo}{op.prazo_min && <span className="po-prazo">Prazo {op.prazo_min} min</span>}</div>
+              <div className="po-fila-cab">{op.rotulo}{op.prazo_min && <span className="po-prazo">Prazo {fmtPrazo(op.prazo_min)}</span>}</div>
               <div className="po-fila-corpo">
                 <span className="po-fila-rot">Espera média atual</span>
                 <span className="po-fila-val">{fmtDur(f.media_ms)}</span>

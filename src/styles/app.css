@@ -1094,3 +1094,5 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .txt-prazo-atencao { color: var(--ambar-800); }
 .txt-prazo-atrasado { color: #a8232c; }
 .tv .po-sit { font-size: 0.9em; }
+.po-fila-selos { display: inline-flex; gap: 6px; align-items: center; }
+.po-fila.futura .po-prazo { background: rgba(0, 0, 0, 0.07); }

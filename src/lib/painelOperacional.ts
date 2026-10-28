@@ -43,11 +43,11 @@ export const TIPOS_DEMANDA: Array<{ id: TipoDemanda; rotulo: string; ativo: bool
   { id: 'estadia', rotulo: 'Estadia', ativo: false },
 ];
 export type IdOperacao = 'cadastro' | 'emissao' | 'estadia';
-/** prazo_min: prazo de espera na fila (pedido de 28/10/2026: Cadastro 30 min, Emissão 20 min). */
+/** prazo_min: prazo de espera na fila (pedido de 28/10/2026: Cadastro 30 min, Emissão 20 min, Estadia 24 h de prazo médio de envio). */
 export const OPERACOES: Array<{ id: IdOperacao; rotulo: string; tipos: TipoSolicitacaoDoc[]; prazo_min?: number; composicao?: string; futura?: boolean }> = [
   { id: 'cadastro', rotulo: 'Cadastro', tipos: ['cadastro'], prazo_min: 30 },
   { id: 'emissao', rotulo: 'Emissão', tipos: ['emissao', 'lote_emissao'], prazo_min: 20, composicao: 'Emissão + Lote e Emissão' },
-  { id: 'estadia', rotulo: 'Estadia', tipos: [], futura: true },
+  { id: 'estadia', rotulo: 'Estadia', tipos: [], prazo_min: 24 * 60, futura: true },
 ];
 
 /** Tolerância de atraso que ainda fica em amarelo. */
