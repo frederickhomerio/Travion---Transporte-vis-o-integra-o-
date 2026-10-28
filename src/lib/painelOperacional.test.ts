@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
+import { situacaoPrazo,
   type EventoPainel, type FiltrosPainel, type SolPainel, diaHoraSP, evolucao, filaAtual, grupoHistorico, inicioDiaSP, linhaDoTempo,
   linhasDoPainel, mapaCalor, mediana, mesclarPainel, porColaborador, resumo,
 } from './painelOperacional';
@@ -185,3 +185,16 @@ describe('resumo e consulta incremental', () => {
 });
 
 function DIA() { return 86400e3; }
+
+describe('situacaoPrazo', () => {
+  const min = 60000;
+  it('verde até o prazo, amarelo até 5 min de atraso, vermelho acima', () => {
+    expect(situacaoPrazo(30 * min, 30)).toBe('no_prazo');
+    expect(situacaoPrazo(30 * min + 1, 30)).toBe('atencao');
+    expect(situacaoPrazo(35 * min, 30)).toBe('atencao');
+    expect(situacaoPrazo(35 * min + 1, 30)).toBe('atrasado');
+    expect(situacaoPrazo(19 * min, 20)).toBe('no_prazo');
+    expect(situacaoPrazo(null, 20)).toBeNull();
+    expect(situacaoPrazo(10 * min, undefined)).toBeNull();
+  });
+});

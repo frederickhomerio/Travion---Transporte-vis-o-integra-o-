@@ -12,8 +12,8 @@ import { intervaloPeriodo } from '../../lib/dashboard';
 import { MOTIVO_DEVOLUCAO, duracao } from '../../lib/documentacao';
 import { fmtDataCurta, fmtDataHora, fmtHora, fmtNum, fmtPct, hojeSP } from '../../lib/formato';
 import {
-  DIAS_CURTOS, DIAS_SEMANA, type FiltrosPainel, type LinhaChamado, OPERACOES, TIPOS_DEMANDA, type TipoDemanda, type VisaoEvolucao,
-  dataSP, evolucao, filaAtual, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo,
+  DIAS_CURTOS, DIAS_SEMANA, type FiltrosPainel, type LinhaChamado, OPERACOES, type SituacaoPrazo, TIPOS_DEMANDA, type TipoDemanda, type VisaoEvolucao,
+  dataSP, evolucao, filaAtual, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo, situacaoPrazo,
 } from '../../lib/painelOperacional';
 import type { MotivoDevolucao, TipoSolicitacaoDoc } from '../../types';
 import { AbasAnalise } from './AbasAnalise';
@@ -161,10 +161,6 @@ function Painel({ perfilId }: { perfilId: string }) {
             {!expandido && (
               <Filtros pref={pref} mudar={mudar} hoje={hoje} txtPeriodo={txtPeriodo} txtTipos={txtTipos} filiais={filiais} centros={centros} colaboradores={colaboradores} solicitantes={solicitantes} />
             )}
-            <p className="po-base pequeno">
-              <strong>Filas:</strong> situação agora ({fmtHora(new Date(agora).toISOString())}). <strong>Demais quadros:</strong> chamados enviados de {txtPeriodo}, com a situação até agora.
-              Escopo: {txtEscopo}.
-            </p>
             {inicioRegistro !== null && inicioRegistro > hist.de && (
               <Alerta tipo="info">
                 Medição completa desde {fmtDataHora(dados.inicio_registro)}. Nos chamados anteriores valem os horários já gravados (envio, assumido,
@@ -317,6 +313,10 @@ function SemTipos({ tipos }: { tipos: TipoDemanda[] }) {
   return null;
 }
 
+const ROTULO_SITUACAO: Record<SituacaoPrazo, string> = {
+  no_prazo: '● Dentro do prazo', atencao: '▲ Atraso de até 5 min', atrasado: '■ Atraso acima de 5 min',
+};
+
 function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   return (
     <Quadro id="filas" titulo="Tempo de fila por operação" sub="Situação agora: chamados aguardando o apoio assumir ou retomar" modo={c.modo} aoExpandir={aoExpandir}>
@@ -337,14 +337,17 @@ function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
             );
           }
           const f = filaAtual(c.linhas, op.tipos as TipoSolicitacaoDoc[], c.agora);
+          const sit = situacaoPrazo(f.media_ms, op.prazo_min);
+          const sitAntigo = situacaoPrazo(f.mais_antigo_ms, op.prazo_min);
           return (
-            <div key={op.id} className="po-fila">
-              <div className="po-fila-cab">{op.rotulo}</div>
+            <div key={op.id} className={`po-fila${sit ? ` prazo-${sit}` : ''}`}>
+              <div className="po-fila-cab">{op.rotulo}{op.prazo_min && <span className="po-prazo">Prazo {op.prazo_min} min</span>}</div>
               <div className="po-fila-corpo">
                 <span className="po-fila-rot">Espera média atual</span>
                 <span className="po-fila-val">{fmtDur(f.media_ms)}</span>
+                <span className={`po-sit${sit ? ` prazo-${sit}` : ''}`}>{sit ? ROTULO_SITUACAO[sit] : f.quantidade ? 'Sem horário de entrada' : 'Fila vazia'}</span>
                 <div className="po-fila-linha"><span>Chamados na fila</span><strong>{f.quantidade}</strong></div>
-                <div className="po-fila-linha"><span>Mais antigo aguardando</span><strong>{fmtDur(f.mais_antigo_ms)}</strong></div>
+                <div className="po-fila-linha"><span>Mais antigo aguardando</span><strong className={sitAntigo ? `txt-prazo-${sitAntigo}` : undefined}>{fmtDur(f.mais_antigo_ms)}</strong></div>
                 {op.composicao && <span className="po-fila-nota">{op.composicao}</span>}
                 {f.retorno > 0 && <span className="po-fila-nota">{f.retorno} na fila de retorno (correção recebida)</span>}
                 {f.sem_registro > 0 && <span className="po-fila-nota">{f.sem_registro} sem registro do horário de entrada</span>}

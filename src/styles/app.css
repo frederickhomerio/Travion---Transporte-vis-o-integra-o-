@@ -1073,3 +1073,24 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .po-filtros-tit { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--vinho); font-size: 0.88rem; }
 .po-filtros-resumo { color: var(--cinza-600); font-size: 0.86rem; min-width: 0; }
 .po-filtros.recolhido { padding: 10px 16px; }
+
+/* ---------- Tempo de fila: cor pelo prazo (verde no prazo, amarelo até 5 min de atraso, vermelho acima) ---------- */
+.po-prazo { font-family: var(--fonte); font-size: 0.74rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.2); white-space: nowrap; }
+.po-fila.prazo-no_prazo { border-color: var(--faixa-verde); }
+.po-fila.prazo-no_prazo .po-fila-cab { background: var(--faixa-verde); }
+.po-fila.prazo-no_prazo .po-fila-val { color: #1e6b3c; }
+.po-fila.prazo-atencao { border-color: var(--faixa-amarelo); }
+.po-fila.prazo-atencao .po-fila-cab { background: var(--faixa-amarelo); color: #3d2a00; }
+.po-fila.prazo-atencao .po-prazo { background: rgba(0, 0, 0, 0.1); }
+.po-fila.prazo-atencao .po-fila-val { color: var(--ambar-800); }
+.po-fila.prazo-atrasado { border-color: var(--faixa-vermelho); }
+.po-fila.prazo-atrasado .po-fila-cab { background: var(--faixa-vermelho); }
+.po-fila.prazo-atrasado .po-fila-val { color: #a8232c; }
+.po-sit { align-self: flex-start; font-size: 0.78rem; font-weight: 600; padding: 2px 10px; border-radius: 999px; background: var(--cinza-100); color: var(--cinza-600); }
+.po-sit.prazo-no_prazo { background: #e3f4ea; color: #1e6b3c; }
+.po-sit.prazo-atencao { background: var(--ambar-100); color: var(--ambar-800); }
+.po-sit.prazo-atrasado { background: var(--vermelho-100); color: #a8232c; }
+.txt-prazo-no_prazo { color: #1e6b3c; }
+.txt-prazo-atencao { color: var(--ambar-800); }
+.txt-prazo-atrasado { color: #a8232c; }
+.tv .po-sit { font-size: 0.9em; }
