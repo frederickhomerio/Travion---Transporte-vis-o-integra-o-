@@ -76,7 +76,7 @@ export function ProvedorDoc({ children }: { children: ReactNode }) {
   const emCurso = useRef(false);
   const perms = estado.sessao?.permissoes;
   const ativo = !!estado.sessao && estado.sessao.perfil.status === 'ativo'
-    && !!perms && (perms.has('documentacao.ver') || perms.has('apoio.pagina'));
+    && !!perms && (perms.has('documentacao.ver') || perms.has('apoio.pagina') || perms.has('cadastro.ver') || perms.has('cadastro.solicitar'));
   const perfilId = estado.sessao?.perfil.id ?? null;
 
   const sincronizar = useCallback(async (completo = false) => {

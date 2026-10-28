@@ -160,6 +160,21 @@ As duas telas leem a mesma tabela de posições diárias. Os supervisores gravam
 - **Permissões padrão** (todas ajustáveis em Administração → Permissões): `documentacao.ver` (todos os papéis internos, exceto Consulta), `documentacao.solicitar` (Gestor, Supervisor, Comercial de Fretes, Coordenador Comercial), `apoio.pagina` (Apoio e Gestor), `apoio.atender` (Apoio), `documentacao.cancelar` (Apoio e Gestor). O banco confere tudo, inclusive o acesso aos arquivos no Storage.
 - **Fora do escopo:** integração com o ERP, envio externo e controle de pagamento.
 
+### 7.4 Cadastro de motorista e veículos — desde 28/10/2026
+
+- **Onde:** aba **Cadastro** (menu lateral, barra do celular e Mais). Formulário em cima ("Dados da solicitação" e "Documentação") e **Acompanhamento dos cadastros** logo abaixo. Não precisa de embarque.
+- **Campos (os 11 do formulário de referência):** placa do cavalo, telefone do motorista, mercadoria, cliente, valor da carga, origem (cidade/UF), destino (cidade/UF), observações (opcional), documentos do motorista (1 a 4), documentos dos veículos (1 a 10) e "Motorista de primeiro embarque?" (Sim/Não, escolha obrigatória). Nome, CPF, proprietário e dados bancários **não** são obrigatórios: o apoio confere nos documentos.
+- **Validações:** placa antiga (ABC1234) ou Mercosul (ABC1D23), aceitando espaço e hífen. Telefone guardado como texto, exatamente como digitado; precisa ter DDD + número (10 ou 11 dígitos; aceita +55 e zero de operadora). Valor no padrão brasileiro ("85.000,00" = R$ 85 mil), **maior que zero**. Cliente só entre os autorizados; filial só entre as do seu acesso (obrigatória para quem tem filial no perfil; o centro de custo vem da filial).
+- **Arquivos:** até 10 MB cada. PDF, imagem (JPG, PNG, WEBP, GIF, HEIC), Word, Excel, PowerPoint, vídeo (MP4, MOV, WEBM, 3GP) e áudio (MP3, M4A, OGG/OPUS, WAV, AAC). PDF e imagem abrem no visualizador; vídeo e áudio tocam; os demais ficam para baixar. O servidor confere tipo, tamanho e quantidade.
+- **Duplicidade:** se já existe cadastro **em aberto** para a mesma placa, nada novo é criado e o usuário é levado ao existente. Depois de concluído ou cancelado, a placa pode ter novo cadastro.
+- **Fila:** entra na mesma fila do Apoio Operacional, tipo **Cadastro** (filtro por tipo). Na coluna do lote aparece "Cadastro no ERP". Concluídas inclui Documentação disponível e Cadastro concluído.
+- **Status:** Enviado, Em atendimento, Aguardando informação, **Cadastro concluído** e Cancelado.
+- **Atendimento:** quadro da esquerda com os campos do cadastro (copiar por campo e resumo), quantidade de documentos por categoria, pedir ajuste, "Referência do cadastro no ERP" (opcional), "Retorno ao solicitante" e **Confirmar cadastro concluído**. Sem frete, lote, pedágio nem documentos emitidos. Não conclui com pendência aberta.
+- **Sem integração com o ERP:** o apoio cadastra à mão no ERP; "Cadastro concluído" é a confirmação do responsável.
+- **Pendências e notificações:** ajuste vai para quem enviou e abre a aba Cadastro na solicitação certa; correções entram como novos anexos (até 4 do motorista e 10 dos veículos por resposta), sem apagar os anteriores. Na conclusão, quem enviou recebe "Cadastro da placa XXX-XXXX concluído" com o retorno do apoio.
+- **Quem vê:** quem enviou sempre; quem tem `cadastro.ver` (ou a fila do apoio) vê os das suas filiais e da sua carteira.
+- **Permissões padrão** (ajustáveis em Administração → Permissões): `cadastro.solicitar` (Gestor, Supervisor, Comercial de Fretes, Coordenador Comercial) e `cadastro.ver` (esses e Apoio Operacional). Atender usa `apoio.atender`; cancelar, `documentacao.cancelar`.
+
 ## 8. Importação da planilha
 
 - Fluxo: arquivo → aba → mapeamento de colunas → **data operacional obrigatória** → prévia com inconsistências → confirmação → relatório. O nome do arquivo não comprova a data.

@@ -3,6 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AnexoDoc, LoteErp, MensagemDoc, NotificacaoApp, SolicitacaoDoc } from '../types';
 import type { ApiDoc, ResultadoDoc } from './api';
+import { tipoCadastro } from '../lib/documentacao';
 
 const BUCKET = 'documentacao';
 /** Concluídas e canceladas ficam na fila por 30 dias; as abertas, sempre. */
@@ -70,11 +71,14 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
       ]);
       return { mensagens: ok(m) as MensagemDoc[], anexos: [...(ok(a) as AnexoDoc[]), ...(ok(ev) as AnexoDoc[])] };
     },
-    async enviarArquivo(arquivo) {
+    async enviarArquivo(arquivo, cadastro) {
+      // Cadastro: tipo deduzido da extensão quando o navegador não informa (áudio do WhatsApp, HEIC etc.).
+      const tipo = cadastro ? tipoCadastro(arquivo.name, arquivo.type) : arquivo.type;
+      if (!tipo) throw new Error('Tipo de arquivo não aceito no cadastro.');
       const caminho = `envios/${await uid()}/${nomeArquivo(arquivo.name)}`;
-      const r = await sb.storage.from(BUCKET).upload(caminho, arquivo, { contentType: arquivo.type, upsert: false });
-      if (r.error) throw new Error(/mime|type/i.test(r.error.message) ? 'Tipo de arquivo não aceito (use PDF, PNG, JPG ou WEBP).'
-        : /size|large/i.test(r.error.message) ? 'Arquivo maior que 15 MB.' : r.error.message);
+      const r = await sb.storage.from(BUCKET).upload(caminho, arquivo, { contentType: tipo, upsert: false });
+      if (r.error) throw new Error(/mime|type/i.test(r.error.message) ? (cadastro ? 'Tipo de arquivo não aceito no cadastro.' : 'Tipo de arquivo não aceito (use PDF, PNG, JPG ou WEBP).')
+        : /size|large/i.test(r.error.message) ? (cadastro ? 'Arquivo maior que 10 MB.' : 'Arquivo maior que 15 MB.') : r.error.message);
       return { caminho, nome: arquivo.name };
     },
     async baixar(caminho) {
@@ -90,6 +94,8 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
     anexarEmitidos: (id, anexos) => rpc<ResultadoDoc>('anexar_documentos_doc', { p_id: id, p_anexos: anexos }),
     concluir: (id) => rpc<ResultadoDoc>('concluir_solicitacao_doc', { p_id: id }),
     cancelar: (id, motivo) => rpc<ResultadoDoc>('cancelar_solicitacao_doc', { p_id: id, p_motivo: motivo }),
+    criarCadastro: (dados, anexos) => rpc<ResultadoDoc>('criar_solicitacao_cadastro', { p_dados: dados, p_anexos: anexos }),
+    concluirCadastro: (id, referencia, retorno) => rpc<ResultadoDoc>('concluir_cadastro_doc', { p_id: id, p_referencia: referencia, p_retorno: retorno }),
     async notificacoes() {
       return ok(await sb.from('notificacoes').select('*').order('criada_em', { ascending: false }).limit(100)) as NotificacaoApp[];
     },

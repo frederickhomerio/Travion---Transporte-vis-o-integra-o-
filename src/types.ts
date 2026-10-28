@@ -16,7 +16,8 @@ export type Permissao =
   | 'financeiro.ver' | 'financeiro.editar' | 'historico.ver'
   | 'compartilhamento.preparar' | 'compartilhamento.links'
   | 'importacao.executar' | 'cadastros.gerenciar' | 'usuarios.gerenciar' | 'configuracoes.gerenciar'
-  | 'documentacao.ver' | 'documentacao.solicitar' | 'documentacao.cancelar' | 'apoio.pagina' | 'apoio.atender';
+  | 'documentacao.ver' | 'documentacao.solicitar' | 'documentacao.cancelar' | 'apoio.pagina' | 'apoio.atender'
+  | 'cadastro.solicitar' | 'cadastro.ver';
 
 export interface Filial { id: string; nome: string; codigo: string | null; supervisor?: string | null; centro_custo_id?: string | null; ativo: boolean; is_demo: boolean }
 export interface CentroCusto { id: string; nome: string; ativo: boolean; is_demo: boolean }
@@ -169,30 +170,37 @@ export interface PosicaoPublica {
 // ---------------------------------------------------------------------------
 // Documentação / Apoio Operacional (migração 1610)
 // ---------------------------------------------------------------------------
-export type TipoSolicitacaoDoc = 'lote_emissao' | 'emissao';
-export type StatusDoc = 'enviado' | 'em_atendimento' | 'aguardando_informacao' | 'documentacao_disponivel' | 'cancelado';
+export type TipoSolicitacaoDoc = 'lote_emissao' | 'emissao' | 'cadastro';
+export type StatusDoc = 'enviado' | 'em_atendimento' | 'aguardando_informacao' | 'documentacao_disponivel' | 'cadastro_concluido' | 'cancelado';
 export type UnidadeFreteDoc = 'rs_tonelada' | 'rs_viagem';
 export type TipoOperacao = 'exportacao' | 'mi_tributado' | 'mi_isento';
 export type FormaPagamento = 'cheque' | 'pagbem';
 export type Pedagio = 'sem_parar' | 'move_mais' | 'conect_car' | 'veloe' | 'nao_ha';
-export type CategoriaAnexo = 'nf' | 'evidencia_frete' | 'correcao' | 'cte' | 'mdfe' | 'outro_emitido';
+export type CategoriaAnexo = 'nf' | 'evidencia_frete' | 'correcao' | 'cte' | 'mdfe' | 'outro_emitido' | 'motorista' | 'veiculo';
 
-/** Retrato do embarque no momento do envio (não muda se o cadastro mudar). */
+/** Retrato do embarque (ou, no Cadastro, do cliente/filial/rota informados) no momento do envio. */
 export interface RetratoDoc {
-  codigo: number; cliente: string | null; carteira: string | null; filial: string | null; centro_custo: string | null;
+  codigo: number | null; cliente: string | null; carteira: string | null; filial: string | null; centro_custo: string | null;
   origem_cidade: string; origem_uf: string | null; coleta: string | null;
   destino_cidade: string; destino_uf: string | null; entrega: string | null; produto: string | null;
-  lote_numero: string | null; filial_id: string; centro_custo_id: string | null; cliente_id: string;
+  lote_numero: string | null; filial_id: string | null; centro_custo_id: string | null; cliente_id: string;
 }
 
 export interface SolicitacaoDoc {
-  id: string; numero: number; embarque_id: string; lote_id: string | null;
+  /** Sem embarque no tipo Cadastro. */
+  id: string; numero: number; embarque_id: string | null; lote_id: string | null;
   tipo: TipoSolicitacaoDoc; status: StatusDoc;
   placa: string; placas_reboque: string[];
+  // Campos de emissão: vazios no tipo Cadastro (as telas de Cadastro não os leem).
   frete_empresa: number; frete_empresa_unidade: UnidadeFreteDoc; frete_motorista: number; frete_motorista_unidade: UnidadeFreteDoc;
   tipo_operacao: TipoOperacao | null; forma_pagamento: FormaPagamento; pedagio: Pedagio;
   exige_obs_cte: boolean; obs_cte: string | null; cte_por_nf: boolean; observacoes: string | null;
   retrato: RetratoDoc;
+  // Campos do Cadastro (migração 1700); nulos nos tipos de emissão.
+  filial_id?: string | null; comercial_id?: string | null; cliente_id?: string | null; telefone_motorista?: string | null;
+  mercadoria?: string | null; valor_carga?: number | null; origem_cidade?: string | null; origem_uf?: string | null;
+  destino_cidade?: string | null; destino_uf?: string | null; primeiro_embarque?: boolean | null;
+  erp_referencia?: string | null; retorno_solicitante?: string | null;
   solicitante_id: string; solicitante_nome: string; responsavel_id: string | null; responsavel_nome: string | null;
   enviado_em: string; assumido_em: string | null; concluido_em: string | null; concluido_por_nome: string | null;
   cancelado_em: string | null; cancelado_por_nome: string | null; cancelado_motivo: string | null;
@@ -217,8 +225,8 @@ export interface AnexoDoc {
 }
 
 export interface NotificacaoApp {
-  id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada'; titulo: string; texto: string;
-  solicitacao_id: string; embarque_id: string; destino: 'embarque' | 'apoio'; criada_em: string; lida_em: string | null;
+  id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada' | 'cadastro_concluido'; titulo: string; texto: string;
+  solicitacao_id: string; embarque_id: string | null; destino: 'embarque' | 'apoio' | 'cadastro'; criada_em: string; lida_em: string | null;
 }
 
 /** Dados do formulário (os do embarque vêm sozinhos, pelo servidor). */
@@ -227,4 +235,11 @@ export interface DadosSolicitacaoDoc {
   frete_empresa: number; frete_empresa_unidade: UnidadeFreteDoc; frete_motorista: number; frete_motorista_unidade: UnidadeFreteDoc;
   tipo_operacao: TipoOperacao | null; forma_pagamento: FormaPagamento; pedagio: Pedagio;
   exige_obs_cte: boolean; obs_cte: string | null; cte_por_nf: boolean; observacoes: string | null; chave_envio: string;
+}
+
+/** Formulário da aba Cadastro (solicitante vem da sessão). */
+export interface DadosCadastroDoc {
+  placa: string; telefone_motorista: string; mercadoria: string; cliente_id: string; valor_carga: number;
+  origem_cidade: string; origem_uf: string; destino_cidade: string; destino_uf: string;
+  observacoes: string | null; primeiro_embarque: boolean; filial_id: string | null; chave_envio: string;
 }

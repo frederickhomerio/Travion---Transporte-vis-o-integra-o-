@@ -57,6 +57,8 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['documentacao.cancelar', 'Documentação', 'Cancelar solicitações de documentação (com motivo)'],
   ['apoio.pagina', 'Documentação', 'Acessar a aba Apoio Operacional (fila de demandas)'],
   ['apoio.atender', 'Documentação', 'Assumir e atender demandas: registrar lote, pedir ajuste, anexar e liberar documentos'],
+  ['cadastro.solicitar', 'Cadastro', 'Enviar cadastro de motorista e veículos ao apoio e responder pendências'],
+  ['cadastro.ver', 'Cadastro', 'Acompanhar os cadastros da sua filial ou carteira (os próprios sempre aparecem)'],
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
 
 /** Mesma matriz inicial de supabase/migrations/20261026000200_permissoes.sql */
@@ -65,21 +67,24 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
-    'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina'],
+    'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
-    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar'],
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar',
+    'cadastro.solicitar', 'cadastro.ver'],
   embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
-    'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar'],
+    'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar',
+    'cadastro.solicitar', 'cadastro.ver'],
   // Apoio Operacional reúne o antigo papel Operação (contadores e observação) e a fila de documentação.
   apoio: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver'],
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
-    'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar'],
+    'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar',
+    'cadastro.solicitar', 'cadastro.ver'],
   consulta: ['embarques.ver'],
 };
 
@@ -333,6 +338,12 @@ export function criarLocalApi(): Api {
     db.centros_custo.push(...cc);
     db.filiais.filter((f) => f.is_demo && !f.centro_custo_id).forEach((f, i) => { f.centro_custo_id = cc[i % 2].id; });
   }
+  // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
+  if (!db.papelPermissoes.some((x) => x.chave.startsWith('cadastro.'))) {
+    for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) {
+      for (const chave of ps) if (chave.startsWith('cadastro.')) db.papelPermissoes.push({ papel: papel as Papel, chave });
+    }
+  }
   let perfilId: string | null = lerStorage(CHAVE_SESSAO);
   const ouvintesAuth = new Set<(e: string) => void>();
   const ouvintesDados = new Set<(e: EventoTempoReal) => void>();
@@ -499,8 +510,18 @@ export function criarLocalApi(): Api {
   }
 
   const doc = criarDocLocal({
-    perfil, tem, veEmbarque,
+    perfil, tem, veEmbarque, noEscopo,
     embarques: () => db.embarques,
+    ehAdmin: () => perfil()?.papel === 'administrador',
+    temFiliais: () => db.perfilFiliais.some((x) => x.perfil_id === perfilId),
+    cliente: (id) => {
+      const c = db.clientes.find((x) => x.id === id);
+      return c && veCliente(c) ? { id: c.id, nome: c.nome, comercial_id: c.comercial_id, carteira: db.comerciais.find((x) => x.id === c.comercial_id)?.nome ?? null } : null;
+    },
+    filial: (id) => {
+      const f = db.filiais.find((x) => x.id === id);
+      return f ? { id: f.id, nome: f.nome, centro_custo_id: f.centro_custo_id ?? null, centro_custo: db.centros_custo?.find((c) => c.id === f.centro_custo_id)?.nome ?? null } : null;
+    },
     retrato: (e) => {
       const n = <T extends { id: string; nome: string }>(xs: T[] | undefined, id: string | null | undefined) => (id ? xs?.find((x) => x.id === id)?.nome ?? null : null);
       const filial = db.filiais.find((f) => f.id === e.filial_id);

@@ -14,6 +14,7 @@ const PosicaoCliente = lazy(() => import('./pages/PosicaoCliente').then((m) => (
 const Admin = lazy(() => import('./pages/admin/Admin').then((m) => ({ default: m.Admin })));
 const ApoioOperacional = lazy(() => import('./pages/ApoioOperacional').then((m) => ({ default: m.ApoioOperacional })));
 const AtendimentoDoc = lazy(() => import('./pages/AtendimentoDoc').then((m) => ({ default: m.AtendimentoDoc })));
+const Cadastro = lazy(() => import('./pages/Cadastro').then((m) => ({ default: m.Cadastro })));
 const ConsultaPublica = lazy(() => import('./pages/ConsultaPublica').then((m) => ({ default: m.ConsultaPublica })));
 
 function Protegido({ children }: { children: ReactNode }) {
@@ -48,6 +49,7 @@ export function App({ api }: { api: Api }) {
               <Route path="/posicao-cliente" element={<Protegido><PosicaoCliente /></Protegido>} />
               <Route path="/apoio" element={<Protegido><ApoioOperacional /></Protegido>} />
               <Route path="/apoio/:id" element={<Protegido><AtendimentoDoc /></Protegido>} />
+              <Route path="/cadastro" element={<Protegido><Cadastro /></Protegido>} />
               <Route path="/admin/*" element={<Protegido><Admin /></Protegido>} />
               <Route path="/mais" element={<Protegido><Mais /></Protegido>} />
               <Route path="*" element={<Navigate to="/" replace />} />

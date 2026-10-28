@@ -5,6 +5,7 @@ import type {
   AnexoDoc, CategoriaAnexo, Embarque, LoteErp, MensagemDoc, NotificacaoApp, Perfil, Permissao, RetratoDoc, SolicitacaoDoc,
 } from '../types';
 import type { ApiDoc, ArquivoDoc, EventoDoc, ResultadoDoc } from './api';
+import { LIMITE_CADASTRO, MAX_MOTORISTA, MAX_VEICULO, TIPOS_CADASTRO, telefoneValido, tipoCadastro } from '../lib/documentacao';
 
 const CHAVE = 'travion-previa-doc-v2';
 const TIPOS = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
@@ -26,6 +27,13 @@ export interface CtxDocLocal {
   embarques(): Embarque[];
   veEmbarque(e: Embarque): boolean;
   retrato(e: Embarque): Omit<RetratoDoc, 'lote_numero'>;
+  noEscopo(filial: string, comercial: string | null): boolean;
+  ehAdmin(): boolean;
+  /** O usuário tem filiais no perfil (então precisa escolher uma no cadastro). */
+  temFiliais(): boolean;
+  /** Cliente que o usuário pode ver (null se não existe ou está fora do alcance). */
+  cliente(id: string): { id: string; nome: string; comercial_id: string | null; carteira: string | null } | null;
+  filial(id: string): { id: string; nome: string; centro_custo_id: string | null; centro_custo: string | null } | null;
 }
 
 const uid = () => crypto.randomUUID();
@@ -132,10 +140,18 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
     const e = embarque(embarqueId);
     return !!e && (ctx.tem('documentacao.ver') || ctx.tem('apoio.pagina')) && ctx.veEmbarque(e);
   };
+  // Cadastro: o solicitante sempre vê; quem tem cadastro.ver (ou a fila) vê os da sua filial ou carteira.
+  const podeVerReg = (s: SolicitacaoDoc) => {
+    if (s.tipo !== 'cadastro') return !!s.embarque_id && podeVer(s.embarque_id);
+    const p = ctx.perfil();
+    if (!p || p.status !== 'ativo') return false;
+    return s.solicitante_id === p.id || ((ctx.tem('cadastro.ver') || ctx.tem('apoio.pagina'))
+      && (ctx.ehAdmin() || (!!s.filial_id && ctx.noEscopo(s.filial_id, null)) || (!!s.comercial_id && ctx.noEscopo('', s.comercial_id))));
+  };
   const carregar = (id: string) => {
     eu();
     const s = db.solicitacoes.find((x) => x.id === id);
-    if (!s || !podeVer(s.embarque_id)) erro('Solicitação não encontrada ou fora do seu escopo.');
+    if (!s || !podeVerReg(s)) erro('Solicitação não encontrada ou fora do seu escopo.');
     return s;
   };
   const tocar = (s: SolicitacaoDoc, mud: Partial<SolicitacaoDoc> = {}) => Object.assign(s, mud, { versao: s.versao + 1, atualizado_em: agora() });
@@ -145,11 +161,11 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
     db.mensagens.push(m);
     return m;
   };
-  const notificar = (dest: string | null, tipo: NotificacaoApp['tipo'], titulo: string, texto: string, s: SolicitacaoDoc, destino: 'embarque' | 'apoio', chave: string) => {
+  const notificar = (dest: string | null, tipo: NotificacaoApp['tipo'], titulo: string, texto: string, s: SolicitacaoDoc, destino: NotificacaoApp['destino'], chave: string) => {
     if (!dest || dest === ctx.perfil()?.id || db.notificacoes.some((n) => n.destinatario_id === dest && n.chave === chave)) return;
     db.notificacoes.push({ id: uid(), destinatario_id: dest, chave, tipo, titulo, texto, solicitacao_id: s.id, embarque_id: s.embarque_id, destino, criada_em: agora(), lida_em: null });
   };
-  const rotulo = (s: SolicitacaoDoc) => `${s.tipo === 'lote_emissao' ? 'Lote e Emissão' : 'Emissão'} nº ${s.numero} · ${s.placa}`;
+  const rotulo = (s: SolicitacaoDoc) => `${s.tipo === 'lote_emissao' ? 'Lote e Emissão' : s.tipo === 'emissao' ? 'Emissão' : 'Cadastro'} nº ${s.numero} · ${s.placa}`;
   const vincular = (s: SolicitacaoDoc, anexos: ArquivoDoc[], cats: CategoriaAnexo[], mensagem: string | null) => {
     const p = eu();
     let n = 0;
@@ -159,6 +175,9 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       const o = db.objetos.find((x) => x.caminho === a.caminho && x.dono === p.id);
       if (!o) erro(`Arquivo não encontrado no armazenamento: envie novamente (${a.nome}).`);
       if (o.tamanho <= 0) erro(`Arquivo vazio ou envio incompleto: ${a.nome}.`);
+      if (s.tipo === 'cadastro' ? !TIPOS_CADASTRO[o.tipo] || o.tamanho > LIMITE_CADASTRO : !TIPOS.includes(o.tipo) || o.tamanho > LIMITE) {
+        erro(s.tipo === 'cadastro' ? `Arquivo não aceito no cadastro (tipo ou tamanho acima de 10 MB): ${a.nome}.` : `Arquivo não aceito (use PDF ou imagem até 15 MB): ${a.nome}.`);
+      }
       if (!db.anexos.some((x) => x.caminho === a.caminho)) {
         db.anexos.push({ id: uid(), solicitacao_id: s.id, categoria: a.categoria, caminho: a.caminho, nome: a.nome.slice(0, 200) || 'arquivo',
           tipo_mime: o.tipo, tamanho: o.tamanho, mensagem_id: mensagem, enviado_por_nome: p.nome, enviado_em: agora() });
@@ -254,13 +273,76 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
           texto: rotulo(s), solicitacao_id: id, embarque_id: e.id, destino: 'embarque', criada_em: min(idade - 75), lida_em: null });
       }
     }
+    await semearCadastros();
+  };
+  // Cadastros fictícios (motorista e veículos de demonstração; nenhum documento real).
+  const semearCadastros = async () => {
+    const es = ctx.embarques().filter((e) => e.is_demo);
+    if (es.length < 6 || db.solicitacoes.some((s) => s.tipo === 'cadastro')) { salvar(); return; }
+    const perfil = (id: string, nome: string) => ({ id, nome } as Perfil);
+    const gestor = perfil('perfil-1', 'Gestor Rio Verde (prévia)');
+    const sup = perfil('perfil-5', 'Supervisor Jataí (prévia)');
+    const apoio = perfil('perfil-2', 'Apoio Operacional (prévia)');
+    const min = (m: number) => new Date(Date.now() - m * 60e3).toISOString();
+    const itens: Array<[number, SolicitacaoDoc['status'], Perfil, Perfil | null, string, string, number, boolean, number]> = [
+      [1, 'enviado', gestor, null, 'RTV5E81', '(64) 99812-3344', 58000, true, 12],
+      [3, 'em_atendimento', sup, apoio, 'JTX2A90', '(64) 98144-7720', 92500.5, false, 70],
+      [0, 'cadastro_concluido', gestor, apoio, 'MTV8C14', '(64) 99677-0102', 85000, true, 400],
+    ];
+    for (const [ei, status, sol, resp, placa, tel, valor, primeiro, idade] of itens) {
+      const e = es[ei];
+      const r0 = ctx.retrato(e);
+      const id = uid();
+      const s: SolicitacaoDoc = {
+        id, numero: ++db.seq, embarque_id: null, lote_id: null, tipo: 'cadastro', status, placa, placas_reboque: [],
+        frete_empresa: 0, frete_empresa_unidade: 'rs_tonelada', frete_motorista: 0, frete_motorista_unidade: 'rs_tonelada', tipo_operacao: null,
+        forma_pagamento: 'pagbem', pedagio: 'nao_ha', exige_obs_cte: false, obs_cte: null, cte_por_nf: false,
+        observacoes: ei === 3 ? 'Motorista chega amanhã cedo para carregar; cadastro com prioridade.' : null,
+        retrato: { ...r0, codigo: null, coleta: null, entrega: null, lote_numero: null },
+        filial_id: e.filial_id, comercial_id: e.comercial_id, cliente_id: e.cliente_id, telefone_motorista: tel, mercadoria: r0.produto ?? 'Soja',
+        valor_carga: valor, origem_cidade: e.origem_cidade, origem_uf: e.origem_uf, destino_cidade: e.destino_cidade, destino_uf: e.destino_uf,
+        primeiro_embarque: primeiro, erp_referencia: status === 'cadastro_concluido' ? 'MOT-20931' : null,
+        retorno_solicitante: status === 'cadastro_concluido' ? 'Motorista e cavalo cadastrados; carreta já existia no ERP.' : null,
+        solicitante_id: sol.id, solicitante_nome: sol.nome, responsavel_id: resp?.id ?? null, responsavel_nome: resp?.nome ?? null,
+        enviado_em: min(idade), assumido_em: resp ? min(idade - 5) : null,
+        concluido_em: status === 'cadastro_concluido' ? min(idade - 40) : null, concluido_por_nome: status === 'cadastro_concluido' ? apoio.nome : null,
+        cancelado_em: null, cancelado_por_nome: null, cancelado_motivo: null, versao: 2, atualizado_em: min(status === 'cadastro_concluido' ? idade - 40 : idade - 5),
+      };
+      db.solicitacoes.push(s);
+      const m = (texto: string, autor: Perfil, quando: number, referencia: string | null = null) =>
+        db.mensagens.push({ id: uid(), solicitacao_id: id, tipo: 'evento', texto, referencia, autor_id: autor.id, autor_nome: autor.nome, criado_em: min(quando) });
+      const docs: Array<[CategoriaAnexo, string, string[]]> = [
+        ['motorista', 'CNH-motorista.pdf', ['CNH (demonstração)', 'Nome: Motorista Fictício da Silva', 'Categoria: E', 'Validade: 12/2029']],
+        ['motorista', 'comprovante-endereco.pdf', ['Comprovante de endereço (demonstração)', 'Rua Fictícia, 100 · Rio Verde/GO']],
+        ['veiculo', `CRLV-${placa}.pdf`, [`CRLV (demonstração) · cavalo ${placa}`, 'Ano 2019 · Scania R450']],
+        ['veiculo', 'CRLV-carreta.pdf', ['CRLV (demonstração) · carreta', 'Graneleira 3 eixos']],
+      ];
+      for (const [cat, nome, linhas] of docs) {
+        const blob = pdfDemo(linhas[0], [...linhas.slice(1), '', 'Documento fictício para a prévia do Travion.']);
+        const caminho = `envios/${sol.id}/${uid()}.pdf`;
+        await gravarArq(caminho, blob);
+        db.objetos.push({ caminho, dono: sol.id, tipo: blob.type, tamanho: blob.size });
+        db.anexos.push({ id: uid(), solicitacao_id: id, categoria: cat, caminho, nome, tipo_mime: blob.type, tamanho: blob.size,
+          mensagem_id: null, enviado_por_nome: sol.nome, enviado_em: min(idade) });
+      }
+      m('Cadastro enviado ao apoio', sol, idade);
+      if (resp) m(`Atendimento assumido por ${resp.nome}`, resp, idade - 5);
+      if (status === 'cadastro_concluido') {
+        m(`Cadastro concluído no ERP, confirmado por ${apoio.nome} · referência MOT-20931`, apoio, idade - 40, 'conclusao');
+        db.notificacoes.push({ id: uid(), destinatario_id: sol.id, chave: `cadastro_concluido:${id}`, tipo: 'cadastro_concluido',
+          titulo: `Cadastro da placa ${placa.slice(0, 3)}-${placa.slice(3)} concluído`, texto: `Cadastro nº ${s.numero} · ${s.retrato.cliente ?? ''}`,
+          solicitacao_id: id, embarque_id: null, destino: 'cadastro', criada_em: min(idade - 40), lida_em: null });
+      }
+    }
     salvar();
   };
   // Dados da prévia recriados (novos embarques): recomeça a documentação fictícia.
   const ids = new Set(ctx.embarques().map((e) => e.id));
-  if (!db.solicitacoes.some((s) => ids.has(s.embarque_id)) && typeof document !== 'undefined') {
+  if (!db.solicitacoes.some((s) => s.embarque_id && ids.has(s.embarque_id)) && typeof document !== 'undefined') {
     db = { seq: 0, solicitacoes: [], lotes: [], mensagens: [], anexos: [], notificacoes: [], objetos: [] };
     pronto = semear().catch(() => undefined);
+  } else if (!db.solicitacoes.some((s) => s.tipo === 'cadastro') && typeof document !== 'undefined') {
+    pronto = semearCadastros().catch(() => undefined);
   }
 
   if (typeof window !== 'undefined') {
@@ -279,7 +361,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
   };
 
   const comNomes = (s: SolicitacaoDoc): SolicitacaoDoc => ({ ...s, nomes_nf: db.anexos.filter((a) => a.solicitacao_id === s.id && (a.categoria === 'nf' || a.categoria === 'correcao')).map((a) => a.nome) });
-  const visiveis = () => db.solicitacoes.filter((s) => podeVer(s.embarque_id));
+  const visiveis = () => db.solicitacoes.filter(podeVerReg);
   const offline = () => { if (!navigator.onLine) erro('Failed to fetch'); };
 
   return {
@@ -305,17 +387,18 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
           ...db.anexos.filter((a) => origem && a.solicitacao_id === origem && a.categoria === 'evidencia_frete')],
       });
     },
-    async enviarArquivo(arquivo) {
+    async enviarArquivo(arquivo, cadastro) {
       offline();
       const p = eu();
-      if (!ctx.tem('documentacao.solicitar') && !ctx.tem('apoio.atender')) erro('Você não tem permissão para enviar arquivos.');
-      if (!TIPOS.includes(arquivo.type)) erro('Tipo de arquivo não aceito (use PDF, PNG, JPG ou WEBP).');
+      if (!ctx.tem('documentacao.solicitar') && !ctx.tem('apoio.atender') && !ctx.tem('cadastro.solicitar')) erro('Você não tem permissão para enviar arquivos.');
+      const tipo = cadastro ? tipoCadastro(arquivo.name, arquivo.type) : TIPOS.includes(arquivo.type) ? arquivo.type : null;
+      if (!tipo) erro(cadastro ? 'Tipo de arquivo não aceito no cadastro.' : 'Tipo de arquivo não aceito (use PDF, PNG, JPG ou WEBP).');
       if (arquivo.size <= 0) erro('Arquivo vazio.');
-      if (arquivo.size > LIMITE) erro('Arquivo maior que 15 MB.');
+      if (arquivo.size > (cadastro ? LIMITE_CADASTRO : LIMITE)) erro(cadastro ? 'Arquivo maior que 10 MB.' : 'Arquivo maior que 15 MB.');
       const ext = arquivo.name.match(/\.[A-Za-z0-9]{1,5}$/)?.[0]?.toLowerCase() ?? '';
       const caminho = `envios/${p.id}/${uid()}${ext}`;
       try { await gravarArq(caminho, arquivo); } catch { erro('Não foi possível guardar o arquivo neste navegador (prévia).'); }
-      db.objetos.push({ caminho, dono: p.id, tipo: arquivo.type, tamanho: arquivo.size });
+      db.objetos.push({ caminho, dono: p.id, tipo, tamanho: arquivo.size });
       salvar();
       return { caminho, nome: arquivo.name };
     },
@@ -323,7 +406,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       await pronto;
       const p = eu();
       const a = db.anexos.find((x) => x.caminho === caminho);
-      if (!(caminho.startsWith(`envios/${p.id}/`) || (a && db.solicitacoes.some((s) => s.id === a.solicitacao_id && podeVer(s.embarque_id))))) {
+      if (!(caminho.startsWith(`envios/${p.id}/`) || (a && db.solicitacoes.some((s) => s.id === a.solicitacao_id && podeVerReg(s))))) {
         erro('Não foi possível abrir o arquivo (sem acesso ou indisponível).');
       }
       const b = await lerArq(caminho);
@@ -388,23 +471,25 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       offline();
       const s = carregar(id);
       responsavel(s, ['em_atendimento', 'aguardando_informacao']);
-      if (s.tipo !== 'lote_emissao') erro('Só a solicitação de lote e emissão registra o lote.');
+      if (s.tipo !== 'lote_emissao' || !s.embarque_id) erro('Só a solicitação de lote e emissão registra o lote.');
+      const embarqueId = s.embarque_id;
       const n = numero.trim();
       if (!n || n.length > 60) erro('Informe o número do lote gerado no ERP.');
-      let l = db.lotes.find((x) => x.embarque_id === s.embarque_id);
+      let l = db.lotes.find((x) => x.embarque_id === embarqueId);
       if (l) {
         if (l.solicitacao_id !== s.id) erro(`Este embarque já tem lote registrado (${l.numero}).`);
         if (l.numero === n) return { status: 'sem_alteracao', registro: clone(s), lote: clone(l) };
         evento(s, 'evento', `Número do lote corrigido de ${l.numero} para ${n}`, 'lote');
         Object.assign(l, { numero: n, versao: l.versao + 1, atualizado_em: agora() });
       } else {
-        l = { id: uid(), embarque_id: s.embarque_id, numero: n, solicitacao_id: s.id, registrado_por_nome: eu().nome, registrado_em: agora(), versao: 1, atualizado_em: agora() };
+        l = { id: uid(), embarque_id: embarqueId, numero: n, solicitacao_id: s.id, registrado_por_nome: eu().nome, registrado_em: agora(), versao: 1, atualizado_em: agora() };
         db.lotes.push(l);
         evento(s, 'evento', `Lote ${n} registrado (gerado no ERP). Emissão desta nota segue em atendimento.`, 'lote');
       }
-      tocar(s, { lote_id: l.id, retrato: { ...s.retrato, lote_numero: l.numero } });
+      const lote = l;
+      tocar(s, { lote_id: lote.id, retrato: { ...s.retrato, lote_numero: lote.numero } });
       emitir({ tabela: 'lotes' });
-      return fim(s, { lote: clone(l) });
+      return fim(s, { lote: clone(lote) });
     },
     async solicitarAjuste(id, texto, referencia) {
       offline();
@@ -413,17 +498,22 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       if (!texto.trim()) erro('Descreva o que falta ou precisa ser corrigido.');
       const m = evento(s, 'pendencia', texto.trim().slice(0, 4000), referencia);
       tocar(s, { status: 'aguardando_informacao' });
-      notificar(s.solicitante_id, 'ajuste_solicitado', 'Ajuste solicitado pelo apoio', `${rotulo(s)}: ${texto.trim().slice(0, 140)}`, s, 'embarque', `ajuste:${m.id}`);
+      notificar(s.solicitante_id, 'ajuste_solicitado', 'Ajuste solicitado pelo apoio', `${rotulo(s)}: ${texto.trim().slice(0, 140)}`, s, s.tipo === 'cadastro' ? 'cadastro' : 'embarque', `ajuste:${m.id}`);
       return fim(s);
     },
     async responder(id, texto, anexos) {
       offline();
-      exigir('documentacao.solicitar');
       const s = carregar(id);
+      exigir(s.tipo === 'cadastro' ? 'cadastro.solicitar' : 'documentacao.solicitar');
       if (s.status !== 'aguardando_informacao') erro('Não há pendência aberta nesta solicitação (ela pode ter sido respondida por outra pessoa).');
       if (!texto.trim()) erro('Escreva a resposta para o apoio.');
       const m = evento(s, 'resposta', texto.trim().slice(0, 4000));
-      vincular(s, anexos, ['nf', 'evidencia_frete', 'correcao'], m.id);
+      if (s.tipo === 'cadastro') {
+        // Correções entram como nova versão: os anteriores ficam; o limite vale para os arquivos desta resposta.
+        const conta = (c: CategoriaAnexo) => (anexos ?? []).filter((a) => a.categoria === c).length;
+        if (conta('motorista') > MAX_MOTORISTA || conta('veiculo') > MAX_VEICULO) { db.mensagens.pop(); erro('Na resposta: até 4 documentos do motorista e 10 dos veículos.'); }
+      }
+      try { vincular(s, anexos, s.tipo === 'cadastro' ? ['motorista', 'veiculo', 'correcao'] : ['nf', 'evidencia_frete', 'correcao'], m.id); } catch (x) { db.mensagens.pop(); throw x; }
       tocar(s, { status: 'em_atendimento' });
       notificar(s.responsavel_id, 'resposta_enviada', 'Resposta do comercial', `${rotulo(s)}: ${texto.trim().slice(0, 140)}`, s, 'apoio', `resposta:${m.id}`);
       return fim(s);
@@ -432,6 +522,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       offline();
       const s = carregar(id);
       responsavel(s, ['em_atendimento', 'aguardando_informacao']);
+      if (s.tipo === 'cadastro') erro('Cadastro não recebe documentos emitidos: confirme a conclusão do cadastro.');
       const n = vincular(s, anexos, SAIDA, null);
       if (!n) erro('Nenhum arquivo para anexar.');
       evento(s, 'evento', `${n} documento(s) emitido(s) anexado(s), em conferência`, 'documentos');
@@ -442,6 +533,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       offline();
       const s = carregar(id);
       responsavel(s, ['em_atendimento']);
+      if (s.tipo === 'cadastro') erro('Use "Confirmar cadastro concluído" para cadastros.');
       if (!db.anexos.some((a) => a.solicitacao_id === s.id && SAIDA.includes(a.categoria))) erro('Anexe ao menos um documento emitido (CT-e, MDF-e ou outro) antes de liberar.');
       if (s.tipo === 'lote_emissao' && !s.lote_id) erro('Registre o número do lote gerado no ERP antes de liberar a documentação.');
       tocar(s, { status: 'documentacao_disponivel', concluido_em: agora(), concluido_por_nome: eu().nome });
@@ -453,7 +545,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       offline();
       const s = carregar(id);
       const p = eu();
-      if (s.status === 'documentacao_disponivel' || s.status === 'cancelado') erro('Solicitação já concluída ou cancelada.');
+      if (s.status === 'documentacao_disponivel' || s.status === 'cadastro_concluido' || s.status === 'cancelado') erro('Solicitação já concluída ou cancelada.');
       if (!(ctx.tem('documentacao.cancelar') || (s.solicitante_id === p.id && s.status === 'enviado'))) erro('Você não tem permissão para cancelar esta solicitação.');
       if (!motivo.trim()) erro('Informe o motivo do cancelamento.');
       if (db.lotes.some((l) => l.solicitacao_id === s.id)) erro('O lote já foi registrado nesta solicitação: conclua a emissão em vez de cancelar.');
@@ -461,11 +553,76 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       evento(s, 'evento', `Solicitação cancelada por ${p.nome}: ${motivo.trim()}`);
       return fim(s);
     },
+    async criarCadastro(d, anexos) {
+      offline();
+      await pronto;
+      exigir('cadastro.solicitar');
+      const p = eu();
+      const rep = db.solicitacoes.find((s) => s.solicitante_id === p.id && (s as SolicitacaoDoc & { chave_envio?: string }).chave_envio === d.chave_envio);
+      if (rep) return { status: 'ok', registro: clone(rep), repetido: true };
+      const placa = d.placa.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!PLACA.test(placa)) erro('Placa do cavalo inválida: use o formato ABC1D23 ou ABC1234.');
+      if (!telefoneValido(d.telefone_motorista ?? '')) erro('Telefone do motorista inválido: informe DDD + número.');
+      if (!(Number(d.valor_carga) > 0)) erro('Informe o valor da carga (maior que zero).');
+      if (!d.mercadoria?.trim()) erro('Informe a mercadoria.');
+      const ouf = (d.origem_uf ?? '').trim().toUpperCase();
+      const duf = (d.destino_uf ?? '').trim().toUpperCase();
+      if (!d.origem_cidade?.trim() || !/^[A-Z]{2}$/.test(ouf)) erro('Informe a origem (cidade e UF).');
+      if (!d.destino_cidade?.trim() || !/^[A-Z]{2}$/.test(duf)) erro('Informe o destino (cidade e UF).');
+      if (typeof d.primeiro_embarque !== 'boolean') erro('Responda se é o primeiro embarque do motorista.');
+      const c = ctx.cliente(d.cliente_id);
+      if (!c) erro('Selecione um cliente autorizado.');
+      if (d.filial_id && !ctx.noEscopo(d.filial_id, null)) erro('Filial fora do seu escopo.');
+      if (!d.filial_id && !ctx.ehAdmin() && ctx.temFiliais()) erro('Selecione a filial.');
+      const aberta = db.solicitacoes.find((s) => s.tipo === 'cadastro' && s.placa === placa && ['enviado', 'em_atendimento', 'aguardando_informacao'].includes(s.status));
+      if (aberta) return { status: 'cadastro_aberto', numero: aberta.numero, situacao: aberta.status, registro: podeVerReg(aberta) ? clone(aberta) : null } as unknown as ResultadoDoc;
+      const conta = (cat: CategoriaAnexo) => (anexos ?? []).filter((a) => a.categoria === cat).length;
+      if (!conta('motorista')) erro('Anexe ao menos um documento do motorista.');
+      if (!conta('veiculo')) erro('Anexe ao menos um documento dos veículos.');
+      if (conta('motorista') > MAX_MOTORISTA) erro('Documentos do motorista: no máximo 4 arquivos.');
+      if (conta('veiculo') > MAX_VEICULO) erro('Documentos dos veículos: no máximo 10 arquivos.');
+      const f = d.filial_id ? ctx.filial(d.filial_id) : null;
+      const s: SolicitacaoDoc & { chave_envio: string } = {
+        id: uid(), numero: ++db.seq, embarque_id: null, lote_id: null, tipo: 'cadastro', status: 'enviado', placa, placas_reboque: [],
+        frete_empresa: 0, frete_empresa_unidade: 'rs_tonelada', frete_motorista: 0, frete_motorista_unidade: 'rs_tonelada', tipo_operacao: null,
+        forma_pagamento: 'pagbem', pedagio: 'nao_ha', exige_obs_cte: false, obs_cte: null, cte_por_nf: false,
+        observacoes: d.observacoes?.trim().slice(0, 2000) || null,
+        retrato: { codigo: null, cliente: c.nome, cliente_id: c.id, carteira: c.carteira, filial: f?.nome ?? null, filial_id: f?.id ?? null,
+          centro_custo: f?.centro_custo ?? null, centro_custo_id: f?.centro_custo_id ?? null, origem_cidade: d.origem_cidade.trim(), origem_uf: ouf,
+          coleta: null, destino_cidade: d.destino_cidade.trim(), destino_uf: duf, entrega: null, produto: d.mercadoria.trim(), lote_numero: null },
+        filial_id: f?.id ?? null, comercial_id: c.comercial_id, cliente_id: c.id, telefone_motorista: d.telefone_motorista.trim().slice(0, 40),
+        mercadoria: d.mercadoria.trim().slice(0, 200), valor_carga: Math.round(Number(d.valor_carga) * 100) / 100,
+        origem_cidade: d.origem_cidade.trim(), origem_uf: ouf, destino_cidade: d.destino_cidade.trim(), destino_uf: duf,
+        primeiro_embarque: d.primeiro_embarque, erp_referencia: null, retorno_solicitante: null,
+        solicitante_id: p.id, solicitante_nome: p.nome, responsavel_id: null, responsavel_nome: null, enviado_em: agora(), assumido_em: null,
+        concluido_em: null, concluido_por_nome: null, cancelado_em: null, cancelado_por_nome: null, cancelado_motivo: null,
+        versao: 1, atualizado_em: agora(), chave_envio: d.chave_envio,
+      };
+      db.solicitacoes.push(s);
+      const antes = db.anexos.length;
+      try { vincular(s, anexos, ['motorista', 'veiculo'], null); } catch (x) { db.solicitacoes.pop(); db.anexos.length = antes; db.seq--; throw x; }
+      evento(s, 'evento', 'Cadastro enviado ao apoio');
+      return fim(s);
+    },
+    async concluirCadastro(id, referencia, retorno) {
+      offline();
+      const s = carregar(id);
+      if (s.tipo !== 'cadastro') erro('Esta solicitação não é de cadastro.');
+      if (s.status === 'aguardando_informacao') erro('Há pendência aguardando resposta do comercial: resolva antes de concluir.');
+      responsavel(s, ['em_atendimento']);
+      const ref = referencia?.trim().slice(0, 120) || null;
+      tocar(s, { status: 'cadastro_concluido', concluido_em: agora(), concluido_por_nome: eu().nome, erp_referencia: ref,
+        retorno_solicitante: retorno?.trim().slice(0, 2000) || null });
+      evento(s, 'evento', `Cadastro concluído no ERP, confirmado por ${eu().nome}${ref ? ` · referência ${ref}` : ''}`, 'conclusao');
+      notificar(s.solicitante_id, 'cadastro_concluido', `Cadastro da placa ${s.placa.slice(0, 3)}-${s.placa.slice(3)} concluído`,
+        `Cadastro nº ${s.numero} · ${s.retrato.cliente ?? ''}${s.retorno_solicitante ? ` · ${s.retorno_solicitante.slice(0, 120)}` : ''}`, s, 'cadastro', `cadastro_concluido:${s.id}`);
+      return fim(s);
+    },
     async notificacoes() {
       await pronto;
       const p = ctx.perfil();
       if (!p) return [];
-      return clone(db.notificacoes.filter((n) => n.destinatario_id === p.id && db.solicitacoes.some((s) => s.id === n.solicitacao_id && podeVer(s.embarque_id)))
+      return clone(db.notificacoes.filter((n) => n.destinatario_id === p.id && db.solicitacoes.some((s) => s.id === n.solicitacao_id && podeVerReg(s)))
         .sort((a, b) => b.criada_em.localeCompare(a.criada_em)));
     },
     async marcarLidas(ids) {

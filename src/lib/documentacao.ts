@@ -6,10 +6,10 @@ import type {
 import { cidadeAnuncio } from './anuncio';
 import { normalizar } from './texto';
 
-export const TIPO_DOC: Record<TipoSolicitacaoDoc, string> = { lote_emissao: 'Lote e Emissão', emissao: 'Emissão' };
+export const TIPO_DOC: Record<TipoSolicitacaoDoc, string> = { lote_emissao: 'Lote e Emissão', emissao: 'Emissão', cadastro: 'Cadastro' };
 export const STATUS_DOC: Record<StatusDoc, string> = {
   enviado: 'Enviado', em_atendimento: 'Em atendimento', aguardando_informacao: 'Aguardando informação',
-  documentacao_disponivel: 'Documentação disponível', cancelado: 'Cancelado',
+  documentacao_disponivel: 'Documentação disponível', cadastro_concluido: 'Cadastro concluído', cancelado: 'Cancelado',
 };
 export const UNIDADE_DOC: Record<UnidadeFreteDoc, string> = { rs_tonelada: 'R$/t', rs_viagem: 'R$/viagem' };
 export const OPERACAO: Record<TipoOperacao, string> = { exportacao: 'Exportação', mi_tributado: 'Mercado Interno Tributado', mi_isento: 'Mercado Interno Isento' };
@@ -17,12 +17,70 @@ export const PAGAMENTO: Record<FormaPagamento, string> = { cheque: 'Cheque', pag
 export const PEDAGIO: Record<Pedagio, string> = { sem_parar: 'Sem Parar', move_mais: 'Move Mais', conect_car: 'Conect Car', veloe: 'Veloe', nao_ha: 'Não há' };
 export const CATEGORIA: Record<CategoriaAnexo, string> = {
   nf: 'NF', evidencia_frete: 'Evidência do frete', correcao: 'Correção', cte: 'CT-e', mdfe: 'MDF-e', outro_emitido: 'Outro documento emitido',
+  motorista: 'Documento do motorista', veiculo: 'Documento do veículo',
 };
 export const CATEGORIAS_SAIDA: CategoriaAnexo[] = ['cte', 'mdfe', 'outro_emitido'];
 export const ABERTOS: StatusDoc[] = ['enviado', 'em_atendimento', 'aguardando_informacao'];
 export const TIPOS_ARQUIVO = 'application/pdf,image/png,image/jpeg,image/webp';
 export const LIMITE_ARQUIVO = 15 * 1024 * 1024;
 export const PLACA_RE = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+
+// Cadastro: os formatos do formulário de referência (PDF, imagem, Word, Excel, PowerPoint, vídeo, áudio), até 10 MB.
+export const TIPOS_CADASTRO: Record<string, string> = {
+  'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/heic': 'heic',
+  'application/msword': 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-powerpoint': 'ppt', 'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'video/3gpp': '3gp',
+  'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/x-wav': 'wav',
+  'audio/aac': 'aac', 'audio/webm': 'weba',
+};
+/** Extensão → tipo, para arquivos que o navegador entrega sem tipo (comum em .heic, .ogg, .opus do WhatsApp). */
+const EXT_CADASTRO: Record<string, string> = {
+  pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', '3gp': 'video/3gpp',
+  mp3: 'audio/mpeg', m4a: 'audio/mp4', ogg: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', aac: 'audio/aac',
+};
+export const ACEITA_CADASTRO = [...Object.keys(TIPOS_CADASTRO), ...Object.keys(EXT_CADASTRO).map((e) => `.${e}`)].join(',');
+export const LIMITE_CADASTRO = 10 * 1024 * 1024;
+export const MAX_MOTORISTA = 4;
+export const MAX_VEICULO = 10;
+export const FORMATOS_CADASTRO = 'PDF, imagem (JPG, PNG, WEBP, GIF, HEIC), Word, Excel, PowerPoint, vídeo (MP4, MOV, WEBM, 3GP) e áudio (MP3, M4A, OGG/OPUS, WAV, AAC)';
+
+/** Tipo do arquivo do cadastro: o do navegador, ou deduzido da extensão; null se não for aceito. */
+export function tipoCadastro(nome: string, mime: string): string | null {
+  if (TIPOS_CADASTRO[mime]) return mime;
+  const ext = nome.toLowerCase().split('.').pop() ?? '';
+  return (!mime || mime === 'application/octet-stream') && EXT_CADASTRO[ext] ? EXT_CADASTRO[ext] : null;
+}
+
+/** Telefone com DDD (10 ou 11 dígitos; aceita +55 e zero de operadora). Guarda-se o texto digitado. */
+export function telefoneValido(t: string): boolean {
+  let d = t.replace(/\D/g, '');
+  if (/^55\d{10,11}$/.test(d)) d = d.slice(2);
+  if (/^0\d{10,11}$/.test(d)) d = d.slice(1);
+  return /^[1-9][1-9]\d{8,9}$/.test(d);
+}
+
+/** Valor em reais no padrão brasileiro: "85.000,00" → 85000. Vazio → null; inválido → NaN. */
+export function lerReais(t: string): number | null {
+  const s = t.trim().replace(/\s|R\$/g, '');
+  if (!s) return null;
+  let n: number;
+  if (s.includes(',')) n = /^\d{1,3}(\.\d{3})*(,\d{1,2})?$|^\d+(,\d{1,2})?$/.test(s) ? Number(s.replace(/\./g, '').replace(',', '.')) : NaN;
+  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) n = Number(s.replace(/\./g, ''));
+  else n = /^\d+(\.\d{1,2})?$/.test(s) ? Number(s) : NaN;
+  return Number.isFinite(n) ? n : NaN;
+}
+/** Referências da pendência no Cadastro (o que o apoio pede para corrigir). */
+export const REF_CADASTRO: Record<string, string> = {
+  '': 'Geral', motorista: 'Documento do motorista', veiculo: 'Documento do veículo', placa: 'Placa do cavalo', telefone: 'Telefone do motorista',
+  valor: 'Valor da carga', cliente: 'Cliente', rota: 'Origem / destino', mercadoria: 'Mercadoria',
+};
+export const fmtReais2 = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export const normalizarPlaca = (p: string) => p.toUpperCase().replace(/[^A-Z0-9]/g, '');
 export const fmtPlaca = (p: string) => (p.length === 7 ? `${p.slice(0, 3)}-${p.slice(3)}` : p);
@@ -40,9 +98,11 @@ export function duracao(ms: number): string {
   return `${Math.floor(h / 24)} d ${h % 24} h`;
 }
 
-/** Tempo de espera (aberta) ou total até a documentação ficar disponível. */
+export const CONCLUIDOS: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido'];
+
+/** Tempo de espera (aberta) ou total até a conclusão. */
 export function tempoDoc(s: SolicitacaoDoc, agora: number): { rotulo: string; texto: string } {
-  if (s.status === 'documentacao_disponivel' && s.concluido_em) return { rotulo: 'Total', texto: duracao(Date.parse(s.concluido_em) - Date.parse(s.enviado_em)) };
+  if (CONCLUIDOS.includes(s.status) && s.concluido_em) return { rotulo: 'Total', texto: duracao(Date.parse(s.concluido_em) - Date.parse(s.enviado_em)) };
   if (s.status === 'cancelado') return { rotulo: 'Cancelada', texto: '—' };
   return { rotulo: s.status === 'enviado' ? 'Aguardando há' : 'Aberta há', texto: duracao(agora - Date.parse(s.enviado_em)) };
 }
@@ -80,8 +140,8 @@ export function avisosDuplicidade(placa: string, nomesNf: string[], doEmbarque: 
 }
 
 export type Atalho = 'abertas' | 'novas' | 'minhas' | 'aguardando' | 'concluidas';
-export interface FiltrosFila { atalho: Atalho; busca: string; filial: string; centro: string; responsavel: string }
-export const FILTROS_FILA: FiltrosFila = { atalho: 'abertas', busca: '', filial: '', centro: '', responsavel: '' };
+export interface FiltrosFila { atalho: Atalho; busca: string; filial: string; centro: string; responsavel: string; tipo: TipoSolicitacaoDoc | '' }
+export const FILTROS_FILA: FiltrosFila = { atalho: 'abertas', busca: '', filial: '', centro: '', responsavel: '', tipo: '' };
 
 export function noAtalho(s: SolicitacaoDoc, atalho: Atalho, eu: string): boolean {
   switch (atalho) {
@@ -89,7 +149,7 @@ export function noAtalho(s: SolicitacaoDoc, atalho: Atalho, eu: string): boolean
     case 'novas': return s.status === 'enviado';
     case 'minhas': return s.responsavel_id === eu && (s.status === 'em_atendimento' || s.status === 'aguardando_informacao');
     case 'aguardando': return s.status === 'aguardando_informacao';
-    case 'concluidas': return s.status === 'documentacao_disponivel' || s.status === 'cancelado';
+    case 'concluidas': return CONCLUIDOS.includes(s.status) || s.status === 'cancelado';
   }
 }
 
@@ -98,6 +158,7 @@ export function filtrarFila(ss: SolicitacaoDoc[], f: FiltrosFila, eu: string): S
   const tPlaca = normalizarPlaca(f.busca);
   return ss
     .filter((s) => noAtalho(s, f.atalho, eu))
+    .filter((s) => !f.tipo || s.tipo === f.tipo)
     .filter((s) => !f.filial || s.retrato.filial_id === f.filial)
     .filter((s) => !f.centro || (s.retrato.centro_custo_id ?? '') === f.centro)
     .filter((s) => !f.responsavel || (f.responsavel === '-' ? !s.responsavel_id : s.responsavel_id === f.responsavel))
@@ -112,6 +173,22 @@ export function filtrarFila(ss: SolicitacaoDoc[], f: FiltrosFila, eu: string): S
 /** Texto para colar no ERP ou numa conversa. */
 export function resumoDoc(s: SolicitacaoDoc): string {
   const r = s.retrato;
+  if (s.tipo === 'cadastro') {
+    return [
+      `Cadastro nº ${s.numero}`,
+      `Placa do cavalo: ${fmtPlaca(s.placa)}`,
+      `Telefone do motorista: ${s.telefone_motorista ?? '—'}`,
+      `Mercadoria: ${s.mercadoria ?? '—'}`,
+      `Cliente: ${r.cliente ?? '—'}`,
+      `Valor da carga: ${s.valor_carga != null ? fmtReais2(s.valor_carga) : '—'}`,
+      `Origem: ${cidadeAnuncio(r.origem_cidade, r.origem_uf)}`,
+      `Destino: ${cidadeAnuncio(r.destino_cidade, r.destino_uf)}`,
+      `Primeiro embarque do motorista: ${s.primeiro_embarque ? 'Sim' : 'Não'}`,
+      r.filial ? `Filial: ${r.filial}${r.centro_custo ? ` · Centro de custo: ${r.centro_custo}` : ''}` : null,
+      s.observacoes ? `Observações: ${s.observacoes}` : null,
+      `Solicitante: ${s.solicitante_nome}`,
+    ].filter(Boolean).join('\n');
+  }
   return [
     `${TIPO_DOC[s.tipo]} nº ${s.numero}`,
     `Cliente: ${r.cliente ?? '—'}`,
@@ -132,5 +209,7 @@ export function resumoDoc(s: SolicitacaoDoc): string {
   ].filter(Boolean).join('\n');
 }
 
-export const ehImagem = (mime: string) => mime.startsWith('image/');
+/** Imagens que o navegador mostra (HEIC fica para baixar). */
+export const ehImagem = (mime: string) => ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(mime);
+export const ehPdf = (mime: string) => mime === 'application/pdf';
 export const fmtTamanho = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} MB`);

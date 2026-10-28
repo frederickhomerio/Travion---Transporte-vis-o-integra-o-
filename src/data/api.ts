@@ -4,7 +4,7 @@
 
 import type { Cadastros } from '../lib/cadastros';
 import type {
-  AnexoDoc, CategoriaAnexo, DadosSolicitacaoDoc, LoteErp, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
+  AnexoDoc, CategoriaAnexo, DadosCadastroDoc, DadosSolicitacaoDoc, LoteErp, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
   Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
@@ -53,8 +53,10 @@ export type TipoCadastro = 'filial' | 'centro_custo' | 'comercial' | 'produto' |
 
 export interface ArquivoDoc { caminho: string; nome: string; categoria: CategoriaAnexo }
 export interface ResultadoDoc {
-  status: 'ok' | 'inicial_aberta' | 'ja_assumida' | 'indisponivel' | 'sem_alteracao';
+  status: 'ok' | 'inicial_aberta' | 'ja_assumida' | 'indisponivel' | 'sem_alteracao' | 'cadastro_aberto';
   registro: SolicitacaoDoc; lote?: LoteErp; repetido?: boolean;
+  /** Em 'cadastro_aberto': número e situação do cadastro já aberto para a placa (o registro vem nulo se estiver fora do seu alcance). */
+  numero?: number; situacao?: StatusDoc;
 }
 export type EventoDoc = { tabela: 'solicitacoes' | 'lotes' | 'notificacoes' | 'detalhe'; id?: string };
 
@@ -65,7 +67,8 @@ export interface ApiDoc {
   listarDoEmbarque(embarqueId: string): Promise<{ solicitacoes: SolicitacaoDoc[]; lotes: LoteErp[] }>;
   /** Mensagens e anexos da solicitação (Emissão traz também as evidências da solicitação que abriu o lote). */
   detalhe(id: string): Promise<{ mensagens: MensagemDoc[]; anexos: AnexoDoc[] }>;
-  enviarArquivo(arquivo: File): Promise<{ caminho: string; nome: string }>;
+  /** `cadastro`: aceita os formatos do Cadastro (até 10 MB) em vez de PDF/imagem até 15 MB. */
+  enviarArquivo(arquivo: File, cadastro?: boolean): Promise<{ caminho: string; nome: string }>;
   baixar(caminho: string): Promise<Blob>;
   criar(embarqueId: string, dados: DadosSolicitacaoDoc, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   assumir(id: string): Promise<ResultadoDoc>;
@@ -75,6 +78,9 @@ export interface ApiDoc {
   anexarEmitidos(id: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   concluir(id: string): Promise<ResultadoDoc>;
   cancelar(id: string, motivo: string): Promise<ResultadoDoc>;
+  /** Aba Cadastro (migração 1700). */
+  criarCadastro(dados: DadosCadastroDoc, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
+  concluirCadastro(id: string, referencia: string | null, retorno: string | null): Promise<ResultadoDoc>;
   notificacoes(): Promise<NotificacaoApp[]>;
   marcarLidas(ids: string[] | null): Promise<void>;
   /** Tempo real; `aoEstado(true)` só depois da confirmação da assinatura. */
