@@ -1,8 +1,10 @@
 // Regras das telas Posições de Embarque (supervisores) e Posição do Cliente (mesa comercial).
 // Funções puras: a autorização real está no banco; aqui só se organiza o que o servidor já liberou.
 
-import type { LinhaFrete, Posicao, StatusLiberacao } from '../types';
+import type { Configuracoes, LinhaFrete, Posicao, StatusLiberacao } from '../types';
+import { metaDaPosicao, volumes } from './calculos';
 import { type Indices, cidadeUF, nome } from './cadastros';
+import { type FaixaBarra, faixaBarra } from './dashboard';
 import { hojeSP } from './formato';
 import { normalizar } from './texto';
 
@@ -206,4 +208,60 @@ export function relatorioFiliais(recorte: LinhaFrete[], data: string, agoraMs: n
       cobertura: total ? (atualizados / total) * 100 : null,
     };
   }).sort((a, b) => a.filial.localeCompare(b.filial, 'pt-BR'));
+}
+
+// ---------------------------------------------------------------------------
+// Imagem por centro de custo (uso interno: supervisores e gestão)
+// ---------------------------------------------------------------------------
+export interface LinhaPrintCentro {
+  chave: string; cliente: string;
+  origem: string; coleta: string | null; destino: string; entrega: string | null;
+  porta_t: number; carregado_t: number; meta_t: number | null;
+  /** Executado = volume carregado ÷ meta do dia × 100 (mesmas faixas do Dashboard). */
+  pct: number | null; faixa: FaixaBarra | null;
+  ultima: string | null; por: string | null;
+}
+export interface PrintCentro {
+  chave: string; centro: string; linhas: LinhaPrintCentro[];
+  totais: { porta_t: number; carregado_t: number; meta_t: number | null; pct: number | null; faixa: FaixaBarra | null };
+}
+
+/** Agrupa as posições (já filtradas) por centro de custo, na ordem de origem, coleta e destino. */
+export function printPorCentro(linhas: LinhaFrete[], idx: Indices, cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>): PrintCentro[] {
+  const grupos = new Map<string, LinhaFrete[]>();
+  for (const l of linhas) {
+    if (!l.posicao) continue;
+    const cc = centroDaLinha(l, idx);
+    grupos.set(cc, [...(grupos.get(cc) ?? []), l]);
+  }
+  const n = (id: string | null) => nome(idx.local, id, '');
+  return [...grupos.entries()].map(([cc, ls]) => {
+    const linhasCc = ls
+      .sort((a, b) => a.embarque.origem_cidade.localeCompare(b.embarque.origem_cidade, 'pt-BR')
+        || n(a.embarque.local_coleta_id).localeCompare(n(b.embarque.local_coleta_id), 'pt-BR')
+        || a.embarque.destino_cidade.localeCompare(b.embarque.destino_cidade, 'pt-BR') || a.embarque.codigo - b.embarque.codigo)
+      .map((l): LinhaPrintCentro => {
+        const e = l.embarque;
+        const p = l.posicao!;
+        const v = volumes(p);
+        const meta = metaDaPosicao(p, cfg).volume_t;
+        const pct = meta && meta > 0 ? (v.carregado_t / meta) * 100 : null;
+        return {
+          chave: p.id, cliente: nome(idx.cliente, e.cliente_id),
+          origem: cidadeUF(e.origem_cidade, e.origem_uf), coleta: n(e.local_coleta_id) || null,
+          destino: cidadeUF(e.destino_cidade, e.destino_uf), entrega: n(e.local_entrega_id) || null,
+          porta_t: v.porta_t, carregado_t: v.carregado_t, meta_t: meta, pct, faixa: faixaBarra(pct),
+          ultima: p.confirmado_em ?? p.atualizado_em ?? null, por: (p.confirmado_em ? p.confirmado_por_nome : p.atualizado_por_nome) ?? null,
+        };
+      });
+    const soma = (k: 'porta_t' | 'carregado_t') => linhasCc.reduce((t, x) => t + x[k], 0);
+    const comMeta = linhasCc.filter((x) => x.meta_t != null);
+    const meta_t = comMeta.length ? comMeta.reduce((t, x) => t + (x.meta_t ?? 0), 0) : null;
+    const carregMeta = comMeta.reduce((t, x) => t + x.carregado_t, 0);
+    const pct = meta_t ? (carregMeta / meta_t) * 100 : null;
+    return {
+      chave: cc, centro: cc === SEM_CENTRO ? 'Sem centro de custo' : nome(idx.centroCusto, cc), linhas: linhasCc,
+      totais: { porta_t: soma('porta_t'), carregado_t: soma('carregado_t'), meta_t, pct, faixa: faixaBarra(pct) },
+    };
+  }).sort((a, b) => a.centro.localeCompare(b.centro, 'pt-BR'));
 }

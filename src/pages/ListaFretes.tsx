@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { BarraFiltros } from '../components/Filtros';
 import { Layout } from '../components/Layout';
-import { AbrirPosicoes } from '../components/AbrirPosicoes';
 import { ImagemAnuncio, ModalDivulgacao } from '../components/AnuncioFrete';
 import { DetalhesEmbarque } from '../components/DetalhesEmbarque';
 import { BotaoDocumentacao, SolicitarDocumentacao } from '../components/doc/DocumentacaoEmbarque';
@@ -58,7 +57,6 @@ export function ListaFretes() {
     setDetalhe(emb); setDocAberta(params.get('doc'));
     setParams({}, { replace: true });
   }, [params, setParams]);
-  const [abrir, setAbrir] = useState(false);
   const [novo, setNovo] = useState(false);
   const [rapido, setRapido] = useState<string | null>(null);
   const [formDoc, setFormDoc] = useState<string | null>(null);
@@ -118,7 +116,6 @@ export function ListaFretes() {
   const acoes = (
     <div className="grupo-btn esconder-celular">
       {pode('embarques.liberar') && <BotaoSuspensos n={suspensos.length} aoClicar={() => setVerSuspensos(true)} />}
-      {pode('posicoes.abrir') && <button className="btn" onClick={() => setAbrir(true)}>Abrir posições</button>}
       {pode('embarques.criar') && <button className="btn primario" onClick={() => setNovo(true)}><Icone nome="mais" tam={18} />Novo embarque</button>}
     </div>
   );
@@ -155,8 +152,7 @@ export function ListaFretes() {
 
       <div className="grupo-btn so-celular" style={{ marginBottom: 12 }}>
         {pode('embarques.liberar') && <BotaoSuspensos n={suspensos.length} aoClicar={() => setVerSuspensos(true)} />}
-        {pode('posicoes.abrir') && <button className="btn" onClick={() => setAbrir(true)}>Abrir posições</button>}
-        {pode('embarques.criar') && <button className="btn primario" onClick={() => setNovo(true)}><Icone nome="mais" tam={18} />Novo embarque</button>}
+          {pode('embarques.criar') && <button className="btn primario" onClick={() => setNovo(true)}><Icone nome="mais" tam={18} />Novo embarque</button>}
       </div>
 
       {estado.erro && <Alerta tipo="erro"><span><strong>Erro ao carregar:</strong> {estado.erro}</span></Alerta>}
@@ -205,7 +201,6 @@ export function ListaFretes() {
       {encerrar && <ConfirmarEncerramento e={encerrar} aoFechar={() => setEncerrar(null)} />}
       {verSuspensos && <EmbarquesSuspensos embarques={suspensos} aoFechar={() => setVerSuspensos(false)} />}
       {detalhe && <DetalhesEmbarque embarqueId={detalhe} solicitacaoDoc={docAberta} aoFechar={() => { setDetalhe(null); setDocAberta(null); }} />}
-      {abrir && <AbrirPosicoes aoFechar={() => setAbrir(false)} />}
       {novo && <NovoEmbarque aoFechar={(id) => { setNovo(false); if (id) setAnuncioNovo(id); }} />}
       {anuncioNovo && estado.embarques[anuncioNovo] && (
         <ImagemAnuncio titulo="Anúncio do novo frete" dados={anuncioDe({ embarque: estado.embarques[anuncioNovo] } as LinhaFrete, idx, estado.financeiro[anuncioNovo] ?? null)}

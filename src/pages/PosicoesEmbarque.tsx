@@ -5,11 +5,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AbrirPosicoes } from '../components/AbrirPosicoes';
 import { CartaoSupervisor, type Rascunho, rascunhoAlterado } from '../components/CartaoSupervisor';
+import { PrintCentros } from '../components/PrintCentros';
 import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, Carregando, Icone } from '../components/ui';
 import { useApp, useIndices, useLinhas } from '../data/store';
+import { metaDaPosicao, volumes } from '../lib/calculos';
+import { cidadeUF, nome, type Indices } from '../lib/cadastros';
+import { faixaBarra } from '../lib/dashboard';
 import { fmtDataAsHora, fmtData, hojeSP, ROTULO_PAPEL } from '../lib/formato';
-import { ajustarFiltros, FILTROS_SUPERVISOR_VAZIOS, type FiltrosSupervisor, filtrarSupervisor, type Opcao, opcoesSupervisor } from '../lib/posicoes';
+import { ajustarFiltros, centroDaLinha, FILTROS_SUPERVISOR_VAZIOS, type FiltrosSupervisor, filtrarSupervisor, type Opcao, opcoesSupervisor, SEM_CENTRO } from '../lib/posicoes';
+import type { Configuracoes, LinhaFrete } from '../types';
 
 const CHAVE_RASCUNHOS = 'travion-rascunhos-posicoes';
 
@@ -34,6 +39,7 @@ export function PosicoesEmbarque() {
   const [atualId, setAtualId] = useState<string | null>(null);
   const [rascunhos, setRascunhos] = useState<Record<string, Rascunho>>(() => lerRascunhos(s.perfil.id));
   const [abrir, setAbrir] = useState(false);
+  const [print, setPrint] = useState(false);
   const ultimoIndice = useRef(0);
   const toque = useRef<{ x: number; y: number } | null>(null);
 
@@ -131,7 +137,8 @@ export function PosicoesEmbarque() {
         ) : !lista.length ? (
           <div className="pe-vazio">{comPosicao.length ? 'Nenhuma posição encontrada para os filtros selecionados' : 'Nenhuma posição autorizada para você hoje.'}</div>
         ) : (
-          <>
+          <div className="pe-mesa">
+          <div className="pe-principal">
             <div className="pe-carrossel"
               onTouchStart={(ev) => {
                 const alvo = ev.target as HTMLElement;
@@ -157,9 +164,18 @@ export function PosicoesEmbarque() {
               <button className="btn" disabled={i >= lista.length - 1} onClick={() => ir(1)}>Próximo <span aria-hidden="true">→</span></button>
             </nav>
             {rascunhoAlterado(rascunhos[atual.posicao!.id]) && <p className="pe-dica"><Icone nome="atualizar" tam={14} /> Rascunho deste embarque guardado nesta aba, ainda não salvo.</p>}
-          </>
+          </div>
+          <MiniBlocos lista={lista} atualId={atual.embarque.id} idx={idx} cfg={estado.config} pendentes={pendentes}
+            aoEscolher={(id) => { setAtualId(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+          </div>
         )}
+
+        <div className="pe-rodape">
+          {pode('posicoes.abrir') && <button className="btn" onClick={() => setAbrir(true)}>Abrir posições</button>}
+          <button className="btn primario" disabled={!lista.length} onClick={() => setPrint(true)}><Icone nome="baixar" tam={18} />Imagem por centro de custo</button>
+        </div>
       </div>
+      {print && <PrintCentros linhas={lista} idx={idx} cfg={estado.config} data={hoje} aoFechar={() => setPrint(false)} />}
       {abrir && <AbrirPosicoes dataInicial={hoje} aoFechar={() => setAbrir(false)} />}
     </Layout>
   );
@@ -174,5 +190,44 @@ function FiltroBotao({ rotulo, todos, valor, opcoes, aoMudar }: { rotulo: string
         {opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
       </select>
     </label>
+  );
+}
+
+/** Computador: miniatura de todos os blocos do filtro, ao lado do cartão. Clicar abre o bloco para preencher. */
+function MiniBlocos({ lista, atualId, idx, cfg, pendentes, aoEscolher }: {
+  lista: LinhaFrete[]; atualId: string; idx: Indices; cfg: Pick<Configuracoes, 'meta_veiculos_lote_padrao'>; pendentes: string[]; aoEscolher: (embarqueId: string) => void;
+}) {
+  return (
+    <aside className="pe-minis" aria-label="Todos os blocos do filtro">
+      <div className="pe-minis-cab">
+        <strong>Blocos do filtro ({lista.length})</strong>
+        <span>Clique num bloco para preencher a posição.</span>
+        <div className="legenda">
+          <span><i className="faixa-vermelho" />Carregado até 60% da meta</span><span><i className="faixa-amarelo" />60,1% a 80%</span>
+          <span><i className="faixa-verde" />Acima de 80%</span><span><i className="sem-meta" />Sem meta</span>
+        </div>
+      </div>
+      <div className="pe-minis-grade">
+        {lista.map((l) => {
+          const e = l.embarque;
+          const p = l.posicao!;
+          const v = volumes(p);
+          const meta = metaDaPosicao(p, cfg).volume_t;
+          const faixa = faixaBarra(meta && meta > 0 ? (v.carregado_t / meta) * 100 : null);
+          const cc = centroDaLinha(l, idx);
+          const ativo = e.id === atualId;
+          return (
+            <button key={e.id} type="button" className={`pe-mini ${faixa ? `faixa-${faixa}` : 'sem-meta'}${ativo ? ' ativo' : ''}`} aria-current={ativo || undefined}
+              onClick={() => aoEscolher(e.id)} title={`Preencher a posição de ${nome(idx.cliente, e.cliente_id)}`}>
+              <span className="pe-mini-cli">{nome(idx.cliente, e.cliente_id)}</span>
+              <span className="pe-mini-rota">{cidadeUF(e.origem_cidade, e.origem_uf)} → {cidadeUF(e.destino_cidade, e.destino_uf)}</span>
+              <span className="pe-mini-cc">{cc === SEM_CENTRO ? 'Sem centro de custo' : nome(idx.centroCusto, cc)} · {nome(idx.filial, e.filial_id)}</span>
+              <span className="pe-mini-cont"><span>Porta <b>{p.porta ?? '—'}</b></span><span>Trânsito <b>{p.transito ?? '—'}</b></span><span>Carreg. <b>{p.carregados ?? '—'}</b></span></span>
+              {pendentes.includes(p.id) && <span className="pe-mini-rasc">Rascunho não salvo</span>}
+            </button>
+          );
+        })}
+      </div>
+    </aside>
   );
 }
