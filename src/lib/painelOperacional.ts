@@ -5,13 +5,15 @@
 //   fila        enviado → assumido, e corrigido → retomado (fila de retorno após a correção)
 //   atendimento assumido/retomado → devolvido/concluído/cancelado
 //   pendência   devolvido → corrigido (aguardando o solicitante)
+//   cliente     enviado_cliente/pago_pendencia → retorno_cliente/concluído (Estadia: aguardando o cliente, não é atendimento ativo)
 // Nada é estimado: sequência de eventos incompleta deixa o chamado fora das medianas ("sem registro").
 
 import type { MotivoDevolucao, StatusDoc, TipoSolicitacaoDoc } from '../types';
 import { FUSO } from './formato';
 
 export type EventoFluxo =
-  | 'enviado' | 'assumido' | 'devolvido' | 'corrigido' | 'retomado' | 'transferido' | 'concluido' | 'cancelado' | 'reaberto' | 'status_alterado';
+  | 'enviado' | 'assumido' | 'devolvido' | 'corrigido' | 'retomado' | 'transferido' | 'concluido' | 'cancelado' | 'reaberto' | 'status_alterado'
+  | 'enviado_cliente' | 'pago_pendencia' | 'retorno_cliente';
 
 export interface SolPainel {
   id: string; numero: number; tipo: TipoSolicitacaoDoc; status: StatusDoc;
@@ -34,20 +36,20 @@ export interface DadosPainel {
   eventos: EventoPainel[];
 }
 
-/** Tipos de demanda do painel. Estadia: operação futura, ainda sem fluxo no app. */
-export type TipoDemanda = TipoSolicitacaoDoc | 'estadia';
+/** Tipos de demanda do painel. */
+export type TipoDemanda = TipoSolicitacaoDoc;
 export const TIPOS_DEMANDA: Array<{ id: TipoDemanda; rotulo: string; ativo: boolean }> = [
   { id: 'cadastro', rotulo: 'Cadastro', ativo: true },
   { id: 'emissao', rotulo: 'Emissão', ativo: true },
   { id: 'lote_emissao', rotulo: 'Lote e Emissão', ativo: true },
-  { id: 'estadia', rotulo: 'Estadia', ativo: false },
+  { id: 'estadia', rotulo: 'Estadia', ativo: true },
 ];
 export type IdOperacao = 'cadastro' | 'emissao' | 'estadia';
 /** prazo_min: prazo de espera na fila (pedido de 28/10/2026: Cadastro 30 min, Emissão 20 min, Estadia 24 h de prazo médio de envio). */
 export const OPERACOES: Array<{ id: IdOperacao; rotulo: string; tipos: TipoSolicitacaoDoc[]; prazo_min?: number; composicao?: string; futura?: boolean }> = [
   { id: 'cadastro', rotulo: 'Cadastro', tipos: ['cadastro'], prazo_min: 30 },
   { id: 'emissao', rotulo: 'Emissão', tipos: ['emissao', 'lote_emissao'], prazo_min: 20, composicao: 'Emissão + Lote e Emissão' },
-  { id: 'estadia', rotulo: 'Estadia', tipos: [], prazo_min: 24 * 60, futura: true },
+  { id: 'estadia', rotulo: 'Estadia', tipos: ['estadia'], prazo_min: 24 * 60 },
 ];
 
 /** Tolerância de atraso que ainda fica em amarelo. */
@@ -61,11 +63,14 @@ export function situacaoPrazo(esperaMs: number | null, prazoMin: number | undefi
   return atraso <= 0 ? 'no_prazo' : atraso <= TOLERANCIA_ATRASO_MS ? 'atencao' : 'atrasado';
 }
 
-const CONCLUIDO: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido'];
+export const CONCLUIDO: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido', 'aprovada', 'aprovada_parcial', 'encerrado'];
+/** Estadia aguardando o cliente (encaminhada, ou paga com receita pendente): fora do atendimento ativo. */
+export const NO_CLIENTE: StatusDoc[] = ['aguardando_cliente', 'pago_pendencia'];
 export const NA_FILA: StatusDoc[] = ['enviado', 'correcao_recebida'];
 /** Desempate de eventos no mesmo instante (a migração preencheu resposta e retomada automática juntas). */
 const ORDEM: Record<EventoFluxo, number> = {
-  enviado: 0, reaberto: 1, assumido: 2, transferido: 3, devolvido: 4, corrigido: 5, retomado: 6, status_alterado: 7, concluido: 8, cancelado: 9,
+  enviado: 0, reaberto: 1, assumido: 2, transferido: 3, devolvido: 4, corrigido: 5, retomado: 6, enviado_cliente: 7, pago_pendencia: 8,
+  retorno_cliente: 9, status_alterado: 10, concluido: 11, cancelado: 12,
 };
 
 // ---------------------------------------------------------------------------
@@ -88,13 +93,15 @@ export const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 // ---------------------------------------------------------------------------
 // Linha do tempo de cada chamado
 // ---------------------------------------------------------------------------
-export type Etapa = 'fila' | 'atendimento' | 'pendencia';
+export type Etapa = 'fila' | 'atendimento' | 'pendencia' | 'cliente';
 export interface Intervalo { etapa: Etapa; de: number; ate: number; responsavel_id: string | null }
 export interface LinhaChamado {
   s: SolPainel;
   /** Sequência de eventos consistente do envio até agora. */
   completo: boolean;
   fila_ms: number; atendimento_ms: number; pendencia_ms: number;
+  /** Estadia: tempo aguardando o retorno do cliente (inclui pago em pendência). */
+  cliente_ms: number;
   /** Conclusão − envio original (só concluídos com sequência completa). */
   total_ms: number | null;
   devolucoes: number;
@@ -118,7 +125,7 @@ export function ordenarEventos(evs: EventoPainel[]): Map<string, EventoPainel[]>
 /** Monta a linha do tempo de um chamado; intervalos abertos contam até `agora`. */
 export function linhaDoTempo(s: SolPainel, evs: EventoPainel[], agora: number): LinhaChamado {
   const l: LinhaChamado = {
-    s, completo: evs.length > 0 && evs[0].evento === 'enviado', fila_ms: 0, atendimento_ms: 0, pendencia_ms: 0, total_ms: null,
+    s, completo: evs.length > 0 && evs[0].evento === 'enviado', fila_ms: 0, atendimento_ms: 0, pendencia_ms: 0, cliente_ms: 0, total_ms: null,
     devolucoes: 0, motivos: [], assumiram: new Map(), concluido_por: null, inicio_fila_atual: null, intervalos: [],
   };
   let etapa: Etapa | 'fim' | null = null;
@@ -139,18 +146,22 @@ export function linhaDoTempo(s: SolPainel, evs: EventoPainel[], agora: number): 
     const t = Date.parse(e.em);
     switch (e.evento) {
       case 'enviado': ir('fila', t, [null]); break;
-      case 'reaberto': ir('fila', t, ['fim']); break;
+      // Reaberto volta ao responsável (atendimento) ou, sem responsável, à fila.
+      case 'reaberto': ir(e.responsavel_id ? 'atendimento' : 'fila', t, ['fim']); break;
       case 'assumido': ir('atendimento', t, ['fila']); break;
       case 'retomado': ir('atendimento', t, ['fila']); break;
       case 'devolvido': ir('pendencia', t, ['atendimento']); l.devolucoes++; if (e.motivo) l.motivos.push(e.motivo); break;
       case 'corrigido': ir('fila', t, ['pendencia']); break;
       case 'transferido': fechar(t); desde = t; break;
+      case 'enviado_cliente': ir('cliente', t, ['atendimento']); break;
+      case 'pago_pendencia': ir('cliente', t, ['atendimento', 'cliente']); break;
+      case 'retorno_cliente': ir('atendimento', t, ['cliente']); break;
       case 'concluido':
-        ir('fim', t, ['atendimento']);
+        ir('fim', t, ['atendimento', 'cliente']);
         if (e.responsavel_id) l.concluido_por = { id: e.responsavel_id, nome: e.responsavel_nome ?? '—' };
         l.total_ms = t - Date.parse(s.enviado_em);
         break;
-      case 'cancelado': ir('fim', t, ['fila', 'atendimento', 'pendencia']); break;
+      case 'cancelado': ir('fim', t, ['fila', 'atendimento', 'pendencia', 'cliente']); break;
       default: l.completo = false;
     }
     resp = e.responsavel_id;
@@ -158,7 +169,7 @@ export function linhaDoTempo(s: SolPainel, evs: EventoPainel[], agora: number): 
   }
   // A etapa calculada precisa bater com a situação atual do chamado.
   const esperada: Etapa | 'fim' | null = NA_FILA.includes(s.status) ? 'fila' : s.status === 'em_atendimento' ? 'atendimento'
-    : s.status === 'aguardando_informacao' ? 'pendencia' : 'fim';
+    : s.status === 'aguardando_informacao' ? 'pendencia' : NO_CLIENTE.includes(s.status) ? 'cliente' : 'fim';
   if (etapa !== esperada) l.completo = false;
   if (etapa === 'fila' && esperada === 'fila') l.inicio_fila_atual = desde;
   else if (s.status === 'enviado' && !evs.length) l.inicio_fila_atual = Date.parse(s.enviado_em); // envio gravado no próprio chamado
@@ -371,13 +382,15 @@ export function evolucao(envios: number[], visao: VisaoEvolucao, dataRef: string
 // ---------------------------------------------------------------------------
 export interface ResumoPainel {
   recebidos: number; concluidos: number; em_atendimento: number; pendencia: number; na_fila: number; cancelados: number;
+  /** Estadia aguardando o cliente (encaminhada ou paga com receita pendente). */
+  aguardando_cliente: number; tempo_cliente_ms: number;
   com_devolucao: number; devolucoes: number; devolvidos_mais_de_uma_vez: number; tempo_pendencia_ms: number;
   motivos: Partial<Record<MotivoDevolucao, number>>;
 }
 
 export function resumo(grupo: LinhaChamado[]): ResumoPainel {
   const r: ResumoPainel = {
-    recebidos: grupo.length, concluidos: 0, em_atendimento: 0, pendencia: 0, na_fila: 0, cancelados: 0,
+    recebidos: grupo.length, concluidos: 0, em_atendimento: 0, pendencia: 0, na_fila: 0, cancelados: 0, aguardando_cliente: 0, tempo_cliente_ms: 0,
     com_devolucao: 0, devolucoes: 0, devolvidos_mais_de_uma_vez: 0, tempo_pendencia_ms: 0, motivos: {},
   };
   for (const l of grupo) {
@@ -386,6 +399,8 @@ export function resumo(grupo: LinhaChamado[]): ResumoPainel {
     else if (l.s.status === 'aguardando_informacao') r.pendencia++;
     else if (NA_FILA.includes(l.s.status)) r.na_fila++;
     else if (l.s.status === 'cancelado') r.cancelados++;
+    else if (NO_CLIENTE.includes(l.s.status)) r.aguardando_cliente++;
+    r.tempo_cliente_ms += l.cliente_ms;
     if (l.devolucoes) r.com_devolucao++;
     if (l.devolucoes > 1) r.devolvidos_mais_de_uma_vez++;
     r.devolucoes += l.devolucoes;

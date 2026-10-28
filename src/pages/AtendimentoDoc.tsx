@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { type ArquivoLocal, Copiar, Historico, LinhaInfo, SeletorArquivos, StatusDocPill, TipoNumero, enviarArquivos, useAgora } from '../components/doc/Comum';
 import { CancelarDoc } from '../components/doc/DocumentacaoEmbarque';
 import { VisualizadorAnexo } from '../components/doc/VisualizadorAnexo';
+import { MesaAmpla } from '../components/doc/MesaAmpla';
 import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, Carregando, useAviso } from '../components/ui';
 import { mensagemErro, type ResultadoDoc } from '../data/api';
@@ -25,7 +26,7 @@ const REFERENCIAS: Array<[string, string]> = [
 ];
 const REFERENCIAS_CADASTRO = Object.entries(REF_CADASTRO);
 
-function useRascunho(chave: string) {
+export function useRascunho(chave: string) {
   const [v, setV] = useState(() => { try { return sessionStorage.getItem(chave) ?? ''; } catch { return ''; } });
   useEffect(() => { try { if (v) sessionStorage.setItem(chave, v); else sessionStorage.removeItem(chave); } catch { /* só em memória */ } }, [chave, v]);
   return [v, setV] as const;
@@ -45,7 +46,7 @@ export function AtendimentoDoc() {
       </Layout>
     );
   }
-  return <Atendimento s={s} />;
+  return s.tipo === 'estadia' ? <MesaAmpla s={s} /> : <Atendimento s={s} />;
 }
 
 function Atendimento({ s }: { s: SolicitacaoDoc }) {
@@ -207,7 +208,7 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
   );
 }
 
-type Executar = (f: () => Promise<ResultadoDoc>, ok: string) => Promise<boolean>;
+export type Executar = (f: () => Promise<ResultadoDoc>, ok: string) => Promise<boolean>;
 
 function RegistrarLote({ s, executar }: { s: SolicitacaoDoc; executar: Executar }) {
   const { api } = useApp();
@@ -252,7 +253,7 @@ function AnexarEmitidos({ s, executar, emitidos }: { s: SolicitacaoDoc; executar
   );
 }
 
-function PedirAjuste({ s, executar, referencias }: { s: SolicitacaoDoc; executar: Executar; referencias: Array<[string, string]> }) {
+export function PedirAjuste({ s, executar, referencias }: { s: SolicitacaoDoc; executar: Executar; referencias: Array<[string, string]> }) {
   const { api } = useApp();
   const [texto, setTexto] = useRascunho(`travion-rascunho-ajuste-${s.id}`);
   const [ref, setRef] = useState('');
@@ -299,7 +300,7 @@ function PedirAjuste({ s, executar, referencias }: { s: SolicitacaoDoc; executar
   );
 }
 
-function Retomar({ s, executar }: { s: SolicitacaoDoc; executar: Executar }) {
+export function Retomar({ s, executar }: { s: SolicitacaoDoc; executar: Executar }) {
   const { api } = useApp();
   const [gravando, setGravando] = useState(false);
   return (

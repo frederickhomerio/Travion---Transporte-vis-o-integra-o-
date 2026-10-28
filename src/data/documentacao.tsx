@@ -3,8 +3,8 @@
 // Registros são identificados pelo id; a versão maior vence, então evento e consulta não duplicam nada.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react';
-import type { AnexoDoc, LoteErp, MensagemDoc, NotificacaoApp, SolicitacaoDoc } from '../types';
-import { mensagemErro, type ResultadoDoc } from './api';
+import type { LoteErp, NotificacaoApp, SolicitacaoDoc } from '../types';
+import { mensagemErro, type DadosDetalheDoc, type ResultadoDoc } from './api';
 import { useApp } from './store';
 
 export const INTERVALO_SYNC_MS = 15000;
@@ -12,7 +12,7 @@ const INTERVALO_NOTIF_MS = 30000;
 /** Margem para registros gravados por transações que terminaram depois da última consulta. */
 const MARGEM_MS = 60000;
 
-export interface DetalheDoc { mensagens: MensagemDoc[]; anexos: AnexoDoc[]; versao: number }
+export interface DetalheDoc extends DadosDetalheDoc { versao: number }
 
 export interface EstadoDoc {
   ativo: boolean;
@@ -76,7 +76,8 @@ export function ProvedorDoc({ children }: { children: ReactNode }) {
   const emCurso = useRef(false);
   const perms = estado.sessao?.permissoes;
   const ativo = !!estado.sessao && estado.sessao.perfil.status === 'ativo'
-    && !!perms && (perms.has('documentacao.ver') || perms.has('apoio.pagina') || perms.has('cadastro.ver') || perms.has('cadastro.solicitar'));
+    && !!perms && (perms.has('documentacao.ver') || perms.has('apoio.pagina') || perms.has('cadastro.ver') || perms.has('cadastro.solicitar')
+      || perms.has('estadia.ver') || perms.has('estadia.solicitar'));
   const perfilId = estado.sessao?.perfil.id ?? null;
 
   const sincronizar = useCallback(async (completo = false) => {
@@ -150,7 +151,7 @@ export function ProvedorDoc({ children }: { children: ReactNode }) {
 
   const ctx = useMemo<CtxDoc>(() => ({
     store, sincronizar, carregarDetalhe, carregarEmbarque, recarregarNotificacoes,
-    aplicar: (r) => store.mesclar([r.registro], r.lote ? [r.lote] : []),
+    aplicar: (r) => { if (r.registro) store.mesclar([r.registro], r.lote ? [r.lote] : []); },
   }), [store, sincronizar, carregarDetalhe, carregarEmbarque, recarregarNotificacoes]);
   return <Ctx.Provider value={ctx}>{children}</Ctx.Provider>;
 }

@@ -1,7 +1,7 @@
 // Documentação / Apoio Operacional no Supabase: tabelas com RLS, funções da migração 1610 e bucket privado "documentacao".
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AnexoDoc, LoteErp, MensagemDoc, NotificacaoApp, SolicitacaoDoc } from '../types';
+import type { AnexoDoc, ConferenciaEstadia, LoteErp, MensagemDoc, NotificacaoApp, PagamentoEstadia, RetornoEstadia, SolicitacaoDoc } from '../types';
 import type { ApiDoc, ResultadoDoc } from './api';
 import { tipoCadastro } from '../lib/documentacao';
 import type { DadosPainel } from '../lib/painelOperacional';
@@ -44,7 +44,7 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
         ql = ql.gte('atualizado_em', desde);
       } else {
         const corte = new Date(Date.now() - DIAS_CONCLUIDAS * 86400e3).toISOString();
-        q = q.or(`status.in.(enviado,em_atendimento,aguardando_informacao,correcao_recebida),atualizado_em.gte.${corte}`);
+        q = q.or(`status.in.(enviado,em_atendimento,aguardando_informacao,correcao_recebida,aguardando_cliente,pago_pendencia),atualizado_em.gte.${corte}`);
       }
       const [s, l] = await Promise.all([q, ql]);
       return { solicitacoes: (ok(s) as ComAnexos[]).map(comNomes), lotes: ok(l) as LoteErp[] };
@@ -70,7 +70,14 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
         origem ? sb.from('doc_anexos').select('*').eq('solicitacao_id', origem).eq('categoria', 'evidencia_frete').order('enviado_em')
           : Promise.resolve({ data: [], error: null }),
       ]);
-      return { mensagens: ok(m) as MensagemDoc[], anexos: [...(ok(a) as AnexoDoc[]), ...(ok(ev) as AnexoDoc[])] };
+      const base = { mensagens: ok(m) as MensagemDoc[], anexos: [...(ok(a) as AnexoDoc[]), ...(ok(ev) as AnexoDoc[])] };
+      if (s.tipo !== 'estadia') return base;
+      const [c, r, p] = await Promise.all([
+        sb.from('estadia_conferencias').select('*').eq('solicitacao_id', id).order('versao'),
+        sb.from('estadia_retornos').select('*').eq('solicitacao_id', id).order('criado_em'),
+        sb.from('estadia_pagamentos').select('*').eq('solicitacao_id', id).order('criado_em'),
+      ]);
+      return { ...base, estadia: { conferencias: ok(c) as ConferenciaEstadia[], retornos: ok(r) as RetornoEstadia[], pagamentos: ok(p) as PagamentoEstadia[] } };
     },
     async enviarArquivo(arquivo, cadastro) {
       // Cadastro: tipo deduzido da extensão quando o navegador não informa (áudio do WhatsApp, HEIC etc.).
@@ -100,6 +107,18 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
     cancelar: (id, motivo) => rpc<ResultadoDoc>('cancelar_solicitacao_doc', { p_id: id, p_motivo: motivo }),
     criarCadastro: (dados, anexos) => rpc<ResultadoDoc>('criar_solicitacao_cadastro', { p_dados: dados, p_anexos: anexos }),
     concluirCadastro: (id, referencia, retorno) => rpc<ResultadoDoc>('concluir_cadastro_doc', { p_id: id, p_referencia: referencia, p_retorno: retorno }),
+    criarEstadia: (dados, anexos) => rpc<ResultadoDoc>('criar_solicitacao_estadia', { p_dados: dados, p_anexos: anexos }),
+    conferirEstadia: (id, parametros, versao) => rpc<ResultadoDoc>('conferir_estadia', { p_id: id, p_dados: parametros, p_versao: versao }),
+    encaminharClienteEstadia: (id, observacao, versao) => rpc<ResultadoDoc>('encaminhar_cliente_estadia', { p_id: id, p_observacao: observacao, p_versao: versao }),
+    registrarRetornoEstadia: (id, dados, anexos, versao) => rpc<ResultadoDoc>('registrar_retorno_estadia', { p_id: id, p_dados: dados, p_anexos: anexos, p_versao: versao }),
+    registrarPagamentoEstadia: (id, dados, anexos, versao) => rpc<ResultadoDoc>('registrar_pagamento_estadia', { p_id: id, p_dados: dados, p_anexos: anexos, p_versao: versao }),
+    encerrarEstadia: (id, motivo, versao) => rpc<ResultadoDoc>('encerrar_estadia', { p_id: id, p_motivo: motivo, p_versao: versao }),
+    reabrirEstadia: (id, motivo) => rpc<ResultadoDoc>('reabrir_estadia', { p_id: id, p_motivo: motivo }),
+    async buscarEstadias(campo, valor) {
+      let q = sb.from('solicitacoes_doc').select(COM_NFS).eq('tipo', 'estadia').order('enviado_em', { ascending: false }).limit(200);
+      q = campo === 'placa' ? q.eq('placa', valor) : q.eq('est_tipo_documento', 'cte').contains('est_documentos', [valor]);
+      return (ok(await q) as ComAnexos[]).map(comNomes);
+    },
     async notificacoes() {
       return ok(await sb.from('notificacoes').select('*').order('criada_em', { ascending: false }).limit(100)) as NotificacaoApp[];
     },

@@ -25,6 +25,7 @@ export function Mais() {
             {pode('compartilhamento.preparar') && <Link className="btn" to="/posicao-cliente"><Icone nome="cliente" />Posição do Cliente</Link>}
             {pode('apoio.pagina') && <Link className="btn" to="/apoio"><Icone nome="lista" />Apoio Operacional</Link>}
             {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <Link className="btn" to="/cadastro"><Icone nome="cadastro" />Cadastro</Link>}
+            {(pode('estadia.solicitar') || pode('estadia.ver')) && <Link className="btn" to="/estadia"><Icone nome="relogio" />Estadia</Link>}
             {admin && <Link className="btn" to="/admin"><Icone nome="config" />Administração</Link>}
           </div>
         </div>

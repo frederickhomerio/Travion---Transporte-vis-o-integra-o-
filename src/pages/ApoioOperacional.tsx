@@ -11,6 +11,7 @@ import { useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
 import { type Atalho, FILTROS_FILA, type FiltrosFila, TIPO_DOC, filtrarFila, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
 import { fmtHora } from '../lib/formato';
+import { documentosEstadia, periodoEstadia } from '../lib/estadia';
 import type { SolicitacaoDoc, TipoSolicitacaoDoc } from '../types';
 
 const CHAVE_FILTROS = 'travion-fila-apoio';
@@ -95,12 +96,13 @@ export function ApoioOperacional() {
           { valor: 'novas', rotulo: `Novas (${contagem('novas')})` },
           { valor: 'minhas', rotulo: `Minhas em atendimento (${contagem('minhas')})` },
           { valor: 'aguardando', rotulo: `Aguardando informação (${contagem('aguardando')})` },
+          { valor: 'cliente', rotulo: `Aguardando cliente (${contagem('cliente')})` },
           { valor: 'concluidas', rotulo: 'Concluídas' },
         ]} />
 
         <div className="ao-filtros">
           <input className="entrada" type="search" value={f.busca} onChange={(e) => setF({ ...f, busca: e.target.value })}
-            placeholder="Buscar placa, lote, cliente, NF ou nº" aria-label="Buscar na fila" />
+            placeholder="Buscar placa, lote, cliente, NF, CT-e ou nº" aria-label="Buscar na fila" />
           <select className="entrada" value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value as TipoSolicitacaoDoc | '' })} aria-label="Tipo de solicitação">
             <option value="">Todos os tipos</option>
             {(Object.keys(TIPO_DOC) as TipoSolicitacaoDoc[]).map((t) => <option key={t} value={t}>{TIPO_DOC[t]}</option>)}
@@ -135,20 +137,21 @@ export function ApoioOperacional() {
                   return (
                     <tr key={s.id} className={nova ? 'ao-nova' : ''}>
                       <td data-rot="Solicitação"><TipoNumero s={s} /></td>
-                      <td data-rot="Cliente e lote"><span className="ao-l1">{s.retrato.cliente}</span><span className="ao-l2">{s.tipo === 'cadastro' ? 'Cadastro no ERP' : s.retrato.lote_numero ? `Lote ${s.retrato.lote_numero}` : 'Lote a gerar'}</span></td>
-                      <td data-rot="Placa e rota"><span className="ao-l1">{fmtPlaca(s.placa)}</span><span className="ao-l2">{rotaDoc(s)}</span></td>
+                      <td data-rot="Cliente e lote"><span className="ao-l1">{s.retrato.cliente}</span><span className="ao-l2">{s.tipo === 'estadia' ? documentosEstadia(s) : s.tipo === 'cadastro' ? 'Cadastro no ERP' : s.retrato.lote_numero ? `Lote ${s.retrato.lote_numero}` : 'Lote a gerar'}</span></td>
+                      <td data-rot="Placa e rota"><span className="ao-l1">{fmtPlaca(s.placa)}</span><span className="ao-l2">{s.tipo === 'estadia' ? periodoEstadia(s) : rotaDoc(s)}</span></td>
                       <td data-rot="Comercial">{s.solicitante_nome}</td>
                       <td data-rot="Tempo"><span className="ao-l2">{t.rotulo}</span><span className="ao-l1">{t.texto}</span></td>
                       <td data-rot="Status"><StatusDocPill status={s.status} /></td>
                       <td data-rot="Responsável">{s.responsavel_nome ?? <span className="suave">—</span>}</td>
                       <td data-rot="Pendência">{s.status === 'aguardando_informacao' ? <span className="ao-pend">Resposta de {s.solicitante_nome}</span>
-                        : s.status === 'correcao_recebida' ? <span className="ao-pend">Correção recebida: retomar</span> : <span className="suave">—</span>}</td>
+                        : s.status === 'correcao_recebida' ? <span className="ao-pend">Correção recebida: retomar</span>
+                        : s.status === 'aguardando_cliente' || s.status === 'pago_pendencia' ? <span className="ao-pend cliente">Retorno do cliente</span> : <span className="suave">—</span>}</td>
                       <td className="ao-acao">
                         {!s.responsavel_id && s.status === 'enviado' && pode('apoio.atender') ? (
                           <button className="btn primario peq" disabled={!!assumindo} onClick={() => void assumir(s)}>{assumindo === s.id ? 'Assumindo…' : 'Assumir'}</button>
                         ) : meu && s.status === 'correcao_recebida' ? (
                           <button className="btn primario peq" onClick={() => nav(`/apoio/${s.id}`)}>Retomar atendimento</button>
-                        ) : meu && (s.status === 'em_atendimento' || s.status === 'aguardando_informacao') ? (
+                        ) : meu && ['em_atendimento', 'aguardando_informacao', 'aguardando_cliente', 'pago_pendencia'].includes(s.status) ? (
                           <button className="btn secundario peq" onClick={() => nav(`/apoio/${s.id}`)}>Continuar atendimento</button>
                         ) : (
                           <button className="btn peq" onClick={() => nav(`/apoio/${s.id}`)}>Consultar</button>

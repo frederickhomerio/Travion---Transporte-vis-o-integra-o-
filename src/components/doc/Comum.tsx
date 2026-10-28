@@ -5,6 +5,7 @@ import { useApp } from '../../data/store';
 import type { ArquivoDoc } from '../../data/api';
 import { ACEITA_CADASTRO, CATEGORIA, LIMITE_ARQUIVO, LIMITE_CADASTRO, MOTIVO_DEVOLUCAO, REF_CADASTRO, STATUS_DOC, TIPOS_ARQUIVO, TIPO_DOC, fmtTamanho, tipoCadastro } from '../../lib/documentacao';
 import { fmtDataHora } from '../../lib/formato';
+import { REF_ESTADIA } from '../../lib/estadia';
 import type { AnexoDoc, CategoriaAnexo, MensagemDoc, SolicitacaoDoc, StatusDoc } from '../../types';
 import { useAviso } from '../ui';
 import { VisualizadorAnexo } from './VisualizadorAnexo';
@@ -25,7 +26,7 @@ export function TipoNumero({ s }: { s: SolicitacaoDoc }) {
   return (
     <span className="tn">
       <span className="tn-tipo">{TIPO_DOC[s.tipo]}</span>
-      <span className="tn-num">Solicitação nº {s.numero}</span>
+      <span className="tn-num">{s.tipo === 'estadia' && s.est_codigo ? s.est_codigo : `Solicitação nº ${s.numero}`}</span>
     </span>
   );
 }
@@ -130,7 +131,7 @@ export function Historico({ mensagens, anexos }: { mensagens: MensagemDoc[]; ane
             {m.tipo === 'pendencia' && m.motivo && m.motivo !== 'sem_registro' && (
               <span className="pequeno"><strong>Motivo:</strong> {MOTIVO_DEVOLUCAO[m.motivo]}{m.motivo === 'outro' && m.motivo_outro ? ` (${m.motivo_outro})` : ''}</span>
             )}
-            {m.referencia && m.tipo === 'pendencia' && <span className="pequeno suave">Referente a: {CATEGORIA[m.referencia as CategoriaAnexo] ?? REF_CADASTRO[m.referencia] ?? m.referencia}</span>}
+            {m.referencia && m.tipo === 'pendencia' && <span className="pequeno suave">Referente a: {CATEGORIA[m.referencia as CategoriaAnexo] ?? REF_CADASTRO[m.referencia] ?? REF_ESTADIA[m.referencia] ?? m.referencia}</span>}
             {arqs.length > 0 && <span className="pequeno">Anexos: {arqs.map((a) => a.nome).join(', ')}</span>}
           </li>
         );

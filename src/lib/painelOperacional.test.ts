@@ -198,3 +198,43 @@ describe('situacaoPrazo', () => {
     expect(situacaoPrazo(10 * min, undefined)).toBeNull();
   });
 });
+
+describe('estadia no painel', () => {
+  it('espera pelo cliente fica fora do atendimento ativo, inclusive pago em pendência', () => {
+    const s = sol('e1', { tipo: 'estadia', status: 'aprovada', ...ana });
+    const l = linhaDoTempo(s, [
+      ev('e1', 'enviado', T0), ev('e1', 'assumido', T0 + 2 * H, ana), ev('e1', 'enviado_cliente', T0 + 3 * H, ana),
+      ev('e1', 'pago_pendencia', T0 + 10 * H, ana), ev('e1', 'concluido', T0 + 30 * H, ana),
+    ], T0 + 40 * H);
+    expect(l.completo).toBe(true);
+    expect(l.fila_ms).toBe(2 * H);
+    expect(l.atendimento_ms).toBe(1 * H);
+    expect(l.cliente_ms).toBe(27 * H);
+    expect(l.total_ms).toBe(30 * H);
+  });
+  it('rejeitada volta ao atendimento e o encerramento conclui', () => {
+    const s = sol('e2', { tipo: 'estadia', status: 'encerrado', ...ana });
+    const l = linhaDoTempo(s, [
+      ev('e2', 'enviado', T0), ev('e2', 'assumido', T0 + H, ana), ev('e2', 'enviado_cliente', T0 + 2 * H, ana),
+      ev('e2', 'retorno_cliente', T0 + 6 * H, ana), ev('e2', 'concluido', T0 + 6.5 * H, ana),
+    ], T0 + 8 * H);
+    expect(l.completo).toBe(true);
+    expect(l.atendimento_ms).toBe(1.5 * H);
+    expect(l.cliente_ms).toBe(4 * H);
+  });
+  it('aguardando cliente agora conta na espera do cliente, não na fila nem no atendimento', () => {
+    const s = sol('e3', { tipo: 'estadia', status: 'aguardando_cliente', ...ana });
+    const l = linhaDoTempo(s, [ev('e3', 'enviado', T0), ev('e3', 'assumido', T0 + H, ana), ev('e3', 'enviado_cliente', T0 + 2 * H, ana)], T0 + 5 * H);
+    expect(l.completo).toBe(true);
+    expect(l.cliente_ms).toBe(3 * H);
+    expect(filaAtual([l], ['estadia'], T0 + 5 * H).quantidade).toBe(0);
+    expect(resumo([l]).aguardando_cliente).toBe(1);
+  });
+  it('reaberta com responsável volta ao atendimento', () => {
+    const s = sol('e4', { tipo: 'estadia', status: 'em_atendimento', ...ana });
+    const l = linhaDoTempo(s, [ev('e4', 'enviado', T0), ev('e4', 'assumido', T0 + H, ana), ev('e4', 'concluido', T0 + 2 * H, ana),
+      ev('e4', 'reaberto', T0 + 3 * H, ana)], T0 + 4 * H);
+    expect(l.completo).toBe(true);
+    expect(l.atendimento_ms).toBe(2 * H);
+  });
+});

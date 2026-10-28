@@ -5,11 +5,14 @@ import type {
 } from '../types';
 import { cidadeAnuncio } from './anuncio';
 import { normalizar } from './texto';
+import { resumoEstadia } from './estadia';
 
-export const TIPO_DOC: Record<TipoSolicitacaoDoc, string> = { lote_emissao: 'Lote e Emissão', emissao: 'Emissão', cadastro: 'Cadastro' };
+export const TIPO_DOC: Record<TipoSolicitacaoDoc, string> = { lote_emissao: 'Lote e Emissão', emissao: 'Emissão', cadastro: 'Cadastro', estadia: 'Estadia' };
 export const STATUS_DOC: Record<StatusDoc, string> = {
   enviado: 'Enviado', em_atendimento: 'Em atendimento', aguardando_informacao: 'Aguardando informação', correcao_recebida: 'Correção recebida',
   documentacao_disponivel: 'Documentação disponível', cadastro_concluido: 'Cadastro concluído', cancelado: 'Cancelado',
+  aguardando_cliente: 'Aguardando retorno do cliente', pago_pendencia: 'Pago em pendência', aprovada: 'Aprovada',
+  aprovada_parcial: 'Aprovada parcialmente', encerrado: 'Encerrado',
 };
 export const UNIDADE_DOC: Record<UnidadeFreteDoc, string> = { rs_tonelada: 'R$/t', rs_viagem: 'R$/viagem' };
 export const OPERACAO: Record<TipoOperacao, string> = { exportacao: 'Exportação', mi_tributado: 'Mercado Interno Tributado', mi_isento: 'Mercado Interno Isento' };
@@ -18,9 +21,12 @@ export const PEDAGIO: Record<Pedagio, string> = { sem_parar: 'Sem Parar', move_m
 export const CATEGORIA: Record<CategoriaAnexo, string> = {
   nf: 'NF', evidencia_frete: 'Evidência do frete', correcao: 'Correção', cte: 'CT-e', mdfe: 'MDF-e', outro_emitido: 'Outro documento emitido',
   motorista: 'Documento do motorista', veiculo: 'Documento do veículo',
+  est_documento: 'CT-e ou Nota Fiscal de Serviço', est_nf_carga: 'Nota fiscal da carga', est_comprovante: 'Comprovante de início e fim',
+  est_agendamento: 'Agendamento', est_tratativa: 'Tratativa com cliente ou mesa', est_retorno: 'Evidência do retorno do cliente',
+  est_pagamento: 'Comprovante de pagamento',
 };
 export const CATEGORIAS_SAIDA: CategoriaAnexo[] = ['cte', 'mdfe', 'outro_emitido'];
-export const ABERTOS: StatusDoc[] = ['enviado', 'em_atendimento', 'aguardando_informacao', 'correcao_recebida'];
+export const ABERTOS: StatusDoc[] = ['enviado', 'em_atendimento', 'aguardando_informacao', 'correcao_recebida', 'aguardando_cliente', 'pago_pendencia'];
 /** Motivos da devolução (pedir ajuste). */
 export const MOTIVO_DEVOLUCAO: Record<MotivoDevolucao, string> = {
   documento_ausente: 'Documento ausente', documento_ilegivel: 'Documento ilegível', divergencia_dados: 'Divergência de dados',
@@ -104,7 +110,7 @@ export function duracao(ms: number): string {
   return `${Math.floor(h / 24)} d ${h % 24} h`;
 }
 
-export const CONCLUIDOS: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido'];
+export const CONCLUIDOS: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido', 'aprovada', 'aprovada_parcial', 'encerrado'];
 
 /** Tempo de espera (aberta) ou total até a conclusão. */
 export function tempoDoc(s: SolicitacaoDoc, agora: number): { rotulo: string; texto: string } {
@@ -118,6 +124,8 @@ export function vezDe(s: SolicitacaoDoc): string | null {
   if (s.status === 'aguardando_informacao') return `Resposta de ${s.solicitante_nome}`;
   if (s.status === 'enviado') return 'Apoio (ninguém assumiu)';
   if (s.status === 'em_atendimento') return `Apoio: ${s.responsavel_nome ?? '—'}`;
+  if (s.status === 'aguardando_cliente') return `Cliente (registra: ${s.responsavel_nome ?? '—'})`;
+  if (s.status === 'pago_pendencia') return `Retorno do cliente (registra: ${s.responsavel_nome ?? '—'})`;
   if (s.status === 'correcao_recebida') return `Apoio: retomar (${s.responsavel_nome ?? '—'})`;
   return null;
 }
@@ -146,7 +154,7 @@ export function avisosDuplicidade(placa: string, nomesNf: string[], doEmbarque: 
   return avisos;
 }
 
-export type Atalho = 'abertas' | 'novas' | 'minhas' | 'aguardando' | 'concluidas';
+export type Atalho = 'abertas' | 'novas' | 'minhas' | 'aguardando' | 'cliente' | 'concluidas';
 export interface FiltrosFila { atalho: Atalho; busca: string; filial: string; centro: string; responsavel: string; tipo: TipoSolicitacaoDoc | '' }
 export const FILTROS_FILA: FiltrosFila = { atalho: 'abertas', busca: '', filial: '', centro: '', responsavel: '', tipo: '' };
 
@@ -154,8 +162,9 @@ export function noAtalho(s: SolicitacaoDoc, atalho: Atalho, eu: string): boolean
   switch (atalho) {
     case 'abertas': return ABERTOS.includes(s.status);
     case 'novas': return s.status === 'enviado';
-    case 'minhas': return s.responsavel_id === eu && (s.status === 'em_atendimento' || s.status === 'aguardando_informacao' || s.status === 'correcao_recebida');
+    case 'minhas': return s.responsavel_id === eu && ABERTOS.includes(s.status) && s.status !== 'enviado';
     case 'aguardando': return s.status === 'aguardando_informacao';
+    case 'cliente': return s.status === 'aguardando_cliente' || s.status === 'pago_pendencia';
     case 'concluidas': return CONCLUIDOS.includes(s.status) || s.status === 'cancelado';
   }
 }
@@ -171,7 +180,8 @@ export function filtrarFila(ss: SolicitacaoDoc[], f: FiltrosFila, eu: string): S
     .filter((s) => !f.responsavel || (f.responsavel === '-' ? !s.responsavel_id : s.responsavel_id === f.responsavel))
     .filter((s) => !t || (tPlaca.length >= 3 && [s.placa, ...s.placas_reboque].some((p) => p.includes(tPlaca)))
       || normalizar(s.retrato.lote_numero ?? '').includes(t) || normalizar(s.retrato.cliente ?? '').includes(t)
-      || String(s.numero) === f.busca.trim() || (s.nomes_nf ?? []).some((n) => normalizar(n).includes(t)))
+      || String(s.numero) === f.busca.trim() || (s.nomes_nf ?? []).some((n) => normalizar(n).includes(t))
+      || normalizar(s.est_codigo ?? '') === t || [...(s.est_documentos ?? []), ...(s.est_nfs_carga ?? [])].some((n) => normalizar(n) === t))
     .sort((a, b) => (f.atalho === 'concluidas'
       ? (b.concluido_em ?? b.cancelado_em ?? b.atualizado_em).localeCompare(a.concluido_em ?? a.cancelado_em ?? a.atualizado_em)
       : a.enviado_em.localeCompare(b.enviado_em)));
@@ -180,6 +190,7 @@ export function filtrarFila(ss: SolicitacaoDoc[], f: FiltrosFila, eu: string): S
 /** Texto para colar no ERP ou numa conversa. */
 export function resumoDoc(s: SolicitacaoDoc): string {
   const r = s.retrato;
+  if (s.tipo === 'estadia') return resumoEstadia(s);
   if (s.tipo === 'cadastro') {
     return [
       `Cadastro nº ${s.numero}`,

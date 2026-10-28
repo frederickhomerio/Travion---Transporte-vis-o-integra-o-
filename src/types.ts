@@ -17,7 +17,8 @@ export type Permissao =
   | 'compartilhamento.preparar' | 'compartilhamento.links'
   | 'importacao.executar' | 'cadastros.gerenciar' | 'usuarios.gerenciar' | 'configuracoes.gerenciar'
   | 'documentacao.ver' | 'documentacao.solicitar' | 'documentacao.cancelar' | 'apoio.pagina' | 'apoio.atender'
-  | 'cadastro.solicitar' | 'cadastro.ver' | 'permissoes.gerenciar' | 'analise.operacional';
+  | 'cadastro.solicitar' | 'cadastro.ver' | 'permissoes.gerenciar' | 'analise.operacional'
+  | 'estadia.solicitar' | 'estadia.ver' | 'estadia.reabrir';
 
 export interface Filial { id: string; nome: string; codigo: string | null; supervisor?: string | null; centro_custo_id?: string | null; ativo: boolean; is_demo: boolean }
 export interface CentroCusto { id: string; nome: string; ativo: boolean; is_demo: boolean }
@@ -170,15 +171,19 @@ export interface PosicaoPublica {
 // ---------------------------------------------------------------------------
 // Documentação / Apoio Operacional (migração 1610)
 // ---------------------------------------------------------------------------
-export type TipoSolicitacaoDoc = 'lote_emissao' | 'emissao' | 'cadastro';
-export type StatusDoc = 'enviado' | 'em_atendimento' | 'aguardando_informacao' | 'correcao_recebida' | 'documentacao_disponivel' | 'cadastro_concluido' | 'cancelado';
+export type TipoSolicitacaoDoc = 'lote_emissao' | 'emissao' | 'cadastro' | 'estadia';
+export type StatusDoc = 'enviado' | 'em_atendimento' | 'aguardando_informacao' | 'correcao_recebida' | 'documentacao_disponivel' | 'cadastro_concluido'
+  // Estadia (migração 2000)
+  | 'aguardando_cliente' | 'pago_pendencia' | 'aprovada' | 'aprovada_parcial' | 'encerrado'
+  | 'cancelado';
 /** Motivo da devolução (pedir ajuste); 'sem_registro' só em pendências anteriores à migração 1900. */
 export type MotivoDevolucao = 'documento_ausente' | 'documento_ilegivel' | 'divergencia_dados' | 'informacao_incompleta' | 'outro' | 'sem_registro';
 export type UnidadeFreteDoc = 'rs_tonelada' | 'rs_viagem';
 export type TipoOperacao = 'exportacao' | 'mi_tributado' | 'mi_isento';
 export type FormaPagamento = 'cheque' | 'pagbem';
 export type Pedagio = 'sem_parar' | 'move_mais' | 'conect_car' | 'veloe' | 'nao_ha';
-export type CategoriaAnexo = 'nf' | 'evidencia_frete' | 'correcao' | 'cte' | 'mdfe' | 'outro_emitido' | 'motorista' | 'veiculo';
+export type CategoriaAnexo = 'nf' | 'evidencia_frete' | 'correcao' | 'cte' | 'mdfe' | 'outro_emitido' | 'motorista' | 'veiculo'
+  | 'est_documento' | 'est_nf_carga' | 'est_comprovante' | 'est_agendamento' | 'est_tratativa' | 'est_retorno' | 'est_pagamento';
 
 /** Retrato do embarque (ou, no Cadastro, do cliente/filial/rota informados) no momento do envio. */
 export interface RetratoDoc {
@@ -203,6 +208,16 @@ export interface SolicitacaoDoc {
   mercadoria?: string | null; valor_carga?: number | null; origem_cidade?: string | null; origem_uf?: string | null;
   destino_cidade?: string | null; destino_uf?: string | null; primeiro_embarque?: boolean | null;
   erp_referencia?: string | null; retorno_solicitante?: string | null;
+  // Campos da Estadia (migração 2000); nulos nos demais tipos.
+  est_codigo?: string | null; est_tipo_documento?: TipoDocEstadia | null; est_documentos?: string[] | null; est_nfs_carga?: string[] | null;
+  est_sindicato?: boolean | null; est_sindicato_nome?: string | null; est_inicio?: string | null; est_saida?: string | null;
+  est_tarifa?: number | null; est_peso_t?: number | null; est_peso_informado?: number | null; est_peso_unidade?: 't' | 'kg' | null;
+  est_motivo?: MotivoEstadia | null; est_motivo_outro?: string | null; est_modalidade?: ModalidadeEstadia | null;
+  est_acordo_valor?: number | null; est_acordo_confirmado_por?: string | null; est_acordo_data?: string | null; est_acordo_descricao?: string | null;
+  est_conferencia_id?: string | null; est_conferencia_versao?: number | null; est_limite_h?: number | null; est_retroagir_h?: number | null;
+  est_horas_validas?: number | null; est_valor_calculado?: number | null; est_conferido_em?: string | null; est_conferido_por_nome?: string | null;
+  est_encaminhado_em?: string | null; est_resultado?: ResultadoEstadia | null; est_valor_aprovado?: number | null; est_retorno_em?: string | null;
+  est_valor_pago?: number | null; est_pago_em?: string | null; est_encerrado_motivo?: string | null;
   solicitante_id: string; solicitante_nome: string; responsavel_id: string | null; responsavel_nome: string | null;
   enviado_em: string; assumido_em: string | null; concluido_em: string | null; concluido_por_nome: string | null;
   cancelado_em: string | null; cancelado_por_nome: string | null; cancelado_motivo: string | null;
@@ -228,8 +243,8 @@ export interface AnexoDoc {
 }
 
 export interface NotificacaoApp {
-  id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada' | 'cadastro_concluido'; titulo: string; texto: string;
-  solicitacao_id: string; embarque_id: string | null; destino: 'embarque' | 'apoio' | 'cadastro'; criada_em: string; lida_em: string | null;
+  id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada' | 'cadastro_concluido' | 'estadia_atualizada'; titulo: string; texto: string;
+  solicitacao_id: string; embarque_id: string | null; destino: 'embarque' | 'apoio' | 'cadastro' | 'estadia'; criada_em: string; lida_em: string | null;
 }
 
 /** Dados do formulário (os do embarque vêm sozinhos, pelo servidor). */
@@ -245,4 +260,44 @@ export interface DadosCadastroDoc {
   placa: string; telefone_motorista: string; mercadoria: string; cliente_id: string; valor_carga: number;
   origem_cidade: string; origem_uf: string; destino_cidade: string; destino_uf: string;
   observacoes: string | null; primeiro_embarque: boolean; filial_id: string | null; chave_envio: string;
+}
+
+// ---------------------------------------------------------------------------
+// Estadia (migração 2000)
+// ---------------------------------------------------------------------------
+export type TipoDocEstadia = 'cte' | 'nfs';
+export type MotivoEstadia = 'demora_descarga' | 'redirecionamento' | 'agendamento_alongado' | 'troca_nota' | 'falta_cota' | 'outro';
+export type ModalidadeEstadia = 'padrao' | 'acordo';
+export type ResultadoEstadia = 'aprovada' | 'aprovada_parcial' | 'rejeitada';
+
+/** Formulário Envio de Estadia. Números como texto (zeros à esquerda valem); peso na unidade escolhida. */
+export interface DadosEstadia {
+  tipo_documento: TipoDocEstadia; documentos: string[]; placa: string; cliente_id: string; nfs_carga: string[];
+  sindicato: boolean; sindicato_nome: string | null; inicio: string; saida: string;
+  tarifa: number; peso: number; peso_unidade: 't' | 'kg'; motivo: MotivoEstadia; motivo_outro: string | null;
+  modalidade: ModalidadeEstadia; acordo_valor: number | null; acordo_confirmado_por: string | null; acordo_data: string | null;
+  acordo_descricao: string | null; observacoes: string | null; filial_id: string | null; chave_envio: string;
+  confirmar_duplicidade?: boolean;
+}
+
+/** Cada vez que o apoio salva a memória de cálculo nasce uma versão. */
+export interface ConferenciaEstadia {
+  id: string; solicitacao_id: string; versao: number; inicio: string; saida: string; tarifa: number; peso_t: number;
+  limite_h: number; retroagir_h: number; permanencia_h: number; horas_validas: number; valor: number;
+  alteracoes: Record<string, { original: unknown; usado: unknown }>; observacao: string | null; autor_nome: string; criado_em: string;
+}
+export interface RetornoEstadia {
+  id: string; solicitacao_id: string; resultado: ResultadoEstadia; valor_aprovado: number | null; justificativa: string; data_retorno: string;
+  conferencia_id: string; valor_calculado: number; status_anterior: StatusDoc; status_novo: StatusDoc; mensagem_id: string | null;
+  autor_nome: string; criado_em: string;
+}
+export interface PagamentoEstadia {
+  id: string; solicitacao_id: string; valor_pago: number; data_pagamento: string; observacao: string | null;
+  conferencia_id: string | null; mensagem_id: string | null; autor_nome: string; criado_em: string;
+}
+export interface DuplicadaEstadia {
+  id: string | null; codigo: string; placa: string; inicio: string; saida: string; status: StatusDoc; motivo: 'periodo' | 'documento';
+}
+export interface ParametrosConferencia {
+  limite_h: number; retroagir_h: number; tarifa?: number; peso_t?: number; inicio?: string; saida?: string; observacao?: string | null;
 }

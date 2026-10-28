@@ -2,10 +2,12 @@
 // Metadados em localStorage (outras abas simulam outros usuários em tempo real) e arquivos em IndexedDB.
 
 import type {
-  AnexoDoc, CategoriaAnexo, Embarque, LoteErp, MensagemDoc, MotivoDevolucao, NotificacaoApp, Perfil, Permissao, RetratoDoc, SolicitacaoDoc,
+  AnexoDoc, CategoriaAnexo, ConferenciaEstadia, DuplicadaEstadia, Embarque, LoteErp, MensagemDoc, MotivoDevolucao, NotificacaoApp, PagamentoEstadia,
+  Perfil, Permissao, RetornoEstadia, RetratoDoc, SolicitacaoDoc, StatusDoc,
 } from '../types';
 import type { ApiDoc, ArquivoDoc, EventoDoc, ResultadoDoc } from './api';
 import { LIMITE_CADASTRO, MAX_MOTORISTA, MAX_VEICULO, TIPOS_CADASTRO, telefoneValido, tipoCadastro } from '../lib/documentacao';
+import { LIMITES_ESTADIA, MOTIVOS_ESTADIA, NUMERO_DOC_RE, RESULTADO_ESTADIA, calcularEstadia, fmtNumeroH, fmtReais, fmtToneladas, pesoToneladas } from '../lib/estadia';
 import { type EventoFluxo, type EventoPainel, type SolPainel, dataSP, diaHoraSP, inicioDiaSP } from '../lib/painelOperacional';
 
 const CHAVE = 'travion-previa-doc-v2';
@@ -22,7 +24,18 @@ interface BancoDoc {
   objetos: ObjetoArq[];
   /** Eventos do fluxo (como a tabela solicitacao_eventos da migração 1900). */
   eventos?: EventoPainel[];
+  /** Estadia (migração 2000): código EST-nnn, versões do cálculo, retornos do cliente e pagamentos informados. */
+  seqEstadia?: number;
+  conferencias?: ConferenciaEstadia[]; retornos?: RetornoEstadia[]; pagamentos?: PagamentoEstadia[];
 }
+const FINAIS: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido', 'aprovada', 'aprovada_parcial', 'encerrado', 'cancelado'];
+const CONCLUSOES: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido', 'aprovada', 'aprovada_parcial', 'encerrado'];
+const ABERTOS_DOC: StatusDoc[] = ['enviado', 'em_atendimento', 'aguardando_informacao', 'correcao_recebida', 'aguardando_cliente', 'pago_pendencia'];
+const CATS_ESTADIA: CategoriaAnexo[] = ['est_documento', 'est_nf_carga', 'est_comprovante', 'est_agendamento', 'est_tratativa'];
+const ROTULO_CAT_ESTADIA: Record<string, string> = {
+  est_documento: 'CT-e ou NFS', est_nf_carga: 'Nota fiscal da carga', est_comprovante: 'Comprovantes de início e fim', est_agendamento: 'Agendamento',
+  est_tratativa: 'Tratativa com cliente ou mesa', est_retorno: 'Evidência do retorno do cliente', est_pagamento: 'Comprovante de pagamento', correcao: 'Correção',
+};
 
 export interface CtxDocLocal {
   perfil(): Perfil | null;
@@ -145,10 +158,10 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
   };
   // Cadastro: o solicitante sempre vê; quem tem cadastro.ver (ou a fila) vê os da sua filial ou carteira.
   const podeVerReg = (s: SolicitacaoDoc) => {
-    if (s.tipo !== 'cadastro') return !!s.embarque_id && podeVer(s.embarque_id);
+    if (s.tipo !== 'cadastro' && s.tipo !== 'estadia') return !!s.embarque_id && podeVer(s.embarque_id);
     const p = ctx.perfil();
     if (!p || p.status !== 'ativo') return false;
-    return s.solicitante_id === p.id || ((ctx.tem('cadastro.ver') || ctx.tem('apoio.pagina'))
+    return s.solicitante_id === p.id || ((ctx.tem(s.tipo === 'cadastro' ? 'cadastro.ver' : 'estadia.ver') || ctx.tem('apoio.pagina'))
       && (ctx.ehAdmin() || (!!s.filial_id && ctx.noEscopo(s.filial_id, null)) || (!!s.comercial_id && ctx.noEscopo('', s.comercial_id))));
   };
   const carregar = (id: string) => {
@@ -163,11 +176,15 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
     let ev: EventoFluxo;
     if (!antes) ev = 'enviado';
     else if (antes.status !== s.status) {
-      ev = antes.status === 'enviado' && s.status === 'em_atendimento' ? 'assumido'
+      ev = FINAIS.includes(antes.status) ? 'reaberto'
+        : antes.status === 'enviado' && s.status === 'em_atendimento' ? 'assumido'
         : s.status === 'aguardando_informacao' ? 'devolvido'
         : antes.status === 'aguardando_informacao' && (s.status === 'correcao_recebida' || s.status === 'em_atendimento') ? 'corrigido'
         : antes.status === 'correcao_recebida' && s.status === 'em_atendimento' ? 'retomado'
-        : s.status === 'documentacao_disponivel' || s.status === 'cadastro_concluido' ? 'concluido'
+        : s.status === 'aguardando_cliente' ? 'enviado_cliente'
+        : s.status === 'pago_pendencia' ? 'pago_pendencia'
+        : (antes.status === 'aguardando_cliente' || antes.status === 'pago_pendencia') && s.status === 'em_atendimento' ? 'retorno_cliente'
+        : CONCLUSOES.includes(s.status) ? 'concluido'
         : s.status === 'cancelado' ? 'cancelado' : 'status_alterado';
     } else if (antes.resp !== s.responsavel_id) ev = 'transferido';
     else return;
@@ -190,7 +207,8 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
     if (!dest || dest === ctx.perfil()?.id || db.notificacoes.some((n) => n.destinatario_id === dest && n.chave === chave)) return;
     db.notificacoes.push({ id: uid(), destinatario_id: dest, chave, tipo, titulo, texto, solicitacao_id: s.id, embarque_id: s.embarque_id, destino, criada_em: agora(), lida_em: null });
   };
-  const rotulo = (s: SolicitacaoDoc) => `${s.tipo === 'lote_emissao' ? 'Lote e Emissão' : s.tipo === 'emissao' ? 'Emissão' : 'Cadastro'} nº ${s.numero} · ${s.placa}`;
+  const rotulo = (s: SolicitacaoDoc) => (s.tipo === 'estadia' ? `Estadia ${s.est_codigo} · ${s.placa}`
+    : `${s.tipo === 'lote_emissao' ? 'Lote e Emissão' : s.tipo === 'emissao' ? 'Emissão' : 'Cadastro'} nº ${s.numero} · ${s.placa}`);
   const vincular = (s: SolicitacaoDoc, anexos: ArquivoDoc[], cats: CategoriaAnexo[], mensagem: string | null) => {
     const p = eu();
     let n = 0;
@@ -200,8 +218,9 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       const o = db.objetos.find((x) => x.caminho === a.caminho && x.dono === p.id);
       if (!o) erro(`Arquivo não encontrado no armazenamento: envie novamente (${a.nome}).`);
       if (o.tamanho <= 0) erro(`Arquivo vazio ou envio incompleto: ${a.nome}.`);
-      if (s.tipo === 'cadastro' ? !TIPOS_CADASTRO[o.tipo] || o.tamanho > LIMITE_CADASTRO : !TIPOS.includes(o.tipo) || o.tamanho > LIMITE) {
-        erro(s.tipo === 'cadastro' ? `Arquivo não aceito no cadastro (tipo ou tamanho acima de 10 MB): ${a.nome}.` : `Arquivo não aceito (use PDF ou imagem até 15 MB): ${a.nome}.`);
+      const amplo = s.tipo === 'cadastro' || s.tipo === 'estadia';
+      if (amplo ? !TIPOS_CADASTRO[o.tipo] || o.tamanho > LIMITE_CADASTRO : !TIPOS.includes(o.tipo) || o.tamanho > LIMITE) {
+        erro(amplo ? `Arquivo não aceito (tipo ou tamanho acima de 10 MB): ${a.nome}.` : `Arquivo não aceito (use PDF ou imagem até 15 MB): ${a.nome}.`);
       }
       if (!db.anexos.some((x) => x.caminho === a.caminho)) {
         db.anexos.push({ id: uid(), solicitacao_id: s.id, categoria: a.categoria, caminho: a.caminho, nome: a.nome.slice(0, 200) || 'arquivo',
@@ -222,6 +241,27 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
     emitir({ tabela: 'notificacoes' });
     return { status: 'ok', registro: clone(s), ...extra } as ResultadoDoc;
   };
+
+  const carregarEstadia = (id: string, versao: number | null) => {
+    const s = carregar(id);
+    if (s.tipo !== 'estadia') erro('Esta solicitação não é de estadia.');
+    if (versao != null && s.versao !== versao) erro('A estadia foi alterada por outra pessoa enquanto você editava. Os dados foram atualizados: confira e salve de novo.');
+    return s;
+  };
+  const numerosEstadia = (lista: string[], max: number, rot: string) => {
+    const v = [...new Set((lista ?? []).map((x) => x.replace(/\s+/g, '').toUpperCase()).filter(Boolean))].sort();
+    if (!v.length) erro(`Informe ${rot}.`);
+    if (v.length > max) erro(`No máximo ${max} números em ${rot}.`);
+    if (v.some((x) => !NUMERO_DOC_RE.test(x))) erro(`Número inválido em ${rot}: use só letras, números, ponto, barra ou hífen.`);
+    return v;
+  };
+  /** Campos de emissão vazios (a estadia não tem embarque). */
+  const base = (): Omit<SolicitacaoDoc, 'id' | 'numero' | 'tipo' | 'status' | 'placa' | 'observacoes' | 'retrato' | 'solicitante_id' | 'solicitante_nome' | 'enviado_em' | 'versao' | 'atualizado_em'> => ({
+    embarque_id: null, lote_id: null, placas_reboque: [], frete_empresa: 0, frete_empresa_unidade: 'rs_tonelada', frete_motorista: 0,
+    frete_motorista_unidade: 'rs_tonelada', tipo_operacao: null, forma_pagamento: 'pagbem', pedagio: 'nao_ha', exige_obs_cte: false, obs_cte: null,
+    cte_por_nf: false, responsavel_id: null, responsavel_nome: null, assumido_em: null, concluido_em: null, concluido_por_nome: null,
+    cancelado_em: null, cancelado_por_nome: null, cancelado_motivo: null,
+  });
 
   // Sementes: algumas demandas em cada etapa, com arquivos fictícios.
   let pronto: Promise<void> = Promise.resolve();
@@ -300,6 +340,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       }
     }
     await semearCadastros();
+    await semearEstadias();
   };
   // Cadastros fictícios (motorista e veículos de demonstração; nenhum documento real).
   const semearCadastros = async () => {
@@ -363,6 +404,115 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
     db.eventos = eventosDosRegistros(db, 'registro');
     salvar();
   };
+  // Estadias fictícias (documentos de demonstração; nenhum dado real). O exemplo da especificação fica em atendimento,
+  // sem conferência, para o apoio informar limite 24 h e retroagir 12 h e ver os R$ 261,70.
+  const semearEstadias = async () => {
+    const es = ctx.embarques().filter((e) => e.is_demo);
+    if (es.length < 6 || db.solicitacoes.some((s) => s.tipo === 'estadia')) { salvar(); return; }
+    const pessoa = (id: string, nome: string) => ({ id, nome } as Perfil);
+    const gestor = pessoa('perfil-1', 'Gestor Rio Verde (prévia)');
+    const sup = pessoa('perfil-5', 'Supervisor Jataí (prévia)');
+    const com = pessoa('perfil-6', 'Comercial de Fretes (prévia)');
+    const apoio = pessoa('perfil-2', 'Apoio Operacional (prévia)');
+    const min = (m: number) => new Date(Date.now() - m * 60e3).toISOString();
+    const dia = (d: number) => dataSP(Date.now() - d * 86400e3);
+    const ids: string[] = [];
+    type Item = { ei: number; sol: Perfil; status: StatusDoc; placa: string; tipoDoc: 'cte' | 'nfs'; docs: string[]; nfs: string[];
+      inicio: string; saida: string; tarifa: number; peso: number; unidade: 't' | 'kg'; motivo: SolicitacaoDoc['est_motivo']; acordo?: boolean; idade: number;
+      sindicato?: string; obs?: string };
+    const itens: Item[] = [
+      { ei: 0, sol: gestor, status: 'em_atendimento', placa: 'EFU2G04', tipoDoc: 'cte', docs: ['000184512'], nfs: ['0045871', '0045872'],
+        inicio: '2026-10-02T13:09:00-03:00', saida: '2026-10-03T16:37:00-03:00', tarifa: 0.45, peso: 37.6, unidade: 't', motivo: 'demora_descarga', idade: 95,
+        obs: 'Descarga parada por fila no armazém do cliente; motorista avisou às 14h do dia 02.' },
+      { ei: 2, sol: sup, status: 'enviado', placa: 'RVD3B19', tipoDoc: 'nfs', docs: ['2026/000311'], nfs: ['0098120'],
+        inicio: `${dia(3)}T07:40:00-03:00`, saida: `${dia(2)}T18:05:00-03:00`, tarifa: 0.5, peso: 36800, unidade: 'kg', motivo: 'falta_cota', acordo: true, idade: 140,
+        sindicato: 'Sindicato dos Transportadores de Jataí' },
+      { ei: 1, sol: com, status: 'aguardando_cliente', placa: 'JTA8C77', tipoDoc: 'cte', docs: ['000183977', '000183978'], nfs: ['0045530'],
+        inicio: `${dia(6)}T09:15:00-03:00`, saida: `${dia(5)}T15:45:00-03:00`, tarifa: 0.42, peso: 38.2, unidade: 't', motivo: 'agendamento_alongado', idade: 3 * 1440 },
+      { ei: 3, sol: gestor, status: 'aprovada', placa: 'MTV1D52', tipoDoc: 'cte', docs: ['000182640'], nfs: ['0044102'],
+        inicio: `${dia(12)}T10:00:00-03:00`, saida: `${dia(10)}T22:30:00-03:00`, tarifa: 0.45, peso: 37.9, unidade: 't', motivo: 'troca_nota', idade: 9 * 1440 },
+    ];
+    for (const it of itens) {
+      const e = es[it.ei];
+      const r0 = ctx.retrato(e);
+      const id = uid();
+      ids.push(id);
+      const pesoT = pesoToneladas(it.peso, it.unidade);
+      const acordo = !!it.acordo;
+      const atendido = it.status !== 'enviado';
+      const s: SolicitacaoDoc = {
+        ...base(), id, numero: ++db.seq, tipo: 'estadia', status: it.status, placa: it.placa, observacoes: it.obs ?? null,
+        retrato: { ...r0, codigo: null, origem_cidade: '', origem_uf: null, coleta: null, destino_cidade: '', destino_uf: null, entrega: null, produto: null, lote_numero: null },
+        filial_id: e.filial_id, comercial_id: e.comercial_id, cliente_id: e.cliente_id,
+        est_codigo: `EST-${String((db.seqEstadia = (db.seqEstadia ?? 0) + 1)).padStart(3, '0')}`, est_tipo_documento: it.tipoDoc, est_documentos: it.docs,
+        est_nfs_carga: it.nfs, est_sindicato: !!it.sindicato, est_sindicato_nome: it.sindicato ?? null,
+        est_inicio: new Date(it.inicio).toISOString(), est_saida: new Date(it.saida).toISOString(), est_tarifa: it.tarifa, est_peso_t: pesoT,
+        est_peso_informado: it.peso, est_peso_unidade: it.unidade, est_motivo: it.motivo, est_motivo_outro: null, est_modalidade: acordo ? 'acordo' : 'padrao',
+        est_acordo_valor: acordo ? 480 : null, est_acordo_confirmado_por: acordo ? 'Mesa comercial (prévia)' : null, est_acordo_data: acordo ? dia(2) : null,
+        est_acordo_descricao: acordo ? 'Cliente aceitou pagar R$ 480,00 pela falta de cota, conforme conversa com a mesa.' : null,
+        solicitante_id: it.sol.id, solicitante_nome: it.sol.nome, responsavel_id: atendido ? apoio.id : null, responsavel_nome: atendido ? apoio.nome : null,
+        enviado_em: min(it.idade), assumido_em: atendido ? min(it.idade - 6) : null, versao: 2, atualizado_em: min(atendido ? it.idade - 6 : it.idade),
+      };
+      db.solicitacoes.push(s);
+      const m = (texto: string, autor: Perfil, quando: number, referencia: string | null = null) => {
+        const x: MensagemDoc = { id: uid(), solicitacao_id: id, tipo: 'evento', texto, referencia, autor_id: autor.id, autor_nome: autor.nome, criado_em: min(quando) };
+        db.mensagens.push(x);
+        return x;
+      };
+      const anexo = async (cat: CategoriaAnexo, nome: string, blob: Blob, por: Perfil, quando: number, mensagem: string | null = null) => {
+        const caminho = `envios/${por.id}/${uid()}${nome.slice(nome.lastIndexOf('.'))}`;
+        await gravarArq(caminho, blob);
+        db.objetos.push({ caminho, dono: por.id, tipo: blob.type, tamanho: blob.size });
+        db.anexos.push({ id: uid(), solicitacao_id: id, categoria: cat, caminho, nome, tipo_mime: blob.type, tamanho: blob.size, mensagem_id: mensagem,
+          enviado_por_nome: por.nome, enviado_em: min(quando) });
+      };
+      const fim1 = 'Documento fictício para a prévia do Travion.';
+      const doc = it.tipoDoc === 'cte' ? 'DACTE' : 'NFS-e';
+      for (const n of it.docs) {
+        await anexo('est_documento', `${it.tipoDoc === 'cte' ? 'CTe' : 'NFSe'}-${n.replace(/\//g, '-')}.pdf`, pdfDemo(`${doc} (demonstração) · ${n}`, [
+          `Tomador: ${r0.cliente ?? ''}`, `Placa: ${it.placa}`, `Peso: ${pesoT.toLocaleString('pt-BR')} t`, '', fim1]), it.sol, it.idade);
+      }
+      for (const n of it.nfs) await anexo('est_nf_carga', `NF-${n}.pdf`, pdfDemo(`DANFE (demonstração) · NF-e ${n}`, [`Destinatário: ${r0.cliente ?? ''}`, `Placa: ${it.placa}`, '', fim1]), it.sol, it.idade);
+      await anexo('est_comprovante', 'ticket-entrada.png', await imagemDemo(['Ticket de entrada (demonstração)', `Placa ${it.placa}`, `Entrada ${it.inicio.slice(8, 10)}/${it.inicio.slice(5, 7)} ${it.inicio.slice(11, 16)}`]), it.sol, it.idade);
+      await anexo('est_comprovante', 'ticket-saida.png', await imagemDemo(['Ticket de saída (demonstração)', `Placa ${it.placa}`, `Saída ${it.saida.slice(8, 10)}/${it.saida.slice(5, 7)} ${it.saida.slice(11, 16)}`]), it.sol, it.idade);
+      if (it.motivo === 'agendamento_alongado') await anexo('est_agendamento', 'agendamento.pdf', pdfDemo('Agendamento (demonstração)', [`Janela prevista: ${it.inicio.slice(11, 16)}`, fim1]), it.sol, it.idade);
+      if (acordo) await anexo('est_tratativa', 'acordo-mesa.png', await imagemDemo(['Fechamos a estadia?', 'R$ 480,00 pela falta de cota', 'Ok, pode lançar', 'Obrigado!']), it.sol, it.idade);
+      m(`Estadia ${s.est_codigo} enviada ao apoio`, it.sol, it.idade);
+      if (atendido) m(`Atendimento assumido por ${apoio.nome}`, apoio, it.idade - 6);
+      if (it.status === 'aguardando_cliente' || it.status === 'aprovada') {
+        const calc = calcularEstadia({ inicio: s.est_inicio, saida: s.est_saida, tarifa: it.tarifa, peso_t: pesoT, limite_h: 24, retroagir_h: it.status === 'aprovada' ? 0 : 12 })!;
+        const conf: ConferenciaEstadia = { id: uid(), solicitacao_id: id, versao: 1, inicio: s.est_inicio!, saida: s.est_saida!, tarifa: it.tarifa, peso_t: pesoT,
+          limite_h: 24, retroagir_h: it.status === 'aprovada' ? 0 : 12, ...calc, alteracoes: {}, observacao: null, autor_nome: apoio.nome, criado_em: min(it.idade - 40) };
+        (db.conferencias ??= []).push(conf);
+        Object.assign(s, { est_conferencia_id: conf.id, est_conferencia_versao: 1, est_limite_h: conf.limite_h, est_retroagir_h: conf.retroagir_h,
+          est_horas_validas: calc.horas_validas, est_valor_calculado: calc.valor, est_conferido_em: conf.criado_em, est_conferido_por_nome: apoio.nome,
+          est_encaminhado_em: min(it.idade - 45) });
+        m(`Memória de cálculo v1 salva: ${it.tarifa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} × ${fmtToneladas(pesoT)} × ${calc.horas_validas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h válidas = ${fmtReais(calc.valor)} (limite 24 h, retroagir ${conf.retroagir_h} h)`, apoio, it.idade - 40, 'calculo');
+        m(`Encaminhada ao cliente pelo apoio (fora do app), conferência v1: ${fmtReais(calc.valor)} · enviado por e-mail ao financeiro do cliente`, apoio, it.idade - 45, 'cliente');
+        if (it.status === 'aprovada') {
+          const pm = m(`Pagamento informado (feito fora do app) em ${dia(7).split('-').reverse().join('/')}: ${fmtReais(calc.valor)}, com receita pendente · pago ao motorista antes do aceite do cliente`, apoio, 7 * 1440, 'pagamento');
+          await anexo('est_pagamento', 'comprovante-pagamento.png', await imagemDemo(['Comprovante (demonstração)', `Pix ${fmtReais(calc.valor)}`, 'Favorecido: motorista']), apoio, 7 * 1440, pm.id);
+          (db.pagamentos ??= []).push({ id: uid(), solicitacao_id: id, valor_pago: calc.valor, data_pagamento: dia(7), observacao: 'pago ao motorista antes do aceite do cliente',
+            conferencia_id: conf.id, mensagem_id: pm.id, autor_nome: apoio.nome, criado_em: min(7 * 1440) });
+          const rm = m(`Retorno do cliente registrado (${dia(5).split('-').reverse().join('/')}): Aprovada, valor aprovado ${fmtReais(calc.valor)} · Cliente aprovou por e-mail · situação Pago em pendência → Aprovada (pagamento e pendência de receita continuam registrados)`, apoio, 5 * 1440, 'retorno');
+          await anexo('est_retorno', 'aprovacao-cliente.png', await imagemDemo(['E-mail do cliente (demonstração)', 'Estadia aprovada', `Valor ${fmtReais(calc.valor)}`]), apoio, 5 * 1440, rm.id);
+          (db.retornos ??= []).push({ id: uid(), solicitacao_id: id, resultado: 'aprovada', valor_aprovado: calc.valor, justificativa: 'Cliente aprovou por e-mail', data_retorno: dia(5),
+            conferencia_id: conf.id, valor_calculado: calc.valor, status_anterior: 'pago_pendencia', status_novo: 'aprovada', mensagem_id: rm.id, autor_nome: apoio.nome, criado_em: min(5 * 1440) });
+          Object.assign(s, { est_valor_pago: calc.valor, est_pago_em: dia(7), est_resultado: 'aprovada', est_valor_aprovado: calc.valor, est_retorno_em: min(5 * 1440),
+            concluido_em: min(5 * 1440), concluido_por_nome: apoio.nome, atualizado_em: min(5 * 1440), versao: 6 });
+          db.notificacoes.push({ id: uid(), destinatario_id: it.sol.id, chave: `estadia_retorno:${id}`, tipo: 'estadia_atualizada', titulo: 'Estadia aprovada pelo cliente',
+            texto: `${rotulo(s)} · ${r0.cliente ?? ''} · ${fmtReais(calc.valor)}`, solicitacao_id: id, embarque_id: null, destino: 'estadia', criada_em: min(5 * 1440), lida_em: null });
+        } else {
+          Object.assign(s, { atualizado_em: min(it.idade - 45), versao: 4 });
+          db.notificacoes.push({ id: uid(), destinatario_id: it.sol.id, chave: `estadia_cliente:${id}`, tipo: 'estadia_atualizada', titulo: 'Estadia aguardando retorno do cliente',
+            texto: `${rotulo(s)} · ${r0.cliente ?? ''} · valor calculado ${fmtReais(calc.valor)}`, solicitacao_id: id, embarque_id: null, destino: 'estadia', criada_em: min(it.idade - 45), lida_em: null });
+        }
+      }
+    }
+    const novos = new Set(ids);
+    (db.eventos ??= []).push(...eventosDosRegistros(db, 'registro').filter((e) => novos.has(e.s)));
+    salvar();
+  };
   // Prévia gravada antes do Painel Operacional: eventos refeitos a partir dos horários gravados (como a migração 1900).
   if (!db.eventos) db.eventos = eventosDosRegistros(db, 'historico');
   // Dados da prévia recriados (novos embarques): recomeça a documentação fictícia.
@@ -371,7 +521,9 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
     db = { seq: 0, solicitacoes: [], lotes: [], mensagens: [], anexos: [], notificacoes: [], objetos: [], eventos: [] };
     pronto = semear().catch(() => undefined);
   } else if (!db.solicitacoes.some((s) => s.tipo === 'cadastro') && typeof document !== 'undefined') {
-    pronto = semearCadastros().catch(() => undefined);
+    pronto = semearCadastros().then(semearEstadias).catch(() => undefined);
+  } else if (!db.solicitacoes.some((s) => s.tipo === 'estadia') && typeof document !== 'undefined') {
+    pronto = semearEstadias().catch(() => undefined);
   }
 
   if (typeof window !== 'undefined') {
@@ -416,12 +568,17 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
         mensagens: db.mensagens.filter((m) => m.solicitacao_id === id).sort((a, b) => a.criado_em.localeCompare(b.criado_em)),
         anexos: [...db.anexos.filter((a) => a.solicitacao_id === id),
           ...db.anexos.filter((a) => origem && a.solicitacao_id === origem && a.categoria === 'evidencia_frete')],
+        ...(s.tipo === 'estadia' ? { estadia: {
+          conferencias: (db.conferencias ?? []).filter((c) => c.solicitacao_id === id).sort((a, b) => a.versao - b.versao),
+          retornos: (db.retornos ?? []).filter((r) => r.solicitacao_id === id),
+          pagamentos: (db.pagamentos ?? []).filter((r) => r.solicitacao_id === id),
+        } } : {}),
       });
     },
     async enviarArquivo(arquivo, cadastro) {
       offline();
       const p = eu();
-      if (!ctx.tem('documentacao.solicitar') && !ctx.tem('apoio.atender') && !ctx.tem('cadastro.solicitar')) erro('Você não tem permissão para enviar arquivos.');
+      if (!ctx.tem('documentacao.solicitar') && !ctx.tem('apoio.atender') && !ctx.tem('cadastro.solicitar') && !ctx.tem('estadia.solicitar')) erro('Você não tem permissão para enviar arquivos.');
       const tipo = cadastro ? tipoCadastro(arquivo.name, arquivo.type) : TIPOS.includes(arquivo.type) ? arquivo.type : null;
       if (!tipo) erro(cadastro ? 'Tipo de arquivo não aceito no cadastro.' : 'Tipo de arquivo não aceito (use PDF, PNG, JPG ou WEBP).');
       if (arquivo.size <= 0) erro('Arquivo vazio.');
@@ -536,13 +693,14 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       motivoPendencia = motivo;
       tocar(s, { status: 'aguardando_informacao' });
       motivoPendencia = null;
-      notificar(s.solicitante_id, 'ajuste_solicitado', 'Ajuste solicitado pelo apoio', `${rotulo(s)}: ${texto.trim().slice(0, 140)}`, s, s.tipo === 'cadastro' ? 'cadastro' : 'embarque', `ajuste:${m.id}`);
+      notificar(s.solicitante_id, 'ajuste_solicitado', 'Ajuste solicitado pelo apoio', `${rotulo(s)}: ${texto.trim().slice(0, 140)}`, s,
+        s.tipo === 'cadastro' ? 'cadastro' : s.tipo === 'estadia' ? 'estadia' : 'embarque', `ajuste:${m.id}`);
       return fim(s);
     },
     async responder(id, texto, anexos) {
       offline();
       const s = carregar(id);
-      exigir(s.tipo === 'cadastro' ? 'cadastro.solicitar' : 'documentacao.solicitar');
+      exigir(s.tipo === 'cadastro' ? 'cadastro.solicitar' : s.tipo === 'estadia' ? 'estadia.solicitar' : 'documentacao.solicitar');
       if (s.status !== 'aguardando_informacao') erro('Não há pendência aberta nesta solicitação (ela pode ter sido respondida por outra pessoa).');
       if (!texto.trim()) erro('Escreva a resposta para o apoio.');
       const m = evento(s, 'resposta', texto.trim().slice(0, 4000));
@@ -551,7 +709,14 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
         const conta = (c: CategoriaAnexo) => (anexos ?? []).filter((a) => a.categoria === c).length;
         if (conta('motorista') > MAX_MOTORISTA || conta('veiculo') > MAX_VEICULO) { db.mensagens.pop(); erro('Na resposta: até 4 documentos do motorista e 10 dos veículos.'); }
       }
-      try { vincular(s, anexos, s.tipo === 'cadastro' ? ['motorista', 'veiculo', 'correcao'] : ['nf', 'evidencia_frete', 'correcao'], m.id); } catch (x) { db.mensagens.pop(); throw x; }
+      if (s.tipo === 'estadia') {
+        for (const [c, n] of Object.entries(LIMITES_ESTADIA.max)) {
+          if ((anexos ?? []).filter((a) => a.categoria === c).length > n) { db.mensagens.pop(); erro(`No máximo ${n} arquivo(s) em ${ROTULO_CAT_ESTADIA[c] ?? c}.`); }
+        }
+      }
+      try {
+        vincular(s, anexos, s.tipo === 'cadastro' ? ['motorista', 'veiculo', 'correcao'] : s.tipo === 'estadia' ? [...CATS_ESTADIA, 'correcao'] : ['nf', 'evidencia_frete', 'correcao'], m.id);
+      } catch (x) { db.mensagens.pop(); throw x; }
       // Volta para a fila do responsável: a nova espera começa agora, até ele retomar.
       tocar(s, { status: 'correcao_recebida' });
       notificar(s.responsavel_id, 'resposta_enviada', 'Correção recebida: retome o atendimento', `${rotulo(s)}: ${texto.trim().slice(0, 140)}`, s, 'apoio', `resposta:${m.id}`);
@@ -573,7 +738,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       const a = Date.parse(ate);
       if (!(a > de)) erro('Período inválido.');
       if (a - de > 400 * 86400e3) erro('Escolha um período de até 400 dias.');
-      const abertos = ['enviado', 'em_atendimento', 'aguardando_informacao', 'correcao_recebida'];
+      const abertos = ABERTOS_DOC;
       const reais = visiveis().filter((s) => {
         const t = Date.parse(s.enviado_em);
         return ((t >= de && t < a) || abertos.includes(s.status)) && (!alteradosDesde || s.atualizado_em >= alteradosDesde);
@@ -603,6 +768,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       const s = carregar(id);
       responsavel(s, ['em_atendimento', 'aguardando_informacao']);
       if (s.tipo === 'cadastro') erro('Cadastro não recebe documentos emitidos: confirme a conclusão do cadastro.');
+      if (s.tipo === 'estadia') erro('Estadia não recebe documentos emitidos: use a memória de cálculo e o retorno do cliente.');
       const n = vincular(s, anexos, SAIDA, null);
       if (!n) erro('Nenhum arquivo para anexar.');
       evento(s, 'evento', `${n} documento(s) emitido(s) anexado(s), em conferência`, 'documentos');
@@ -614,6 +780,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       const s = carregar(id);
       responsavel(s, ['em_atendimento']);
       if (s.tipo === 'cadastro') erro('Use "Confirmar cadastro concluído" para cadastros.');
+      if (s.tipo === 'estadia') erro('Estadia termina pelo retorno do cliente ou por Encerrar.');
       if (!db.anexos.some((a) => a.solicitacao_id === s.id && SAIDA.includes(a.categoria))) erro('Anexe ao menos um documento emitido (CT-e, MDF-e ou outro) antes de liberar.');
       if (s.tipo === 'lote_emissao' && !s.lote_id) erro('Registre o número do lote gerado no ERP antes de liberar a documentação.');
       tocar(s, { status: 'documentacao_disponivel', concluido_em: agora(), concluido_por_nome: eu().nome });
@@ -625,12 +792,13 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
       offline();
       const s = carregar(id);
       const p = eu();
-      if (s.status === 'documentacao_disponivel' || s.status === 'cadastro_concluido' || s.status === 'cancelado') erro('Solicitação já concluída ou cancelada.');
+      if (FINAIS.includes(s.status)) erro('Solicitação já concluída, encerrada ou cancelada.');
       if (!(ctx.tem('documentacao.cancelar') || (s.solicitante_id === p.id && s.status === 'enviado'))) erro('Você não tem permissão para cancelar esta solicitação.');
       if (!motivo.trim()) erro('Informe o motivo do cancelamento.');
       if (db.lotes.some((l) => l.solicitacao_id === s.id)) erro('O lote já foi registrado nesta solicitação: conclua a emissão em vez de cancelar.');
       tocar(s, { status: 'cancelado', cancelado_em: agora(), cancelado_por_nome: p.nome, cancelado_motivo: motivo.trim().slice(0, 1000) });
       evento(s, 'evento', `Solicitação cancelada por ${p.nome}: ${motivo.trim()}`);
+      if (s.tipo === 'estadia') notificar(s.solicitante_id, 'estadia_atualizada', 'Estadia cancelada', `${rotulo(s)} · ${motivo.trim().slice(0, 140)}`, s, 'estadia', `estadia_cancelada:${s.id}:${s.versao}`);
       return fim(s);
     },
     async criarCadastro(d, anexos) {
@@ -699,6 +867,231 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDoc {
         `Cadastro nº ${s.numero} · ${s.retrato.cliente ?? ''}${s.retorno_solicitante ? ` · ${s.retorno_solicitante.slice(0, 120)}` : ''}`, s, 'cadastro', `cadastro_concluido:${s.id}`);
       return fim(s);
     },
+    async criarEstadia(d, anexos) {
+      offline();
+      await pronto;
+      exigir('estadia.solicitar');
+      const p = eu();
+      const rep = db.solicitacoes.find((s) => s.solicitante_id === p.id && (s as SolicitacaoDoc & { chave_envio?: string }).chave_envio === d.chave_envio);
+      if (rep) return { status: 'ok', registro: clone(rep), repetido: true };
+      if (d.tipo_documento !== 'cte' && d.tipo_documento !== 'nfs') erro('Escolha o tipo de documento (CT-e ou Nota Fiscal de Serviço).');
+      const docs = numerosEstadia(d.documentos, 20, d.tipo_documento === 'cte' ? 'o(s) número(s) do CT-e' : 'o(s) número(s) da NFS');
+      const nfs = numerosEstadia(d.nfs_carga, 50, 'o(s) número(s) da nota fiscal da carga');
+      const placa = (d.placa ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!PLACA.test(placa)) erro('Placa do veículo inválida: use o formato ABC1D23 ou ABC1234.');
+      if (typeof d.sindicato !== 'boolean') erro('Responda se possui sindicato.');
+      const sindNome = d.sindicato_nome?.trim().slice(0, 120) || null;
+      if (d.sindicato && !sindNome) erro('Informe qual sindicato.');
+      const ini = Date.parse(d.inicio); const sai = Date.parse(d.saida);
+      if (!Number.isFinite(ini) || !Number.isFinite(sai)) erro('Informe início e saída da estadia.');
+      if (sai <= ini) erro('A saída precisa ser depois do início da estadia.');
+      if (sai > Date.now() + 15 * 60e3) erro('A saída não pode estar no futuro.');
+      if (sai - ini > 60 * 86400e3) erro('Permanência acima de 60 dias: confira as datas.');
+      if (!(d.tarifa > 0) || d.tarifa > 10000) erro('Informe a tarifa da estadia em R$/t/h (maior que zero).');
+      if (d.peso_unidade !== 't' && d.peso_unidade !== 'kg') erro('Escolha a unidade do peso (t ou kg).');
+      if (!(d.peso > 0)) erro('Informe o peso do veículo (maior que zero).');
+      const pesoT = pesoToneladas(d.peso, d.peso_unidade);
+      if (pesoT <= 0) erro('Peso do veículo muito pequeno: confira a unidade.');
+      if (pesoT > 100) erro('Peso acima de 100 t: confira o valor e a unidade (t ou kg).');
+      if (!MOTIVOS_ESTADIA.includes(d.motivo)) erro('Escolha o motivo da estadia.');
+      const outro = d.motivo_outro?.trim().slice(0, 200) || null;
+      if (d.motivo === 'outro' && !outro) erro('Descreva o motivo "Outro".');
+      if (d.modalidade !== 'padrao' && d.modalidade !== 'acordo') erro('Escolha o tipo de estadia.');
+      const acordo = d.modalidade === 'acordo';
+      if (acordo) {
+        if (!(Number(d.acordo_valor) > 0)) erro('Informe o valor acordado em reais.');
+        if (!d.acordo_confirmado_por?.trim()) erro('Informe quem confirmou o acordo.');
+        if (!d.acordo_data) erro('Informe a data da confirmação do acordo.');
+        if (d.acordo_data > dataSP(Date.now())) erro('A data da confirmação do acordo não pode estar no futuro.');
+        if (!d.acordo_descricao?.trim()) erro('Descreva a tratativa do acordo.');
+      }
+      const c = ctx.cliente(d.cliente_id);
+      if (!c) erro('Selecione um cliente autorizado.');
+      if (d.filial_id && !ctx.noEscopo(d.filial_id, null)) erro('Filial fora do seu escopo.');
+      if (!d.filial_id && !ctx.ehAdmin() && ctx.temFiliais()) erro('Selecione a filial.');
+      const inicio = new Date(ini).toISOString(); const saida = new Date(sai).toISOString();
+      if (!d.confirmar_duplicidade) {
+        const dups: DuplicadaEstadia[] = db.solicitacoes
+          .filter((x) => x.tipo === 'estadia' && x.status !== 'cancelado')
+          .map((x) => {
+            const periodo = x.placa === placa && Date.parse(x.est_inicio!) < sai && ini < Date.parse(x.est_saida!);
+            const documento = x.cliente_id === c.id && x.est_tipo_documento === d.tipo_documento && (x.est_documentos ?? []).some((n) => docs.includes(n));
+            return periodo || documento ? { id: podeVerReg(x) ? x.id : null, codigo: x.est_codigo!, placa: x.placa, inicio: x.est_inicio!, saida: x.est_saida!,
+              status: x.status, motivo: periodo ? 'periodo' : 'documento' } as DuplicadaEstadia : null;
+          })
+          .filter((x): x is DuplicadaEstadia => !!x);
+        if (dups.length) return { status: 'possivel_duplicidade', duplicadas: dups } as unknown as ResultadoDoc;
+      }
+      for (const [cat, n] of Object.entries(LIMITES_ESTADIA.max)) {
+        if ((anexos ?? []).filter((a) => a.categoria === cat).length > n) erro(`No máximo ${n} arquivo(s) em ${ROTULO_CAT_ESTADIA[cat] ?? cat}.`);
+      }
+      const conta = (cat: CategoriaAnexo) => (anexos ?? []).filter((a) => a.categoria === cat).length;
+      if (!conta('est_documento')) erro('Anexe o CT-e ou a Nota Fiscal de Serviço.');
+      if (!conta('est_nf_carga')) erro('Anexe a nota fiscal da carga.');
+      if (!conta('est_comprovante')) erro('Anexe os comprovantes de início e fim da estadia.');
+      if (acordo && !conta('est_tratativa')) erro('Anexe a evidência do acordo com o cliente ou a mesa.');
+      const f = d.filial_id ? ctx.filial(d.filial_id) : null;
+      const s: SolicitacaoDoc & { chave_envio: string } = {
+        ...base(), id: uid(), numero: ++db.seq, tipo: 'estadia', status: 'enviado', placa,
+        observacoes: d.observacoes?.trim().slice(0, 2000) || null,
+        retrato: { codigo: null, cliente: c.nome, cliente_id: c.id, carteira: c.carteira, filial: f?.nome ?? null, filial_id: f?.id ?? null,
+          centro_custo: f?.centro_custo ?? null, centro_custo_id: f?.centro_custo_id ?? null, origem_cidade: '', origem_uf: null,
+          coleta: null, destino_cidade: '', destino_uf: null, entrega: null, produto: null, lote_numero: null },
+        filial_id: f?.id ?? null, comercial_id: c.comercial_id, cliente_id: c.id,
+        est_codigo: `EST-${String((db.seqEstadia = (db.seqEstadia ?? 0) + 1)).padStart(3, '0')}`, est_tipo_documento: d.tipo_documento,
+        est_documentos: docs, est_nfs_carga: nfs, est_sindicato: d.sindicato, est_sindicato_nome: d.sindicato ? sindNome : null,
+        est_inicio: inicio, est_saida: saida, est_tarifa: d.tarifa, est_peso_t: pesoT, est_peso_informado: d.peso, est_peso_unidade: d.peso_unidade,
+        est_motivo: d.motivo, est_motivo_outro: d.motivo === 'outro' ? outro : null, est_modalidade: d.modalidade,
+        est_acordo_valor: acordo ? Math.round(Number(d.acordo_valor) * 100) / 100 : null, est_acordo_confirmado_por: acordo ? d.acordo_confirmado_por!.trim().slice(0, 120) : null,
+        est_acordo_data: acordo ? d.acordo_data : null, est_acordo_descricao: acordo ? d.acordo_descricao!.trim().slice(0, 2000) : null,
+        solicitante_id: p.id, solicitante_nome: p.nome, enviado_em: agora(), versao: 1, atualizado_em: agora(), chave_envio: d.chave_envio,
+      };
+      db.solicitacoes.push(s);
+      const antes = db.anexos.length;
+      try { vincular(s, anexos, CATS_ESTADIA, null); } catch (x) { db.solicitacoes.pop(); db.anexos.length = antes; db.seq--; db.seqEstadia!--; throw x; }
+      registrarFluxo(s, null);
+      evento(s, 'evento', `Estadia ${s.est_codigo} enviada ao apoio`);
+      return fim(s);
+    },
+    conferirEstadia: (id, d, versao) => comTrava(async () => {
+      offline();
+      const s = carregarEstadia(id, versao);
+      responsavel(s, ['em_atendimento']);
+      if (d.limite_h == null || d.retroagir_h == null || !Number.isFinite(d.limite_h) || !Number.isFinite(d.retroagir_h)) {
+        erro('Informe "Cobrar após quantas horas" e "Horas a retroagir" (zero é um valor válido; vazio não).');
+      }
+      if (d.limite_h < 0 || d.limite_h > 720 || d.retroagir_h < 0 || d.retroagir_h > 720) erro('Horas entre 0 e 720.');
+      const inicio = d.inicio ? new Date(d.inicio).toISOString() : s.est_inicio!;
+      const saida = d.saida ? new Date(d.saida).toISOString() : s.est_saida!;
+      const tarifa = d.tarifa ?? s.est_tarifa!;
+      const peso = Math.round((d.peso_t ?? s.est_peso_t!) * 1000) / 1000;
+      if (Date.parse(saida) <= Date.parse(inicio)) erro('A saída precisa ser depois do início da estadia.');
+      if (!(tarifa > 0) || tarifa > 10000) erro('Tarifa em R$/t/h maior que zero.');
+      if (!(peso > 0) || peso > 100) erro('Peso em toneladas entre 0 e 100: confira a unidade.');
+      const obs = d.observacao?.trim().slice(0, 1000) || null;
+      const alt: ConferenciaEstadia['alteracoes'] = {};
+      if (inicio !== s.est_inicio) alt.inicio = { original: s.est_inicio, usado: inicio };
+      if (saida !== s.est_saida) alt.saida = { original: s.est_saida, usado: saida };
+      if (tarifa !== s.est_tarifa) alt.tarifa = { original: s.est_tarifa, usado: tarifa };
+      if (peso !== s.est_peso_t) alt.peso_t = { original: s.est_peso_t, usado: peso };
+      if (Object.keys(alt).length && !obs) erro('Você alterou dados enviados pelo solicitante: explique na observação da conferência.');
+      const calc = calcularEstadia({ inicio, saida, tarifa, peso_t: peso, limite_h: d.limite_h, retroagir_h: d.retroagir_h })!;
+      const vs = (db.conferencias ??= []).filter((c) => c.solicitacao_id === s.id);
+      const ult = vs[vs.length - 1];
+      if (ult && ult.inicio === inicio && ult.saida === saida && ult.tarifa === tarifa && ult.peso_t === peso && ult.limite_h === d.limite_h
+        && ult.retroagir_h === d.retroagir_h && (ult.observacao ?? null) === obs) return { status: 'sem_alteracao', registro: clone(s) };
+      const p = eu();
+      const conf: ConferenciaEstadia = { id: uid(), solicitacao_id: s.id, versao: (ult?.versao ?? 0) + 1, inicio, saida, tarifa, peso_t: peso,
+        limite_h: d.limite_h, retroagir_h: d.retroagir_h, ...calc, alteracoes: alt, observacao: obs, autor_nome: p.nome, criado_em: agora() };
+      db.conferencias.push(conf);
+      tocar(s, { est_conferencia_id: conf.id, est_conferencia_versao: conf.versao, est_limite_h: d.limite_h, est_retroagir_h: d.retroagir_h,
+        est_horas_validas: calc.horas_validas, est_valor_calculado: calc.valor, est_conferido_em: conf.criado_em, est_conferido_por_nome: p.nome });
+      evento(s, 'evento', `Memória de cálculo v${conf.versao} salva: ${tarifa.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} × ${fmtToneladas(peso)} × ${calc.horas_validas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h válidas = ${fmtReais(calc.valor)} (limite ${fmtNumeroH(d.limite_h)}, retroagir ${fmtNumeroH(d.retroagir_h)})${Object.keys(alt).length ? ` · dados ajustados pelo apoio: ${obs}` : ''}`, 'calculo');
+      return fim(s, { conferencia: clone(conf) });
+    }),
+    encaminharClienteEstadia: (id, observacao, versao) => comTrava(async () => {
+      offline();
+      const s = carregarEstadia(id, versao);
+      responsavel(s, ['em_atendimento']);
+      if (!s.est_conferencia_id) erro('Salve a memória de cálculo antes de aguardar o retorno do cliente.');
+      const obs = observacao?.trim().slice(0, 1000) || null;
+      tocar(s, { status: 'aguardando_cliente', est_encaminhado_em: agora() });
+      evento(s, 'evento', `Encaminhada ao cliente pelo apoio (fora do app), conferência v${s.est_conferencia_versao}: ${fmtReais(s.est_valor_calculado ?? 0)}${obs ? ` · ${obs}` : ''}`, 'cliente');
+      notificar(s.solicitante_id, 'estadia_atualizada', 'Estadia aguardando retorno do cliente', `${rotulo(s)} · ${s.retrato.cliente ?? ''} · valor calculado ${fmtReais(s.est_valor_calculado ?? 0)}`, s, 'estadia', `estadia_cliente:${s.id}:${s.versao}`);
+      return fim(s);
+    }),
+    registrarRetornoEstadia: (id, d, anexos, versao) => comTrava(async () => {
+      offline();
+      const s = carregarEstadia(id, versao);
+      responsavel(s, ['em_atendimento', 'aguardando_cliente', 'pago_pendencia']);
+      if (!s.est_conferencia_id) erro('Salve a memória de cálculo antes de registrar o retorno do cliente.');
+      if (!['aprovada', 'aprovada_parcial', 'rejeitada'].includes(d.resultado)) erro('Escolha o resultado do cliente.');
+      const just = d.justificativa?.trim().slice(0, 2000);
+      if (!just) erro('Descreva o retorno do cliente (justificativa).');
+      const hoje = dataSP(Date.now());
+      const data = d.data_retorno || hoje;
+      if (data > hoje) erro('A data do retorno não pode estar no futuro.');
+      const valor = d.resultado === 'rejeitada' ? null : Math.round((d.resultado === 'aprovada' ? d.valor_aprovado ?? s.est_valor_calculado! : d.valor_aprovado ?? 0) * 100) / 100;
+      if (d.resultado !== 'rejeitada' && !(valor! > 0)) erro('Informe o valor aprovado pelo cliente (maior que zero).');
+      if (!(anexos ?? []).some((a) => a.categoria === 'est_retorno')) erro('Anexe a evidência do retorno do cliente.');
+      if (anexos.filter((a) => a.categoria === 'est_retorno').length > LIMITES_ESTADIA.max.est_retorno) erro(`No máximo ${LIMITES_ESTADIA.max.est_retorno} arquivo(s) em evidência do retorno.`);
+      const antes = s.status;
+      const novo: StatusDoc = d.resultado === 'aprovada' ? 'aprovada' : d.resultado === 'aprovada_parcial' ? 'aprovada_parcial' : 'em_atendimento';
+      const m = evento(s, 'evento', `Retorno do cliente registrado (${data.split('-').reverse().join('/')}): ${RESULTADO_ESTADIA[d.resultado]}${valor != null ? `, valor aprovado ${fmtReais(valor)}` : ''} · ${just}${
+        antes === 'pago_pendencia' && novo === 'aprovada' ? ' · situação Pago em pendência → Aprovada (pagamento e pendência de receita continuam registrados)'
+        : antes === 'pago_pendencia' && novo === 'aprovada_parcial' ? ' · situação Pago em pendência → Aprovada parcialmente (pagamento continua registrado)' : ''}`, 'retorno');
+      try { vincular(s, anexos, ['est_retorno'], m.id); } catch (x) { db.mensagens.pop(); throw x; }
+      const p = eu();
+      const ret: RetornoEstadia = { id: uid(), solicitacao_id: s.id, resultado: d.resultado, valor_aprovado: valor, justificativa: just, data_retorno: data,
+        conferencia_id: s.est_conferencia_id, valor_calculado: s.est_valor_calculado ?? 0, status_anterior: antes, status_novo: novo, mensagem_id: m.id,
+        autor_nome: p.nome, criado_em: agora() };
+      (db.retornos ??= []).push(ret);
+      const fecha = novo === 'aprovada' || novo === 'aprovada_parcial';
+      tocar(s, { status: novo, est_resultado: d.resultado, est_valor_aprovado: valor, est_retorno_em: agora(),
+        ...(fecha ? { concluido_em: agora(), concluido_por_nome: p.nome } : {}) });
+      notificar(s.solicitante_id, 'estadia_atualizada',
+        d.resultado === 'aprovada' ? 'Estadia aprovada pelo cliente' : d.resultado === 'aprovada_parcial' ? 'Estadia aprovada parcialmente' : 'Estadia rejeitada pelo cliente',
+        `${rotulo(s)} · ${s.retrato.cliente ?? ''}${valor != null ? ` · ${fmtReais(valor)}` : ''}`, s, 'estadia', `estadia_retorno:${ret.id}`);
+      return fim(s);
+    }),
+    registrarPagamentoEstadia: (id, d, anexos, versao) => comTrava(async () => {
+      offline();
+      const s = carregarEstadia(id, versao);
+      responsavel(s, ['em_atendimento', 'aguardando_cliente', 'pago_pendencia']);
+      if (!s.est_conferencia_id) erro('Salve a memória de cálculo antes de registrar o pagamento.');
+      if (!(d.valor_pago > 0)) erro('Informe o valor efetivamente pago (maior que zero).');
+      if (!d.data_pagamento) erro('Informe a data do pagamento.');
+      if (d.data_pagamento > dataSP(Date.now())) erro('A data do pagamento não pode estar no futuro.');
+      if (!(anexos ?? []).some((a) => a.categoria === 'est_pagamento')) erro('Anexe o comprovante do pagamento.');
+      if (anexos.filter((a) => a.categoria === 'est_pagamento').length > LIMITES_ESTADIA.max.est_pagamento) erro(`No máximo ${LIMITES_ESTADIA.max.est_pagamento} arquivo(s) em comprovante de pagamento.`);
+      const obs = d.observacao?.trim().slice(0, 1000) || null;
+      const valor = Math.round(d.valor_pago * 100) / 100;
+      const m = evento(s, 'evento', `Pagamento informado (feito fora do app) em ${d.data_pagamento.split('-').reverse().join('/')}: ${fmtReais(valor)}, com receita pendente${obs ? ` · ${obs}` : ''}`, 'pagamento');
+      try { vincular(s, anexos, ['est_pagamento'], m.id); } catch (x) { db.mensagens.pop(); throw x; }
+      const pag: PagamentoEstadia = { id: uid(), solicitacao_id: s.id, valor_pago: valor, data_pagamento: d.data_pagamento, observacao: obs,
+        conferencia_id: s.est_conferencia_id, mensagem_id: m.id, autor_nome: eu().nome, criado_em: agora() };
+      (db.pagamentos ??= []).push(pag);
+      const todos = db.pagamentos.filter((x) => x.solicitacao_id === s.id);
+      tocar(s, { status: 'pago_pendencia', est_valor_pago: Math.round(todos.reduce((a, x) => a + x.valor_pago, 0) * 100) / 100,
+        est_pago_em: todos.map((x) => x.data_pagamento).sort().pop() ?? null });
+      notificar(s.solicitante_id, 'estadia_atualizada', 'Estadia paga com receita pendente', `${rotulo(s)} · ${s.retrato.cliente ?? ''} · pago ${fmtReais(valor)}`, s, 'estadia', `estadia_pagamento:${pag.id}`);
+      return fim(s);
+    }),
+    encerrarEstadia: (id, motivo, versao) => comTrava(async () => {
+      offline();
+      const s = carregarEstadia(id, versao);
+      responsavel(s, ['em_atendimento']);
+      if (s.est_resultado !== 'rejeitada') erro('Encerrar vale para estadia que não gerou cobrança: registre antes o retorno do cliente como Rejeitada.');
+      const m = motivo?.trim().slice(0, 1000);
+      if (!m) erro('Informe o motivo do encerramento.');
+      const p = eu();
+      tocar(s, { status: 'encerrado', est_encerrado_motivo: m, concluido_em: agora(), concluido_por_nome: p.nome });
+      evento(s, 'evento', `Estadia encerrada sem cobrança por ${p.nome}: ${m}${s.est_valor_pago != null ? ` · pagamento informado de ${fmtReais(s.est_valor_pago)} continua registrado` : ''}`, 'encerramento');
+      notificar(s.solicitante_id, 'estadia_atualizada', 'Estadia encerrada', `${rotulo(s)} · ${s.retrato.cliente ?? ''} · ${m.slice(0, 120)}`, s, 'estadia', `estadia_encerrada:${s.id}:${s.versao}`);
+      return fim(s);
+    }),
+    reabrirEstadia: (id, motivo) => comTrava(async () => {
+      offline();
+      exigir('estadia.reabrir');
+      const s = carregarEstadia(id, null);
+      if (!['cancelado', 'encerrado', 'aprovada', 'aprovada_parcial'].includes(s.status)) erro('Só estadia cancelada, encerrada ou aprovada pode ser reaberta.');
+      const m = motivo?.trim().slice(0, 1000);
+      if (!m) erro('Informe o motivo da reabertura.');
+      const antes = s.status;
+      tocar(s, { status: s.responsavel_id ? 'em_atendimento' : 'enviado', concluido_em: null, concluido_por_nome: null });
+      evento(s, 'evento', `Estadia reaberta por ${eu().nome} (estava ${antes === 'cancelado' ? 'Cancelada' : antes === 'encerrado' ? 'Encerrada' : antes === 'aprovada' ? 'Aprovada' : 'Aprovada parcialmente'}): ${m}`, 'reabertura');
+      notificar(s.solicitante_id, 'estadia_atualizada', 'Estadia reaberta', `${rotulo(s)} · ${m.slice(0, 140)}`, s, 'estadia', `estadia_reaberta:${s.id}:${s.versao}`);
+      notificar(s.responsavel_id, 'estadia_atualizada', 'Estadia reaberta para você', `${rotulo(s)} · ${m.slice(0, 140)}`, s, 'apoio', `estadia_reaberta_apoio:${s.id}:${s.versao}`);
+      return fim(s);
+    }),
+    async buscarEstadias(campo, valor) {
+      await pronto;
+      eu();
+      const v = campo === 'placa' ? valor.toUpperCase().replace(/[^A-Z0-9]/g, '') : valor.trim().toUpperCase();
+      return clone(visiveis().filter((s) => s.tipo === 'estadia'
+        && (campo === 'placa' ? s.placa === v : s.est_tipo_documento === 'cte' && (s.est_documentos ?? []).includes(v)))
+        .sort((a, b) => b.enviado_em.localeCompare(a.enviado_em)).map(comNomes));
+    },
     async notificacoes() {
       await pronto;
       const p = ctx.perfil();
@@ -741,7 +1134,12 @@ function eventosDosRegistros(db: BancoDoc, origem: EventoPainel['origem']): Even
       if (m.tipo === 'pendencia') ev(s, 'devolvido', m.criado_em, m.motivo ?? 'sem_registro');
       if (m.tipo === 'resposta') { ev(s, 'corrigido', m.criado_em); ev(s, 'retomado', m.criado_em); }
     }
-    if (s.status === 'documentacao_disponivel' || s.status === 'cadastro_concluido') ev(s, 'concluido', s.concluido_em);
+    if (s.tipo === 'estadia') {
+      if (s.est_encaminhado_em) ev(s, 'enviado_cliente', s.est_encaminhado_em);
+      for (const p of (db.pagamentos ?? []).filter((x) => x.solicitacao_id === s.id)) ev(s, 'pago_pendencia', p.criado_em);
+      if (s.est_resultado === 'rejeitada' && s.est_retorno_em) ev(s, 'retorno_cliente', s.est_retorno_em);
+    }
+    if (CONCLUSOES.includes(s.status)) ev(s, 'concluido', s.concluido_em);
     if (s.status === 'cancelado') ev(s, 'cancelado', s.cancelado_em);
   }
   return out;
@@ -798,7 +1196,7 @@ function historicoFicticio(filiais: Array<{ id: string; centro: string | null }>
       while (hora < 23 && x > PESO_HORA[hora]) { x -= PESO_HORA[hora]; hora++; }
       let t = dia0 + hora * H + Math.floor(r() * H);
       const u = r();
-      const tipo: SolPainel['tipo'] = u < 0.45 ? 'emissao' : u < 0.65 ? 'lote_emissao' : 'cadastro';
+      const tipo: SolPainel['tipo'] = u < 0.42 ? 'emissao' : u < 0.6 ? 'lote_emissao' : u < 0.88 ? 'cadastro' : 'estadia';
       let y = r() * somaColab;
       const colab = COLABORADORES_PREVIA.find((cb) => (y -= cb[2]) < 0) ?? COLABORADORES_PREVIA[0];
       const sol = SOLICITANTES_PREVIA[Math.floor(r() * SOLICITANTES_PREVIA.length)];
@@ -810,8 +1208,9 @@ function historicoFicticio(filiais: Array<{ id: string; centro: string | null }>
         lista.push({ s: id, evento, em: new Date(em).toISOString(), ...(comResp ? resp : { responsavel_id: null, responsavel_nome: null }), motivo, origem: 'registro' });
       const enviado = t;
       ev('enviado', t, null, false);
-      t += (2 + r() * r() * 45) * MIN;
-      let status: SolPainel['status'] = tipo === 'cadastro' ? 'cadastro_concluido' : 'documentacao_disponivel';
+      // Estadia: prazo de 24 h na fila; depois do atendimento, espera o retorno do cliente (fora do atendimento ativo).
+      t += (tipo === 'estadia' ? 20 + r() * r() * 1700 : 2 + r() * r() * 45) * MIN;
+      let status: SolPainel['status'] = tipo === 'cadastro' ? 'cadastro_concluido' : tipo === 'estadia' ? 'aprovada' : 'documentacao_disponivel';
       if (r() < 0.03) { ev('cancelado', t, null, false); status = 'cancelado'; } else {
         ev('assumido', t);
         let voltas = r() < 0.22 ? (r() < 0.25 ? 2 : 1) : 0;
@@ -824,6 +1223,14 @@ function historicoFicticio(filiais: Array<{ id: string; centro: string | null }>
           ev('retomado', t);
         }
         t += ((tipo === 'cadastro' ? 15 : 8) + r() * 50) * MIN;
+        if (tipo === 'estadia') {
+          ev('enviado_cliente', t);
+          t += (4 + r() * 70) * H;
+          const x = r();
+          if (x < 0.25) { ev('pago_pendencia', t); t += (6 + r() * 48) * H; }
+          if (x > 0.85) { ev('retorno_cliente', t); t += (5 + r() * 30) * MIN; status = 'encerrado'; }
+          else if (x > 0.7) status = 'aprovada_parcial';
+        }
         ev('concluido', t);
       }
       if (t > agoraMs - 5 * MIN) continue; // só chamados já encerrados

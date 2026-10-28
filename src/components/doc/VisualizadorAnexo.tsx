@@ -3,7 +3,7 @@
 // Fotos e PDFs digitalizados não têm texto para copiar (sem OCR nesta versão).
 // Outros formatos do Cadastro (Word, Excel, PowerPoint, HEIC): só baixar; vídeo e áudio tocam no player do navegador.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { useApp } from '../../data/store';
 import { CATEGORIA, CATEGORIAS_SAIDA, ehImagem, ehPdf, fmtTamanho } from '../../lib/documentacao';
@@ -12,6 +12,8 @@ import type { AnexoDoc } from '../../types';
 import { useAviso } from '../ui';
 
 const cacheBlobs = new Map<string, Blob>();
+/** Texto do botão que sai da ampliação (o atendimento de Estadia volta à Mesa ampla, não a dois quadros). */
+export const RotuloVoltarAmpliado = createContext('Voltar aos dois quadros');
 
 async function carregarPdfjs() {
   const pdfjs = await import('pdfjs-dist');
@@ -62,7 +64,10 @@ export function VisualizadorAnexo({ anexos, selecionado, aoSelecionar, ampliado,
   const atual = anexos.find((a) => a.id === selecionado) ?? anexos[0] ?? null;
   const { blob, erro, carregando } = useBlob(atual?.caminho ?? null);
   const cadastro = anexos.some((a) => a.categoria === 'motorista' || a.categoria === 'veiculo');
-  const grupos: Array<[string, AnexoDoc[]]> = cadastro ? [
+  const estadia = anexos.some((a) => a.categoria.startsWith('est_'));
+  const grupos: Array<[string, AnexoDoc[]]> = estadia ? ([
+    'est_documento', 'est_nf_carga', 'est_comprovante', 'est_agendamento', 'est_tratativa', 'correcao', 'est_retorno', 'est_pagamento',
+  ] as const).map((c) => [CATEGORIA[c], anexos.filter((a) => a.categoria === c)] as [string, AnexoDoc[]]) : cadastro ? [
     ['Motorista', anexos.filter((a) => a.categoria === 'motorista')],
     ['Veículos', anexos.filter((a) => a.categoria === 'veiculo')],
     ['Correções', anexos.filter((a) => a.categoria === 'correcao')],
@@ -99,12 +104,13 @@ function BarraComum({ blob, anexo, ampliado, aoAmpliar, copiar }: {
   blob: Blob; anexo: AnexoDoc; ampliado: boolean; aoAmpliar: (v: boolean) => void; copiar?: () => Promise<void>;
 }) {
   const avisar = useAviso();
+  const voltar = useContext(RotuloVoltarAmpliado);
   return (
     <>
       {copiar && <button className="btn peq" onClick={() => copiar().then(() => avisar('ok', 'Imagem copiada.'), (e) => avisar('erro', (e as Error).message))}>Copiar imagem</button>}
       <button className="btn peq" onClick={() => abrirBlob(blob)} title="Abrir no visualizador do navegador">Abrir</button>
       <button className="btn peq" onClick={() => baixarBlob(blob, anexo.nome)}>Baixar</button>
-      <button className="btn peq" onClick={() => aoAmpliar(!ampliado)} aria-pressed={ampliado}>{ampliado ? 'Voltar aos dois quadros' : 'Ampliar'}</button>
+      <button className="btn peq" onClick={() => aoAmpliar(!ampliado)} aria-pressed={ampliado}>{ampliado ? voltar : 'Ampliar'}</button>
     </>
   );
 }

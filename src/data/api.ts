@@ -5,7 +5,8 @@
 import type { Cadastros } from '../lib/cadastros';
 import type { DadosPainel } from '../lib/painelOperacional';
 import type {
-  AnexoDoc, CategoriaAnexo, DadosCadastroDoc, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
+  AnexoDoc, CategoriaAnexo, ConferenciaEstadia, DadosCadastroDoc, DadosEstadia, DuplicadaEstadia, PagamentoEstadia, ParametrosConferencia,
+  ResultadoEstadia, RetornoEstadia, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
   Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
@@ -57,11 +58,21 @@ export type TipoCadastro = 'filial' | 'centro_custo' | 'comercial' | 'produto' |
 
 export interface ArquivoDoc { caminho: string; nome: string; categoria: CategoriaAnexo }
 export interface ResultadoDoc {
-  status: 'ok' | 'inicial_aberta' | 'ja_assumida' | 'indisponivel' | 'sem_alteracao' | 'cadastro_aberto';
+  status: 'ok' | 'inicial_aberta' | 'ja_assumida' | 'indisponivel' | 'sem_alteracao' | 'cadastro_aberto' | 'possivel_duplicidade';
   registro: SolicitacaoDoc; lote?: LoteErp; repetido?: boolean;
+  /** Em 'possivel_duplicidade' (Estadia): o que parece repetido; nada foi gravado. */
+  duplicadas?: DuplicadaEstadia[];
+  conferencia?: ConferenciaEstadia;
   /** Em 'cadastro_aberto': número e situação do cadastro já aberto para a placa (o registro vem nulo se estiver fora do seu alcance). */
   numero?: number; situacao?: StatusDoc;
 }
+export interface DadosDetalheDoc {
+  mensagens: MensagemDoc[]; anexos: AnexoDoc[];
+  /** Só no tipo Estadia: versões do cálculo, retornos do cliente e pagamentos informados. */
+  estadia?: { conferencias: ConferenciaEstadia[]; retornos: RetornoEstadia[]; pagamentos: PagamentoEstadia[] };
+}
+export interface DadosRetornoEstadia { resultado: ResultadoEstadia; valor_aprovado: number | null; justificativa: string; data_retorno: string }
+export interface DadosPagamentoEstadia { valor_pago: number; data_pagamento: string; observacao: string | null }
 export type EventoDoc = { tabela: 'solicitacoes' | 'lotes' | 'notificacoes' | 'detalhe'; id?: string };
 
 /** Documentação / Apoio Operacional. Toda regra é conferida no servidor (migração 1610). */
@@ -70,7 +81,7 @@ export interface ApiDoc {
   listar(desde: string | null): Promise<{ solicitacoes: SolicitacaoDoc[]; lotes: LoteErp[] }>;
   listarDoEmbarque(embarqueId: string): Promise<{ solicitacoes: SolicitacaoDoc[]; lotes: LoteErp[] }>;
   /** Mensagens e anexos da solicitação (Emissão traz também as evidências da solicitação que abriu o lote). */
-  detalhe(id: string): Promise<{ mensagens: MensagemDoc[]; anexos: AnexoDoc[] }>;
+  detalhe(id: string): Promise<DadosDetalheDoc>;
   /** `cadastro`: aceita os formatos do Cadastro (até 10 MB) em vez de PDF/imagem até 15 MB. */
   enviarArquivo(arquivo: File, cadastro?: boolean): Promise<{ caminho: string; nome: string }>;
   baixar(caminho: string): Promise<Blob>;
@@ -90,6 +101,16 @@ export interface ApiDoc {
   /** Aba Cadastro (migração 1700). */
   criarCadastro(dados: DadosCadastroDoc, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   concluirCadastro(id: string, referencia: string | null, retorno: string | null): Promise<ResultadoDoc>;
+  /** Aba Estadia (migração 2000). `versao`: a que a tela mostrava (conflito se outra pessoa alterou antes). */
+  criarEstadia(dados: DadosEstadia, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
+  conferirEstadia(id: string, parametros: ParametrosConferencia, versao: number | null): Promise<ResultadoDoc>;
+  encaminharClienteEstadia(id: string, observacao: string | null, versao: number | null): Promise<ResultadoDoc>;
+  registrarRetornoEstadia(id: string, dados: DadosRetornoEstadia, anexos: ArquivoDoc[], versao: number | null): Promise<ResultadoDoc>;
+  registrarPagamentoEstadia(id: string, dados: DadosPagamentoEstadia, anexos: ArquivoDoc[], versao: number | null): Promise<ResultadoDoc>;
+  encerrarEstadia(id: string, motivo: string, versao: number | null): Promise<ResultadoDoc>;
+  reabrirEstadia(id: string, motivo: string): Promise<ResultadoDoc>;
+  /** Consultar Estadia: por placa ou número do CT-e (dentro do que a pessoa pode ver). */
+  buscarEstadias(campo: 'placa' | 'cte', valor: string): Promise<SolicitacaoDoc[]>;
   notificacoes(): Promise<NotificacaoApp[]>;
   marcarLidas(ids: string[] | null): Promise<void>;
   /** Tempo real; `aoEstado(true)` só depois da confirmação da assinatura. */

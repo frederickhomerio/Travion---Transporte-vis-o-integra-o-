@@ -25,6 +25,7 @@ const caminhos: Record<string, string> = {
   sair: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10',
   atualizar: 'M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4',
   cadastro: 'M3 5h18v14H3zM9 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM5.5 16.5c.6-1.8 1.9-2.6 3.5-2.6s2.9.8 3.5 2.6M14.5 9.5h4M14.5 13h4',
+  relogio: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2',
   caminhao: 'M3 7h11v9H3zM14 10h4l3 3v3h-7M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
 };
 

@@ -61,6 +61,9 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['cadastro.ver', 'Cadastro', 'Acompanhar os cadastros da sua filial ou carteira (os próprios sempre aparecem)'],
   ['permissoes.gerenciar', 'Administração', 'Definir as permissões de cada usuário em Administração → Permissões'],
   ['analise.operacional', 'Análise', 'Ver o Painel Operacional (filas, atendimento por colaborador e evolução das demandas do Apoio)'],
+  ['estadia.solicitar', 'Estadia', 'Abrir a aba Estadia, enviar solicitações de estadia e responder pendências'],
+  ['estadia.ver', 'Estadia', 'Consultar as estadias das suas filiais e da sua carteira, além das próprias'],
+  ['estadia.reabrir', 'Estadia', 'Reabrir estadia cancelada, encerrada ou aprovada (com motivo, fica no histórico)'],
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
 
 /** Mesma matriz inicial de supabase/migrations/20261026000200_permissoes.sql */
@@ -70,24 +73,24 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
     'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver',
-    'permissoes.gerenciar', 'analise.operacional'],
+    'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar',
-    'cadastro.solicitar', 'cadastro.ver'],
+    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver'],
   embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar',
-    'cadastro.solicitar', 'cadastro.ver'],
+    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver'],
   // Apoio Operacional reúne o antigo papel Operação (contadores e observação) e a fila de documentação.
   apoio: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver', 'analise.operacional'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver', 'analise.operacional', 'estadia.ver'],
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver', 'analise.operacional'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver', 'analise.operacional', 'estadia.ver'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
     'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar',
-    'cadastro.solicitar', 'cadastro.ver'],
+    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver'],
   consulta: ['embarques.ver'],
 };
 
@@ -342,7 +345,7 @@ export function criarLocalApi(): Api {
     db.filiais.filter((f) => f.is_demo && !f.centro_custo_id).forEach((f, i) => { f.centro_custo_id = cc[i % 2].id; });
   }
   // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
-  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional'] as Permissao[]) {
+  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir'] as Permissao[]) {
     if (db.papelPermissoes.some((x) => x.chave === nova)) continue;
     for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) if (ps.includes(nova)) db.papelPermissoes.push({ papel: papel as Papel, chave: nova });
   }

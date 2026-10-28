@@ -254,7 +254,7 @@ export function CancelarDoc({ s, aoFechar }: { s: SolicitacaoDoc; aoFechar: () =
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   return (
-    <Modal titulo={`Cancelar ${TIPO_DOC[s.tipo]} nº ${s.numero}`} aoFechar={aoFechar} rodape={<>
+    <Modal titulo={s.tipo === 'estadia' ? `Cancelar estadia ${s.est_codigo ?? ''}` : `Cancelar ${TIPO_DOC[s.tipo]} nº ${s.numero}`} aoFechar={aoFechar} rodape={<>
       <button className="btn" onClick={aoFechar} disabled={enviando}>Voltar</button>
       <button className="btn perigo" disabled={enviando} onClick={async () => {
         setErro(null);

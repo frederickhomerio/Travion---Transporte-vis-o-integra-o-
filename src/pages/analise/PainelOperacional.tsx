@@ -32,7 +32,9 @@ const ROTULO_TIPO = Object.fromEntries(TIPOS_DEMANDA.map((t) => [t.id, t.rotulo]
 type Modo = 'normal' | 'expandido' | 'tv';
 
 interface Preferencias { atalho: Atalho; inicio: string; fim: string; tipos: TipoDemanda[]; filial: string; centro: string; colaborador: string;
-  solicitante: string; visaoEvol: VisaoEvolucao; tiposEvol: TipoDemanda[]; tv: IdQuadro[]; passoMapa: 1 | 2; filtrosRecolhidos: boolean }
+  solicitante: string; visaoEvol: VisaoEvolucao; tiposEvol: TipoDemanda[]; tv: IdQuadro[]; passoMapa: 1 | 2; filtrosRecolhidos: boolean;
+  /** Preferência já ajustada para incluir a Estadia (28/10/2026). */
+  tiposV2?: boolean }
 
 function periodoDoAtalho(a: Atalho, hoje: string, atual: { inicio: string; fim: string }) {
   if (a === 'hoje') return { inicio: hoje, fim: hoje };
@@ -43,11 +45,18 @@ function periodoDoAtalho(a: Atalho, hoje: string, atual: { inicio: string; fim: 
 
 function lerPreferencias(chave: string, hoje: string): Preferencias {
   const padrao: Preferencias = { atalho: 'mes', ...intervaloPeriodo(hoje, 'mes'), tipos: TIPOS_ATIVOS, filial: '', centro: '', colaborador: '',
-    solicitante: '', visaoEvol: 'dia', tiposEvol: TIPOS_ATIVOS, tv: ['filas', 'equipe', 'evolucao'], passoMapa: 2, filtrosRecolhidos: false };
+    solicitante: '', visaoEvol: 'dia', tiposEvol: TIPOS_ATIVOS, tv: ['filas', 'equipe', 'evolucao'], passoMapa: 2, filtrosRecolhidos: false, tiposV2: true };
   try {
     const p = JSON.parse(localStorage.getItem(chave) ?? 'null') as Partial<Preferencias> | null;
     if (!p) return padrao;
     const r = { ...padrao, ...p };
+    // Estadia entrou no painel em 28/10/2026: quem já via todos os tipos passa a ver a Estadia também.
+    const antigos: TipoDemanda[] = ['cadastro', 'emissao', 'lote_emissao'];
+    if (!p.tiposV2) {
+      if (antigos.every((t) => r.tipos.includes(t)) && !r.tipos.includes('estadia')) r.tipos = [...r.tipos, 'estadia'];
+      if (antigos.every((t) => r.tiposEvol.includes(t)) && !r.tiposEvol.includes('estadia')) r.tiposEvol = [...r.tiposEvol, 'estadia'];
+      r.tiposV2 = true;
+    }
     return { ...r, ...periodoDoAtalho(r.atalho, hoje, r), tv: r.tv?.length ? r.tv : padrao.tv };
   } catch { return padrao; }
 }
@@ -324,20 +333,6 @@ function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
     <Quadro id="filas" titulo="Tempo de fila por operação" sub="Situação agora: chamados aguardando o apoio assumir ou retomar" modo={c.modo} aoExpandir={aoExpandir}>
       <div className="po-filas">
         {OPERACOES.map((op) => {
-          if (op.futura) {
-            return (
-              <div key={op.id} className="po-fila futura">
-                <div className="po-fila-cab">{op.rotulo}<span className="po-fila-selos">{op.prazo_min && <span className="po-prazo">Prazo {fmtPrazo(op.prazo_min)}</span>}<span className="po-breve">Em breve</span></span></div>
-                <div className="po-fila-corpo">
-                  <span className="po-fila-rot">Espera média atual</span>
-                  <span className="po-fila-val">—</span>
-                  <div className="po-fila-linha"><span>Chamados na fila</span><strong>—</strong></div>
-                  <div className="po-fila-linha"><span>Mais antigo aguardando</span><strong>—</strong></div>
-                  <span className="po-fila-nota">Sem dados: a aba Estadia ainda será construída.</span>
-                </div>
-              </div>
-            );
-          }
           const f = filaAtual(c.linhas, op.tipos as TipoSolicitacaoDoc[], c.agora);
           const sit = situacaoPrazo(f.media_ms, op.prazo_min);
           const sitAntigo = situacaoPrazo(f.mais_antigo_ms, op.prazo_min);
@@ -527,6 +522,7 @@ function QResumo({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
             <div><span>Concluídos</span><strong>{fmtNum(r.concluidos)}</strong></div>
             <div><span>Em atendimento</span><strong>{fmtNum(r.em_atendimento)}</strong></div>
             <div><span>Parados por pendência</span><strong>{fmtNum(r.pendencia)}</strong></div>
+            {c.pref.tipos.includes('estadia') && <div><span>Aguardando cliente</span><strong>{fmtNum(r.aguardando_cliente)}</strong></div>}
           </div>
           <p className="po-nota">Não é a soma de todas as situações: dos recebidos, {r.na_fila} estão na fila e {r.cancelados} foram cancelados.</p>
           {c.modo !== 'tv' && (
@@ -535,6 +531,11 @@ function QResumo({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
               {' '}{fmtDur(r.tempo_pendencia_ms || null)} aguardando correção (soma).
               {motivos.length > 0 && <> Motivos: {motivos.map(([m, n]) => `${MOTIVO_DEVOLUCAO[m as MotivoDevolucao]} ${n}`).join(' · ')}.</>}
               {(r.motivos.sem_registro ?? 0) > 0 && <> {r.motivos.sem_registro} sem motivo registrado (antes da medição completa).</>}
+            </p>
+          )}
+          {c.modo !== 'tv' && c.pref.tipos.includes('estadia') && (
+            <p className="po-nota">
+              <strong>Estadia:</strong> {fmtDur(r.tempo_cliente_ms || null)} aguardando retorno do cliente (soma, inclui pago em pendência). Esse tempo fica fora do atendimento ativo do apoio.
             </p>
           )}
         </>

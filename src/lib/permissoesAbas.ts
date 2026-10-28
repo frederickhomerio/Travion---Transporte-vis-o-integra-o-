@@ -12,8 +12,9 @@ export const ABAS_APP: Array<{ id: string; rotulo: string; chaves: Permissao[] }
   { id: 'painel', rotulo: 'Análise · Painel Operacional', chaves: ['analise.operacional'] },
   { id: 'posicoes', rotulo: 'Posições de Embarque', chaves: ['posicoes.pagina', 'embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional'] },
   { id: 'cliente', rotulo: 'Posição do Cliente', chaves: ['compartilhamento.preparar', 'compartilhamento.links', 'posicoes.editar_obs_cliente'] },
-  { id: 'apoio', rotulo: 'Apoio Operacional', chaves: ['apoio.pagina', 'apoio.atender', 'documentacao.ver', 'documentacao.cancelar'] },
+  { id: 'apoio', rotulo: 'Apoio Operacional', chaves: ['apoio.pagina', 'apoio.atender', 'documentacao.ver', 'documentacao.cancelar', 'estadia.ver'] },
   { id: 'cadastro', rotulo: 'Cadastro', chaves: ['cadastro.solicitar', 'cadastro.ver'] },
+  { id: 'estadia', rotulo: 'Estadia', chaves: ['estadia.solicitar', 'estadia.ver', 'estadia.reabrir'] },
   { id: 'admin', rotulo: 'Administração', chaves: ['usuarios.gerenciar', 'permissoes.gerenciar', 'cadastros.gerenciar', 'importacao.executar', 'configuracoes.gerenciar'] },
 ];
 
