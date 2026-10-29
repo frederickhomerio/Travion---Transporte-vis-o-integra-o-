@@ -216,14 +216,15 @@ export function relatorioFiliais(recorte: LinhaFrete[], data: string, agoraMs: n
 export interface LinhaPrintCentro {
   chave: string; cliente: string; lote: string | null;
   origem: string; coleta: string | null; destino: string; entrega: string | null;
-  porta_t: number; carregado_t: number; meta_t: number | null;
-  /** Executado = volume carregado ÷ meta do dia × 100 (mesmas faixas do Dashboard). */
+  /** Em veículos (pedido de 29/10): na porta, em trânsito, carregados e meta do dia. */
+  porta: number; transito: number; carregados: number; meta: number | null;
+  /** Executado = veículos carregados ÷ meta do dia em veículos × 100 (mesmas faixas do Dashboard). */
   pct: number | null; faixa: FaixaBarra | null;
   ultima: string | null; por: string | null;
 }
 export interface PrintCentro {
   chave: string; centro: string; linhas: LinhaPrintCentro[];
-  totais: { porta_t: number; carregado_t: number; meta_t: number | null; pct: number | null; faixa: FaixaBarra | null };
+  totais: { porta: number; transito: number; carregados: number; meta: number | null; pct: number | null; faixa: FaixaBarra | null };
 }
 
 /** Agrupa as posições (já filtradas) por centro de custo, na ordem de origem, coleta e destino. */
@@ -244,24 +245,25 @@ export function printPorCentro(linhas: LinhaFrete[], idx: Indices, lotes: Record
         const e = l.embarque;
         const p = l.posicao!;
         const v = volumes(p);
-        const meta = metaDaPosicao(p).volume_t;
-        const pct = meta && meta > 0 ? (v.carregado_t / meta) * 100 : null;
+        // Meta em t/dia vira veículos pela capacidade da posição.
+        const meta = metaDaPosicao(p).veiculos;
+        const pct = meta && meta > 0 ? (v.carregados / meta) * 100 : null;
         return {
           chave: p.id, cliente: nome(idx.cliente, e.cliente_id), lote: lotes[e.id]?.numero ?? null,
           origem: cidadeUF(e.origem_cidade, e.origem_uf), coleta: n(e.local_coleta_id) || null,
           destino: cidadeUF(e.destino_cidade, e.destino_uf), entrega: n(e.local_entrega_id) || null,
-          porta_t: v.porta_t, carregado_t: v.carregado_t, meta_t: meta, pct, faixa: faixaBarra(pct),
+          porta: v.porta, transito: v.transito, carregados: v.carregados, meta, pct, faixa: faixaBarra(pct),
           ultima: p.confirmado_em ?? p.atualizado_em ?? null, por: (p.confirmado_em ? p.confirmado_por_nome : p.atualizado_por_nome) ?? null,
         };
       });
-    const soma = (k: 'porta_t' | 'carregado_t') => linhasCc.reduce((t, x) => t + x[k], 0);
-    const comMeta = linhasCc.filter((x) => x.meta_t != null);
-    const meta_t = comMeta.length ? comMeta.reduce((t, x) => t + (x.meta_t ?? 0), 0) : null;
-    const carregMeta = comMeta.reduce((t, x) => t + x.carregado_t, 0);
-    const pct = meta_t ? (carregMeta / meta_t) * 100 : null;
+    const soma = (k: 'porta' | 'transito' | 'carregados') => linhasCc.reduce((t, x) => t + x[k], 0);
+    const comMeta = linhasCc.filter((x) => x.meta != null);
+    const meta = comMeta.length ? comMeta.reduce((t, x) => t + (x.meta ?? 0), 0) : null;
+    const carregMeta = comMeta.reduce((t, x) => t + x.carregados, 0);
+    const pct = meta ? (carregMeta / meta) * 100 : null;
     return {
       chave: cc, centro: cc === SEM_CENTRO ? 'Sem centro de custo' : nome(idx.centroCusto, cc), linhas: linhasCc,
-      totais: { porta_t: soma('porta_t'), carregado_t: soma('carregado_t'), meta_t, pct, faixa: faixaBarra(pct) },
+      totais: { porta: soma('porta'), transito: soma('transito'), carregados: soma('carregados'), meta, pct, faixa: faixaBarra(pct) },
     };
   }).sort((a, b) => a.centro.localeCompare(b.centro, 'pt-BR'));
 }

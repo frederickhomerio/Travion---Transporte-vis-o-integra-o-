@@ -1252,6 +1252,11 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
   .pe-mini-cc { font-size: 0.7rem; color: var(--cinza-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pe-mini-cont { display: flex; gap: 8px; font-size: 0.72rem; color: var(--cinza-700); margin-top: 2px; font-variant-numeric: tabular-nums; }
   .pe-mini-cont b { color: var(--cinza-900); }
+  .pe-mini.recente, .pe-mini.atrasada { border-width: 2px; border-left-width: 5px; }
+  .pe-mini.recente { border-top-color: var(--faixa-verde); border-right-color: var(--faixa-verde); border-bottom-color: var(--faixa-verde); }
+  .pe-mini.atrasada { border-top-color: var(--faixa-vermelho); border-right-color: var(--faixa-vermelho); border-bottom-color: var(--faixa-vermelho); }
+  .pe-minis-cab .legenda i.borda-recente, .pe-minis-cab .legenda i.borda-atrasada { background: #fff; border: 2px solid var(--faixa-verde); }
+  .pe-minis-cab .legenda i.borda-atrasada { border-color: var(--faixa-vermelho); }
   .pe-mini-rasc { font-size: 0.68rem; font-weight: 700; color: var(--ambar-800); }
 }
 .modal:has(.pc) { width: min(1180px, 100%); }
@@ -1344,3 +1349,10 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .cc-filiais legend { font-weight: 600; padding: 0 6px; }
 .cc-filiais .check.bloqueada { opacity: 0.55; cursor: not-allowed; }
 .cc-filiais .alerta { grid-column: 1 / -1; }
+
+/* Posição do Cliente: atualização da última hora por centro de custo, numa linha ao lado da data. */
+.ac-centros { display: flex; gap: 8px; flex: 1 1 auto; min-width: 0; overflow-x: auto; align-self: flex-end; padding-bottom: 2px; }
+.ac-centro { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 1px; min-height: 48px; padding: 6px 12px; border-radius: 10px; border: 2px solid; font-size: 0.78rem; white-space: nowrap; }
+.ac-centro strong { font-size: 0.85rem; }
+.ac-centro.ok { border-color: var(--faixa-verde); background: color-mix(in srgb, var(--faixa-verde) 12%, #fff); color: #14532d; }
+.ac-centro.falta { border-color: var(--faixa-vermelho); background: color-mix(in srgb, var(--faixa-vermelho) 12%, #fff); color: #7f1d1d; }

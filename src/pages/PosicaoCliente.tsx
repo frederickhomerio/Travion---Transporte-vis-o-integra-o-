@@ -3,6 +3,7 @@
 // O envio é manual: o botão gera o PNG do quadro do cliente e copia para a área de transferência.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AtualizacaoCentros } from '../components/AtualizacaoCentros';
 import { Layout } from '../components/Layout';
 import { QuadroPosicao } from '../components/QuadroPosicao';
 import { AcessoNegado, Alerta, Carregando, Icone, Segmentado } from '../components/ui';
@@ -172,6 +173,7 @@ export function PosicaoCliente() {
             <input className="entrada" type="date" value={data} max={hoje} onChange={(e) => e.target.value && definirData(e.target.value)} />
           </label>
           {data !== hoje && <button className="btn sutil" onClick={() => definirData(hoje)}>Ir para hoje</button>}
+          {data === hoje && <AtualizacaoCentros linhas={linhas} idx={idx} />}
           <Segmentado rotulo="Apresentação" valor={visao} aoMudar={setVisao}
             opcoes={[{ valor: 'mesa', rotulo: 'Mesa comercial' }, { valor: 'cliente', rotulo: 'Visão do cliente' }]} />
         </div>

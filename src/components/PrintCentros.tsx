@@ -1,4 +1,4 @@
-// Imagem das posições por centro de custo: um quadro por centro, com origem, destino, volumes,
+// Imagem das posições por centro de custo: um quadro por centro, com origem, destino, veículos (porta, trânsito, carregados),
 // executado × meta (vermelho até 60%, amarelo até 80%, verde acima) e quem atualizou por último.
 
 import { useRef, useState } from 'react';
@@ -9,7 +9,7 @@ import { type PrintCentro, printPorCentro } from '../lib/posicoes';
 import type { LinhaFrete } from '../types';
 import { Alerta, Icone, Modal } from './ui';
 
-const fmtT = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} t`;
+const fmtV = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 const fmtPct = (v: number | null) => (v == null ? 'Sem meta' : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`);
 
 async function gerarPng(el: HTMLElement): Promise<Blob> {
@@ -76,7 +76,7 @@ export function PrintCentros({ linhas, idx, data, aoFechar }: {
         <button className="btn primario" onClick={aoFechar}>Fechar</button>
       </>}>
       <div className="pc">
-        <p className="pequeno suave">Uma imagem por centro de custo, com as posições dos filtros atuais. Executado = volume carregado ÷ meta do dia.</p>
+        <p className="pequeno suave">Uma imagem por centro de custo, com as posições dos filtros atuais. Quantidades em veículos. Executado = veículos carregados ÷ meta do dia.</p>
         {msg && <Alerta tipo={msg.tipo}>{msg.txt}</Alerta>}
         {!grupos.length && <Alerta tipo="info">Nenhuma posição nos filtros atuais.</Alerta>}
         {grupos.map((g) => (
@@ -96,17 +96,18 @@ export function PrintCentros({ linhas, idx, data, aoFechar }: {
                 </div>
                 <table className="pc-tabela">
                   <thead><tr>
-                    <th>Origem e coleta</th><th>Destino e entrega</th><th className="n">Volume na porta</th><th className="n">Volume carregado</th>
-                    <th className="n">Meta do dia</th><th className="n">Executado</th><th>Última atualização</th><th>Quem atualizou</th>
+                    <th>Origem e coleta</th><th>Destino e entrega</th><th className="n">Veículos na porta</th><th className="n">Em trânsito</th><th className="n">Carregados</th>
+                    <th className="n">Meta do dia (veíc.)</th><th className="n">Executado</th><th>Última atualização</th><th>Quem atualizou</th>
                   </tr></thead>
                   <tbody>
                     {g.linhas.map((l) => (
                       <tr key={l.chave}>
                         <td><span className="pc-cidade">{l.origem}</span>{l.coleta && <span className="pc-local">{l.coleta}</span>}<span className="pc-cliente">{l.cliente}{l.lote ? ` · Lote ERP ${l.lote}` : ''}</span></td>
                         <td><span className="pc-cidade">{l.destino}</span>{l.entrega && <span className="pc-local">{l.entrega}</span>}</td>
-                        <td className="n">{fmtT(l.porta_t)}</td>
-                        <td className="n">{fmtT(l.carregado_t)}</td>
-                        <td className="n">{l.meta_t != null ? fmtT(l.meta_t) : '—'}</td>
+                        <td className="n">{fmtV(l.porta)}</td>
+                        <td className="n">{fmtV(l.transito)}</td>
+                        <td className="n">{fmtV(l.carregados)}</td>
+                        <td className="n">{l.meta != null ? fmtV(l.meta) : '—'}</td>
                         <td className="n"><span className={`pc-exec ${l.faixa ? `faixa-${l.faixa}` : 'sem'}`}>{fmtPct(l.pct)}</span></td>
                         <td>{l.ultima ? fmtDataAsHora(l.ultima) : '—'}</td>
                         <td>{l.por ?? '—'}</td>
@@ -115,8 +116,8 @@ export function PrintCentros({ linhas, idx, data, aoFechar }: {
                   </tbody>
                   <tfoot><tr>
                     <th colSpan={2}>Total do centro de custo ({g.linhas.length} {g.linhas.length === 1 ? 'posição' : 'posições'})</th>
-                    <td className="n">{fmtT(g.totais.porta_t)}</td><td className="n">{fmtT(g.totais.carregado_t)}</td>
-                    <td className="n">{g.totais.meta_t != null ? fmtT(g.totais.meta_t) : '—'}</td>
+                    <td className="n">{fmtV(g.totais.porta)}</td><td className="n">{fmtV(g.totais.transito)}</td><td className="n">{fmtV(g.totais.carregados)}</td>
+                    <td className="n">{g.totais.meta != null ? fmtV(g.totais.meta) : '—'}</td>
                     <td className="n"><span className={`pc-exec ${g.totais.faixa ? `faixa-${g.totais.faixa}` : 'sem'}`}>{fmtPct(g.totais.pct)}</span></td>
                     <td colSpan={2} />
                   </tr></tfoot>

@@ -5,6 +5,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AbrirPosicoes } from '../components/AbrirPosicoes';
 import { CartaoSupervisor, type Rascunho, rascunhoAlterado } from '../components/CartaoSupervisor';
+import { atualizadaNaHora } from '../components/AtualizacaoCentros';
+import { useAgora } from '../components/doc/Comum';
 import { PrintCentros } from '../components/PrintCentros';
 import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, Carregando, Icone } from '../components/ui';
@@ -197,6 +199,9 @@ function FiltroBotao({ rotulo, todos, valor, opcoes, aoMudar }: { rotulo: string
 function MiniBlocos({ lista, atualId, idx, pendentes, aoEscolher }: {
   lista: LinhaFrete[]; atualId: string; idx: Indices; pendentes: string[]; aoEscolher: (embarqueId: string) => void;
 }) {
+  // Borda verde: posição atualizada na última hora; vermelha: sem atualização há mais de 1 h (pedido de 29/10).
+  const agora = useAgora(60000);
+  const recente = (p: NonNullable<LinhaFrete['posicao']>) => atualizadaNaHora(p, agora);
   return (
     <aside className="pe-minis" aria-label="Todos os blocos do filtro">
       <div className="pe-minis-cab">
@@ -205,6 +210,9 @@ function MiniBlocos({ lista, atualId, idx, pendentes, aoEscolher }: {
         <div className="legenda">
           <span><i className="faixa-vermelho" />Carregado até 60% da meta</span><span><i className="faixa-amarelo" />60,1% a 80%</span>
           <span><i className="faixa-verde" />Acima de 80%</span><span><i className="sem-meta" />Sem meta</span>
+        </div>
+        <div className="legenda">
+          <span><i className="borda-recente" />Borda verde: atualizada na última hora</span><span><i className="borda-atrasada" />Borda vermelha: mais de 1 h sem atualizar</span>
         </div>
       </div>
       <div className="pe-minis-grade">
@@ -217,7 +225,7 @@ function MiniBlocos({ lista, atualId, idx, pendentes, aoEscolher }: {
           const cc = centroDaLinha(l, idx);
           const ativo = e.id === atualId;
           return (
-            <button key={e.id} type="button" className={`pe-mini ${faixa ? `faixa-${faixa}` : 'sem-meta'}${ativo ? ' ativo' : ''}`} aria-current={ativo || undefined}
+            <button key={e.id} type="button" className={`pe-mini ${faixa ? `faixa-${faixa}` : 'sem-meta'} ${recente(p) ? 'recente' : 'atrasada'}${ativo ? ' ativo' : ''}`} aria-current={ativo || undefined}
               onClick={() => aoEscolher(e.id)} title={`Preencher a posição de ${nome(idx.cliente, e.cliente_id)}`}>
               <span className="pe-mini-cli">{nome(idx.cliente, e.cliente_id)}</span>
               <span className="pe-mini-rota">{cidadeUF(e.origem_cidade, e.origem_uf)} → {cidadeUF(e.destino_cidade, e.destino_uf)}</span>
