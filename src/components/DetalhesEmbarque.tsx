@@ -73,6 +73,25 @@ export function DetalhesEmbarque({ embarqueId, aoFechar, solicitacaoDoc }: { emb
   );
 }
 
+/** Editar lote (Lista de Fretes → Detalhes): dados do embarque e frete na mesma tela. Cada campo segue a sua permissão. */
+export function EditarLote({ embarqueId, aoFechar }: { embarqueId: string; aoFechar: () => void }) {
+  const { estado, pode } = useApp();
+  const idx = useIndices();
+  const e = estado.embarques[embarqueId];
+  if (!e) return null;
+  return (
+    <Gaveta titulo={<>Editar lote · {codigoEmbarque(e.codigo)}</>}
+      subtitulo={<>{cidadeUF(e.origem_cidade, e.origem_uf)} → {cidadeUF(e.destino_cidade, e.destino_uf)} · {nome(idx.cliente, e.cliente_id)}</>} aoFechar={aoFechar}>
+      <h3 className="pequeno" style={{ margin: '0 0 6px' }}>Dados do lote</h3>
+      <Cadastro e={e} idx={idx} />
+      {pode('financeiro.ver') && <>
+        <h3 className="pequeno" style={{ margin: '14px 0 6px' }}>Frete</h3>
+        <FinanceiroAba embarqueId={e.id} existe={!!estado.financeiro[e.id]} />
+      </>}
+    </Gaveta>
+  );
+}
+
 function Resumo({ e, idx }: { e: Embarque; idx: Indices }) {
   const { estado } = useApp();
   const posicao = Object.values(estado.posicoes).find((p) => p.embarque_id === e.id && p.data_operacional === estado.data) ?? null;

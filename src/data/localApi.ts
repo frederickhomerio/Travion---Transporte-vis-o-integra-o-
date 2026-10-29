@@ -36,6 +36,7 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['embarques.editar_cadencia', 'Embarques', 'Alterar a meta diária de qualquer embarque'],
   ['embarques.editar_cadencia_proprio', 'Embarques', 'Alterar a meta diária dos embarques que a própria pessoa criou'],
   ['embarques.editar_capacidade', 'Embarques', 'Alterar toneladas médias por veículo'],
+  ['embarques.editar_lote', 'Embarques', 'Botão Editar lote no Detalhes da Lista de Fretes (os campos seguem as demais permissões)'],
   ['embarques.arquivar', 'Embarques', 'Arquivar ou reativar embarques'],
   ['embarques.encerrar', 'Embarques', 'Encerrar embarque definitivamente (sem reativação)'],
   ['carteira.editar', 'Comercial', 'Alterar a carteira (responsável comercial) de clientes e embarques'],
@@ -77,12 +78,12 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
     'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver',
-    'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila'],
+    'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar',
-    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila'],
+    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote'],
   embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar',
     'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila'],
@@ -92,6 +93,7 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
     'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver', 'analise.operacional', 'estadia.ver', 'analise.fila'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
+    'embarques.editar_lote', 'embarques.editar_cadastro', 'embarques.editar_capacidade',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
     'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar',
     'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila'],
@@ -416,9 +418,13 @@ export function criarLocalApi(): Api {
   }
   if (!db.perfilCentros) { migrarCentros(db); gravarStorage(CHAVE, JSON.stringify(db)); }
   // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
-  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila'] as Permissao[]) {
+  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote'] as Permissao[]) {
     if (db.papelPermissoes.some((x) => x.chave === nova)) continue;
     for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) if (ps.includes(nova)) db.papelPermissoes.push({ papel: papel as Papel, chave: nova });
+    // Migração 2800: o Coordenador Comercial passa a editar o lote inteiro.
+    if (nova === 'embarques.editar_lote') for (const k of ['embarques.editar_cadastro', 'embarques.editar_capacidade'] as Permissao[]) {
+      if (!db.papelPermissoes.some((x) => x.papel === 'comercial' && x.chave === k)) db.papelPermissoes.push({ papel: 'comercial', chave: k });
+    }
   }
   let perfilId: string | null = lerStorage(CHAVE_SESSAO);
   const ouvintesAuth = new Set<(e: string) => void>();

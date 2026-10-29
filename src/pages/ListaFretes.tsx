@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { BarraFiltros } from '../components/Filtros';
 import { Layout } from '../components/Layout';
 import { ImagemAnuncio, ModalDivulgacao } from '../components/AnuncioFrete';
-import { DetalhesEmbarque } from '../components/DetalhesEmbarque';
+import { DetalhesEmbarque, EditarLote } from '../components/DetalhesEmbarque';
 import { BotaoDocumentacao, SolicitarDocumentacao } from '../components/doc/DocumentacaoEmbarque';
 import { NovoEmbarque } from '../components/NovoEmbarque';
 import { ConfirmarEncerramento, ConfirmarSuspensao, EmbarquesSuspensos } from '../components/SuspenderEncerrar';
@@ -50,6 +50,7 @@ export function ListaFretes() {
   const [gerando, setGerando] = useState(false);
   const [lista, setLista] = useState<ItemLista[] | null>(null);
   const [detalhe, setDetalhe] = useState<string | null>(null);
+  const [editarLote, setEditarLote] = useState<string | null>(null);
   // Notificação de documentação abre Detalhes do embarque → Documentação → Solicitação.
   const [docAberta, setDocAberta] = useState<string | null>(null);
   useEffect(() => {
@@ -188,6 +189,7 @@ export function ListaFretes() {
       )}
 
       {rapido && <DetalhesRapidos embarqueId={rapido} aoFechar={() => setRapido(null)} aoFichaCompleta={() => { setDetalhe(rapido); setRapido(null); }}
+        aoEditar={() => { setEditarLote(rapido); setRapido(null); }}
         aoSolicitarDoc={() => { setFormDoc(rapido); setRapido(null); }}
         aoAcompanharDoc={(sid) => { setDetalhe(rapido); setDocAberta(sid); setRapido(null); }} />}
       {formDoc && estado.embarques[formDoc] && <SolicitarDocumentacao embarque={estado.embarques[formDoc]} aoFechar={() => setFormDoc(null)}
@@ -200,6 +202,7 @@ export function ListaFretes() {
       {suspender && <ConfirmarSuspensao e={suspender} aoFechar={() => setSuspender(null)} />}
       {encerrar && <ConfirmarEncerramento e={encerrar} aoFechar={() => setEncerrar(null)} />}
       {verSuspensos && <EmbarquesSuspensos embarques={suspensos} aoFechar={() => setVerSuspensos(false)} />}
+      {editarLote && <EditarLote embarqueId={editarLote} aoFechar={() => setEditarLote(null)} />}
       {detalhe && <DetalhesEmbarque embarqueId={detalhe} solicitacaoDoc={docAberta} aoFechar={() => { setDetalhe(null); setDocAberta(null); }} />}
       {novo && <NovoEmbarque aoFechar={(id) => { setNovo(false); if (id) setAnuncioNovo(id); }} />}
       {anuncioNovo && estado.embarques[anuncioNovo] && (
@@ -342,10 +345,10 @@ function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaFrete; idx: Indices;
 }
 
 /** Detalhes rápidos para a equipe de campo: veículos na porta, em trânsito e observações. */
-function DetalhesRapidos({ embarqueId, aoFechar, aoFichaCompleta, aoSolicitarDoc, aoAcompanharDoc }: {
-  embarqueId: string; aoFechar: () => void; aoFichaCompleta: () => void; aoSolicitarDoc: () => void; aoAcompanharDoc: (solicitacaoId: string) => void;
+function DetalhesRapidos({ embarqueId, aoFechar, aoFichaCompleta, aoEditar, aoSolicitarDoc, aoAcompanharDoc }: {
+  embarqueId: string; aoFechar: () => void; aoFichaCompleta: () => void; aoEditar: () => void; aoSolicitarDoc: () => void; aoAcompanharDoc: (solicitacaoId: string) => void;
 }) {
-  const { estado } = useApp();
+  const { estado, pode } = useApp();
   const idx = useIndices();
   const e = estado.embarques[embarqueId];
   const p = Object.values(estado.posicoes).find((x) => x.embarque_id === embarqueId && x.data_operacional === estado.data) ?? null;
@@ -358,6 +361,7 @@ function DetalhesRapidos({ embarqueId, aoFechar, aoFichaCompleta, aoSolicitarDoc
   return (
     <Modal titulo={`${cidadeAnuncio(e.origem_cidade, e.origem_uf)} ➜ ${cidadeAnuncio(e.destino_cidade, e.destino_uf)}`} aoFechar={aoFechar} rodape={
       <><BotaoDocumentacao embarque={e} aoSolicitar={aoSolicitarDoc} aoAcompanhar={aoAcompanharDoc} />
+        {pode('embarques.editar_lote') && !e.encerrado_em && <button className="btn" onClick={aoEditar}>Editar lote</button>}
         <button className="btn" onClick={aoFichaCompleta}>Ficha completa</button><button className="btn" onClick={aoFechar}>Fechar</button></>
     }>
       <div className="pequeno suave" style={{ marginBottom: 10 }}>

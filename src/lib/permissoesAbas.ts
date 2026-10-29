@@ -5,7 +5,7 @@ import type { Permissao } from '../types';
 export const ABAS_APP: Array<{ id: string; rotulo: string; chaves: Permissao[] }> = [
   { id: 'lista', rotulo: 'Lista de Fretes', chaves: [
     'embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia', 'embarques.editar_cadencia_proprio',
-    'embarques.editar_capacidade', 'embarques.arquivar', 'embarques.encerrar', 'carteira.editar', 'financeiro.ver', 'financeiro.editar',
+    'embarques.editar_capacidade', 'embarques.editar_lote', 'embarques.arquivar', 'embarques.encerrar', 'carteira.editar', 'financeiro.ver', 'financeiro.editar',
     'historico.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente',
     'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar'] },
   { id: 'dashboard', rotulo: 'Dashboard Embarques', chaves: ['embarques.ver', 'financeiro.ver', 'analise.fila'] },
