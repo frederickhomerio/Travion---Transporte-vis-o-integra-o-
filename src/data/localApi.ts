@@ -101,6 +101,8 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
 interface Banco {
   versao: 1;
   seq: number;
+  /** Prévia: perfis que já entraram (os demais aparecem como convite pendente). */
+  entraram?: string[];
   filiais: Filial[];
   comerciais: Comercial[];
   clientes: Cliente[];
@@ -621,6 +623,7 @@ export function criarLocalApi(): Api {
       const p = db.perfis.find((x) => x.email === email) ?? db.perfis.find((x) => x.id === email);
       if (!p) erro('Perfil de prévia não encontrado.');
       perfilId = p.id;
+      if (!(db.entraram ??= []).includes(p.id)) { db.entraram.push(p.id); salvar(); }
       gravarStorage(CHAVE_SESSAO, p.id);
       for (const o of ouvintesAuth) o('SIGNED_IN');
     },
@@ -1054,7 +1057,7 @@ export function criarLocalApi(): Api {
 
     async listarUsuarios(): Promise<UsuarioAdmin[]> {
       exigir('usuarios.gerenciar');
-      return db.perfis.map((p) => ({ ...clone(p), centros: (db.perfilCentros ?? []).filter((x) => x.perfil_id === p.id).map((x) => x.centro_custo_id),
+      return db.perfis.map((p) => ({ ...clone(p), acesso_pendente: p.status === 'ativo' && !(db.entraram ?? []).includes(p.id), centros: (db.perfilCentros ?? []).filter((x) => x.perfil_id === p.id).map((x) => x.centro_custo_id),
         filiais: db.perfilFiliais.filter((x) => x.perfil_id === p.id).map((x) => x.filial_id),
         permissoes: Object.fromEntries(db.perfilPermissoes.filter((x) => x.perfil_id === p.id).map((x) => [x.chave, x.permitido])) }));
     },

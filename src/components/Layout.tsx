@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, matchPath, useLocation, useNavigate } from 'react-router-dom';
 import { PERFIS_PREVIA } from '../data/localApi';
 import { useApp } from '../data/store';
 import { ROTULO_PAPEL } from '../lib/formato';
@@ -18,6 +18,71 @@ function Item({ to, end, icone, rotulo, recolhido }: { to: string; end?: boolean
   );
 }
 
+interface ItemMenu { to: string; end?: boolean; icone: string; rotulo: string }
+interface GrupoMenu { id: string; rotulo: string; icone: string; itens: ItemMenu[] }
+
+/** Módulos em 3 blocos (menu lateral e barra do celular), só com o que a pessoa pode abrir. */
+function useGrupos(admin: boolean): GrupoMenu[] {
+  const { pode } = useApp();
+  const se = (ok: boolean, i: ItemMenu) => (ok ? [i] : []);
+  return [
+    { id: 'embarques', rotulo: 'Embarques', icone: 'caminhao', itens: [
+      { to: '/', end: true, icone: 'lista', rotulo: 'Lista de Fretes' },
+      ...se(pode('posicoes.pagina'), { to: '/posicoes', icone: 'caminhao', rotulo: 'Posições de Embarque' }),
+      ...se(pode('cadastro.solicitar') || pode('cadastro.ver'), { to: '/cadastro', icone: 'cadastro', rotulo: 'Cadastro' }),
+      ...se(pode('estadia.solicitar') || pode('estadia.ver'), { to: '/estadia', icone: 'relogio', rotulo: 'Estadia' }),
+      { to: '/analise', end: true, icone: 'painel', rotulo: 'Dashboard Embarques' },
+    ] },
+    { id: 'apoio', rotulo: 'Apoio Operacional', icone: 'analise', itens: [
+      ...se(pode('apoio.pagina'), { to: '/apoio', icone: 'lista', rotulo: 'Apoio Operacional' }),
+      ...se(pode('analise.operacional'), { to: '/analise/operacional', icone: 'analise', rotulo: 'Painel Operacional' }),
+    ] },
+    { id: 'gestao', rotulo: 'Gestão', icone: 'config', itens: [
+      ...se(pode('compartilhamento.preparar'), { to: '/posicao-cliente', icone: 'cliente', rotulo: 'Posição do Cliente' }),
+      ...se(admin, { to: '/admin', icone: 'config', rotulo: 'Administração' }),
+    ] },
+  ].filter((g) => g.itens.length);
+}
+
+/** Celular: 3 botões; cada um abre para cima os módulos do bloco, no mesmo desenho da barra. */
+function BarraCelular({ grupos }: { grupos: GrupoMenu[] }) {
+  const { pathname } = useLocation();
+  const [aberto, setAberto] = useState<string | null>(null);
+  useEffect(() => setAberto(null), [pathname]);
+  useEffect(() => {
+    if (!aberto) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAberto(null); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [aberto]);
+  const ativo = (i: ItemMenu) => !!matchPath({ path: i.to, end: i.end ?? false }, pathname);
+  // Gestão também leva à conta (dados, modo demonstração e Sair).
+  const comConta = grupos.map((g) => (g.id === 'gestao' ? { ...g, itens: [...g.itens, { to: '/mais', icone: 'cliente', rotulo: 'Minha conta' }] } : g));
+  if (!comConta.some((g) => g.id === 'gestao')) comConta.push({ id: 'gestao', rotulo: 'Gestão', icone: 'config', itens: [{ to: '/mais', icone: 'cliente', rotulo: 'Minha conta' }] });
+  const g = comConta.find((x) => x.id === aberto);
+  return (
+    <>
+      {g && <div className="navinf-fundo" onClick={() => setAberto(null)} aria-hidden="true" />}
+      {g && (
+        <div className="navinf-folha" role="menu" aria-label={g.rotulo} style={{ ['--n' as string]: Math.min(g.itens.length, 3) }}>
+          {g.itens.map((i) => (
+            <NavLink key={i.to} to={i.to} end={i.end} role="menuitem" onClick={() => setAberto(null)}><Icone nome={i.icone} />{i.rotulo}</NavLink>
+          ))}
+        </div>
+      )}
+      <nav className="navinf" aria-label="Principal (celular)">
+        {comConta.map((x) => (
+          <button key={x.id} type="button" aria-expanded={aberto === x.id} aria-haspopup="menu"
+            className={[x.itens.some(ativo) ? 'ativo' : '', aberto === x.id ? 'aberto' : ''].join(' ').trim() || undefined}
+            onClick={() => setAberto(aberto === x.id ? null : x.id)}>
+            <Icone nome={x.icone} />{x.rotulo}
+          </button>
+        ))}
+      </nav>
+    </>
+  );
+}
+
 const ROTULO_CONEXAO = {
   conectando: 'Conectando…',
   conectado: 'Tempo real ativo',
@@ -33,6 +98,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
   const [recolhido, setRecolhido] = useState(() => { try { return localStorage.getItem(CHAVE_MENU) === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem(CHAVE_MENU, recolhido ? '1' : '0'); } catch { /* preferência local */ } }, [recolhido]);
   const r = recolhido;
+  const grupos = useGrupos(admin);
 
   return (
     <div className={`app${r ? ' menu-recolhido' : ''}`}>
@@ -45,18 +111,12 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
           </svg>
         </button>
         <nav className="nav" aria-label="Principal">
-          <div className="grupo"><span className="rotulo">Embarques</span></div>
-          <Item to="/" end icone="lista" rotulo="Lista de Fretes" recolhido={r} />
-          {pode('posicoes.pagina') && <Item to="/posicoes" icone="caminhao" rotulo="Posições de Embarque" recolhido={r} />}
-          {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <Item to="/cadastro" icone="cadastro" rotulo="Cadastro" recolhido={r} />}
-          {(pode('estadia.solicitar') || pode('estadia.ver')) && <Item to="/estadia" icone="relogio" rotulo="Estadia" recolhido={r} />}
-          <Item to="/analise" end icone="painel" rotulo="Dashboard Embarques" recolhido={r} />
-          {(pode('apoio.pagina') || pode('analise.operacional')) && <div className="grupo"><span className="rotulo">Apoio Operacional</span></div>}
-          {pode('apoio.pagina') && <Item to="/apoio" icone="lista" rotulo="Apoio Operacional" recolhido={r} />}
-          {pode('analise.operacional') && <Item to="/analise/operacional" icone="analise" rotulo="Painel Operacional" recolhido={r} />}
-          {(admin || pode('compartilhamento.preparar')) && <div className="grupo"><span className="rotulo">Gestão</span></div>}
-          {pode('compartilhamento.preparar') && <Item to="/posicao-cliente" icone="cliente" rotulo="Posição do Cliente" recolhido={r} />}
-          {admin && <Item to="/admin" icone="config" rotulo="Administração" recolhido={r} />}
+          {grupos.map((g) => (
+            <div key={g.id} className="nav-bloco">
+              <div className="grupo"><span className="rotulo">{g.rotulo}</span></div>
+              {g.itens.map((i) => <Item key={i.to} to={i.to} end={i.end} icone={i.icone} rotulo={i.rotulo} recolhido={r} />)}
+            </div>
+          ))}
         </nav>
         <div className="lateral-rodape">
           <div className="rotulo">
@@ -94,14 +154,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
         <main className="conteudo">{children}</main>
       </div>
 
-      <nav className="navinf" aria-label="Principal (celular)">
-        <NavLink to="/" end><Icone nome="lista" />Fretes</NavLink>
-        <NavLink to="/analise"><Icone nome="analise" />Análise</NavLink>
-        {pode('posicoes.pagina') && <NavLink to="/posicoes"><Icone nome="caminhao" />Posições</NavLink>}
-        {pode('apoio.pagina') && <NavLink to="/apoio"><Icone nome="lista" />Apoio</NavLink>}
-        {(pode('cadastro.solicitar') || pode('cadastro.ver')) && <NavLink to="/cadastro"><Icone nome="cadastro" />Cadastro</NavLink>}
-        <NavLink to="/mais"><Icone nome="config" />Mais</NavLink>
-      </nav>
+      <BarraCelular grupos={grupos} />
     </div>
   );
 }

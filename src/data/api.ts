@@ -29,6 +29,8 @@ export interface UsuarioAdmin extends Perfil {
   centros: string[];
   filiais: string[];
   permissoes: Partial<Record<Permissao, boolean>>;
+  /** Recebeu o convite mas ainda não criou a senha nem entrou no app. */
+  acesso_pendente?: boolean;
 }
 
 export interface Convite {

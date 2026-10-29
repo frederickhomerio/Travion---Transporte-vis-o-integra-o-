@@ -81,7 +81,9 @@ export function Usuarios() {
                 <tr key={u.id}>
                   <td><strong>{u.nome}</strong><div className="pequeno suave">{u.email}{u.telefone ? ` · ${u.telefone}` : ''}</div></td>
                   <td>{ROTULO_PAPEL[u.papel]}</td>
-                  <td><span className={`badge ${u.status === 'ativo' ? 'liberado' : u.status === 'bloqueado' ? 'suspenso' : 'aviso'}`}>{ROTULO_SITUACAO[u.status]}</span></td>
+                  <td>{u.acesso_pendente
+                    ? <span className="badge aviso" title="Recebeu o convite e ainda não criou a senha nem entrou no app">Convite pendente</span>
+                    : <span className={`badge ${u.status === 'ativo' ? 'liberado' : u.status === 'bloqueado' ? 'suspenso' : 'aviso'}`}>{ROTULO_SITUACAO[u.status]}</span>}</td>
                   <td>{centrosNomes(u.centros)}<div className="pequeno suave">{total(u.centros) || u.papel === 'administrador' ? 'Todas as filiais' : filiaisNomes(u.filiais)}</div></td>
                   <td className="pequeno">{Object.keys(u.permissoes).length ? `${Object.keys(u.permissoes).length} permissão(ões) individual(is)` : '—'}</td>
                   <td className="td-acao"><span style={{ display: 'inline-flex', gap: 6 }}>

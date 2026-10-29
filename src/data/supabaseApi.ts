@@ -236,14 +236,18 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
     },
 
     async listarUsuarios() {
-      const [perfis, filiais, perms, centros] = await Promise.all([
+      const [perfis, filiais, perms, centros, acessos] = await Promise.all([
         todos((a, b) => sb.from('perfis').select('id,nome,email,telefone,papel,status,comercial_id,criado_em').order('nome').range(a, b)),
         todos((a, b) => sb.from('perfil_filiais').select('perfil_id,filial_id').range(a, b)),
         todos((a, b) => sb.from('perfil_permissoes').select('perfil_id,chave,permitido').range(a, b)),
         todos((a, b) => sb.from('perfil_centros').select('perfil_id,centro_custo_id').range(a, b)),
+        // Sem a migração 2700, a lista abre sem a situação de convite pendente.
+        sb.rpc('usuarios_primeiro_acesso').then((r) => (r.error ? [] : r.data ?? []) as Array<{ perfil_id: string; senha_criada: boolean; primeiro_acesso_em: string | null }>),
       ]);
-      return (perfis as never[]).map((p: { id: string }) => ({
+      const pendente = new Set(acessos.filter((x) => !x.senha_criada || !x.primeiro_acesso_em).map((x) => x.perfil_id));
+      return (perfis as never[]).map((p: { id: string; status: string }) => ({
         ...(p as object),
+        acesso_pendente: p.status === 'ativo' && pendente.has(p.id),
         centros: (centros as Array<{ perfil_id: string; centro_custo_id: string }>).filter((c) => c.perfil_id === p.id).map((c) => c.centro_custo_id),
         filiais: (filiais as Array<{ perfil_id: string; filial_id: string }>).filter((f) => f.perfil_id === p.id).map((f) => f.filial_id),
         permissoes: Object.fromEntries((perms as Array<{ perfil_id: string; chave: string; permitido: boolean }>)
