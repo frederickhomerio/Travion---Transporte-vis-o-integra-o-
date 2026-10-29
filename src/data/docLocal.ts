@@ -1254,7 +1254,7 @@ function historicoFicticio(filiais: Array<{ id: string; centro: string | null }>
         lista.push({ s: id, evento, em: new Date(em).toISOString(), ...(comResp ? resp : { responsavel_id: null, responsavel_nome: null }), motivo, origem: 'registro' });
       const enviado = t;
       ev('enviado', t, null, false);
-      // Estadia: prazo de 24 h na fila; depois do atendimento, espera o retorno do cliente (fora do atendimento ativo).
+      // Estadia: prazo de 96 h na fila; depois do atendimento, espera o retorno do cliente (fora do atendimento ativo).
       t += (tipo === 'estadia' ? 20 + r() * r() * 1700 : 2 + r() * r() * 45) * MIN;
       let status: SolPainel['status'] = tipo === 'cadastro' ? 'cadastro_concluido' : tipo === 'estadia' ? 'aprovada' : 'documentacao_disponivel';
       if (r() < 0.03) { ev('cancelado', t, null, false); status = 'cancelado'; } else {
