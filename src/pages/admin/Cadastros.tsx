@@ -24,7 +24,7 @@ const DEF: Record<TipoCadastro, { rotulo: string; lista: Lista; campos: DefCampo
     { campo: 'centro_custo_id', rotulo: 'Centro de custo', tipo: 'select', opcoesDe: 'centros_custo', obrigatorio: true },
     { campo: 'supervisor', rotulo: 'Supervisor responsável' }, { campo: 'ativo', rotulo: 'Ativa', tipo: 'bool' },
   ] },
-  centro_custo: { rotulo: 'Centros de custo', lista: 'centros_custo', nota: 'Cada filial fica vinculada a um centro de custo (escolha na aba Filiais).', campos: [
+  centro_custo: { rotulo: 'Centros de custo', lista: 'centros_custo', nota: 'Cada filial fica em um só centro de custo. Em Editar, marque as filiais do centro; as que já estão em outro centro aparecem bloqueadas.', campos: [
     { campo: 'nome', rotulo: 'Nome', obrigatorio: true }, { campo: 'ativo', rotulo: 'Ativo', tipo: 'bool' },
   ] },
   comercial: { rotulo: 'Comerciais', lista: 'comerciais', campos: [
@@ -57,6 +57,10 @@ function opcoesCampo(c: DefCampoCad, cad: Record<string, unknown>, atual?: unkno
   const xs = (cad[c.opcoesDe] ?? []) as Array<{ id: string; nome: string; ativo: boolean }>;
   return xs.filter((x) => x.ativo || x.id === atual).map((x) => ({ v: x.id, r: x.nome }));
 }
+
+type FilialCad = { id: string; nome: string; ativo: boolean; centro_custo_id?: string | null };
+const filiaisDoCentro = (filiais: FilialCad[], centro: string) =>
+  filiais.filter((f) => f.centro_custo_id === centro).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
 export function Cadastros() {
   const { estado } = useApp();
@@ -125,12 +129,14 @@ export function Cadastros() {
               </>
             ) : (
               <>
-                <thead><tr>{def.campos.map((c) => <th key={c.campo}>{c.rotulo}</th>)}{tipo === 'produto' && <th>Fonte do preço</th>}<th /></tr></thead>
+                <thead><tr>{def.campos.map((c) => <th key={c.campo}>{c.rotulo}</th>)}{tipo === 'produto' && <th>Fonte do preço</th>}{tipo === 'centro_custo' && <th>Filiais alocadas</th>}<th /></tr></thead>
                 <tbody>
                   {lista.map((r) => (
                     <tr key={r.id} style={r.ativo ? undefined : { opacity: 0.6 }}>
                       {def.campos.map((c) => <td key={c.campo}>{exibir(r, c)}</td>)}
                       {tipo === 'produto' && <td className="pequeno">{(r.preco_fonte as string) || <span className="suave">Manual</span>}</td>}
+                      {tipo === 'centro_custo' && <td className="pequeno">{r.acesso_total ? <span className="suave">Todas as filiais (acesso gerencial)</span>
+                        : filiaisDoCentro(estado.cadastros.filiais, r.id).map((f) => f.nome).join(', ') || <span className="suave">Nenhuma</span>}</td>}
                       <td className="td-acao"><button className="btn peq" onClick={() => setEditar(r)}>Editar</button></td>
                     </tr>
                   ))}
@@ -175,6 +181,11 @@ function EditarCadastro({ tipo, registro, aoFechar }: { tipo: TipoCadastro; regi
   const [d, setD] = useState<Record<string, unknown>>(inicial);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  // Centro de custo: filiais alocadas (cada filial fica em um só centro).
+  const filiais = estado.cadastros.filiais as FilialCad[];
+  const alocarFiliais = tipo === 'centro_custo' && !registro?.acesso_total;
+  const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set(registro ? filiaisDoCentro(filiais, registro.id).map((f) => f.id) : []));
+  const mudancasFiliais = () => filiais.filter((f) => marcadas.has(f.id) !== (!!registro && f.centro_custo_id === registro.id));
 
   async function salvar() {
     const dados: Record<string, unknown> = {};
@@ -194,11 +205,17 @@ function EditarCadastro({ tipo, registro, aoFechar }: { tipo: TipoCadastro; regi
     if (tipo === 'produto' && 'valor_pauta_kg' in dados && dados.valor_pauta_kg !== null && !('valor_pauta_data' in dados)) {
       dados.valor_pauta_data = hojeSP();
     }
-    if (registro && Object.keys(dados).length === 0) { aoFechar(); return; }
+    const trocas = alocarFiliais ? mudancasFiliais() : [];
+    if (registro && Object.keys(dados).length === 0 && !trocas.length) { aoFechar(); return; }
     setSalvando(true);
     setErro(null);
     try {
-      await api.salvarCadastro(tipo, registro?.id ?? null, dados, estado.demo);
+      let id = registro?.id ?? null;
+      if (!registro || Object.keys(dados).length) {
+        const r = await api.salvarCadastro(tipo, registro?.id ?? null, dados, estado.demo) as { id?: string } | null;
+        id = id ?? r?.id ?? null;
+      }
+      if (id) for (const f of trocas) await api.salvarCadastro('filial', f.id, { centro_custo_id: marcadas.has(f.id) ? id : null }, estado.demo);
       await recarregar();
       avisar('ok', 'Cadastro salvo.');
       aoFechar();
@@ -221,6 +238,25 @@ function EditarCadastro({ tipo, registro, aoFechar }: { tipo: TipoCadastro; regi
           opcoes={opcoesCampo(c, estado.cadastros as unknown as Record<string, unknown>, registro?.[c.campo])} />)}
       {tipo === 'filial' && estado.cadastros.centros_custo.length === 0 && <Alerta tipo="aviso">Cadastre primeiro os centros de custo (aba Centros de custo).</Alerta>}
       </div>
+      {tipo === 'centro_custo' && !!registro?.acesso_total && <Alerta tipo="info">Este centro dá acesso a todas as filiais; não é preciso alocar filiais nele.</Alerta>}
+      {alocarFiliais && (
+        <fieldset className="cc-filiais">
+          <legend>Filiais deste centro de custo</legend>
+          {[...filiais].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((f) => {
+            const outro = f.centro_custo_id && f.centro_custo_id !== registro?.id ? estado.cadastros.centros_custo.find((c) => c.id === f.centro_custo_id) : null;
+            return (
+              <label key={f.id} className={`check${outro ? ' bloqueada' : ''}`} title={outro ? `Já está no centro ${outro.nome}. Desmarque lá para trazer para cá.` : undefined}>
+                <input type="checkbox" checked={marcadas.has(f.id)} disabled={!!outro}
+                  onChange={(e) => setMarcadas((m) => { const n = new Set(m); if (e.target.checked) n.add(f.id); else n.delete(f.id); return n; })} />
+                <span>{f.nome}{!f.ativo && ' (inativa)'}{outro && <small className="suave"> · em {outro.nome}</small>}</span>
+              </label>
+            );
+          })}
+          {registro && filiais.some((f) => f.centro_custo_id === registro.id && !marcadas.has(f.id)) && (
+            <Alerta tipo="aviso">A filial desmarcada fica sem centro de custo até ser alocada em outro; quem acessa por centro deixa de vê-la.</Alerta>
+          )}
+        </fieldset>
+      )}
       {tipo === 'produto' && (
         <PrecoCna nome={String(d.nome ?? '')} valorKg={valorKg ?? null}
           aoUsar={(kg, data) => setD((x) => ({ ...x, valor_pauta_kg: String(kg).replace('.', ','), valor_pauta_data: data }))} />

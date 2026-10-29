@@ -1338,3 +1338,9 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .cc-opcao > span { display: flex; flex-direction: column; gap: 2px; }
 .cc-opcao small { color: var(--cinza-600); font-weight: 400; }
 .cc-opcao.gerencial { border-color: var(--dourado, #C6A044); }
+
+/* Cadastro de centro de custo: filiais alocadas (uma filial em um só centro). */
+.cc-filiais { border: 1px solid var(--borda); border-radius: var(--raio); padding: 8px 14px 12px; margin: 12px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 12px; }
+.cc-filiais legend { font-weight: 600; padding: 0 6px; }
+.cc-filiais .check.bloqueada { opacity: 0.55; cursor: not-allowed; }
+.cc-filiais .alerta { grid-column: 1 / -1; }
