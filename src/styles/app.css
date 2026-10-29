@@ -1383,3 +1383,12 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .pc-filiais .check { margin: 0; }
 .pc .pe-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 600px) { .pc .pe-filtros { grid-template-columns: minmax(0, 1fr); } }
+/* Quadro do cliente (29/10): volume por destino centralizado entre os indicadores e o fim do quadro,
+   logo da TP afastada da borda e títulos da tabela maiores, em negrito e centralizados. */
+.qp-volume { align-items: center; text-align: center; }
+.qp-destinos { justify-content: center; }
+.qp-destino dt { text-align: left; }
+.qp-total { align-self: center; }
+.qp-faixa-tp { padding-right: 14px; flex: 0 0 auto; }
+.qp-tabela thead th { font-size: 0.95rem; font-weight: 800; text-align: center; vertical-align: middle; }
+.qp-faixa-tp .qp-logo { max-width: 200px; object-fit: contain; }

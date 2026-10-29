@@ -1,5 +1,5 @@
 // Quadros por centro de custo ao lado da data (Posição do Cliente): verde quando todas as posições do centro
-// foram atualizadas na última hora, vermelho quando falta alguma (pedido de 29/10/2026).
+// foram atualizadas nas últimas 2 horas, vermelho quando falta alguma (pedido de 29/10/2026; janela de 1 h passou a 2 h).
 
 import { useMemo } from 'react';
 import { nome, type Indices } from '../lib/cadastros';
@@ -7,7 +7,8 @@ import { centroDaLinha, SEM_CENTRO } from '../lib/posicoes';
 import type { LinhaFrete } from '../types';
 import { useAgora } from './doc/Comum';
 
-const UMA_HORA = 3600_000;
+/** Janela de atualização que define a cor (verde/vermelho). */
+export const JANELA_ATUALIZACAO = 2 * 3600_000;
 
 /** Última atualização da posição (contadores ou confirmação), em ms; 0 quando nunca foi atualizada. */
 export function ultimaAtualizacao(p: NonNullable<LinhaFrete['posicao']>): number {
@@ -15,7 +16,7 @@ export function ultimaAtualizacao(p: NonNullable<LinhaFrete['posicao']>): number
 }
 export const atualizadaNaHora = (p: NonNullable<LinhaFrete['posicao']>, agora: number) => {
   const t = ultimaAtualizacao(p);
-  return t > 0 && agora - t <= UMA_HORA;
+  return t > 0 && agora - t <= JANELA_ATUALIZACAO;
 };
 
 export function AtualizacaoCentros({ linhas, idx }: { linhas: LinhaFrete[]; idx: Indices }) {
@@ -36,14 +37,14 @@ export function AtualizacaoCentros({ linhas, idx }: { linhas: LinhaFrete[]; idx:
   }, [linhas, idx, agora]);
   if (!centros.length) return null;
   return (
-    <div className="ac-centros" role="list" aria-label="Atualização das posições por centro de custo na última hora">
+    <div className="ac-centros" role="list" aria-label="Atualização das posições por centro de custo nas últimas 2 horas">
       {centros.map((c) => {
         const tudo = c.ok === c.total;
         return (
           <div key={c.cc} role="listitem" className={`ac-centro ${tudo ? 'ok' : 'falta'}`}
-            title={tudo ? 'Todas as posições atualizadas na última hora' : `${c.total - c.ok} posição(ões) sem atualização na última hora`}>
+            title={tudo ? 'Todas as posições atualizadas nas últimas 2 horas' : `${c.total - c.ok} posição(ões) sem atualização nas últimas 2 horas`}>
             <strong>{c.nome}</strong>
-            <span>{c.ok}/{c.total} na última hora</span>
+            <span>{c.ok}/{c.total} nas últimas 2 h</span>
           </div>
         );
       })}

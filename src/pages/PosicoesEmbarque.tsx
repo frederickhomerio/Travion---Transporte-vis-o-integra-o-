@@ -199,7 +199,7 @@ function FiltroBotao({ rotulo, todos, valor, opcoes, aoMudar }: { rotulo: string
 function MiniBlocos({ lista, atualId, idx, pendentes, aoEscolher }: {
   lista: LinhaFrete[]; atualId: string; idx: Indices; pendentes: string[]; aoEscolher: (embarqueId: string) => void;
 }) {
-  // Borda verde: posição atualizada na última hora; vermelha: sem atualização há mais de 1 h (pedido de 29/10).
+  // Borda verde: posição atualizada nas últimas 2 horas; vermelha: sem atualização há mais de 2 h (pedido de 29/10).
   const agora = useAgora(60000);
   const recente = (p: NonNullable<LinhaFrete['posicao']>) => atualizadaNaHora(p, agora);
   return (
@@ -212,7 +212,7 @@ function MiniBlocos({ lista, atualId, idx, pendentes, aoEscolher }: {
           <span><i className="faixa-verde" />Acima de 80%</span><span><i className="sem-meta" />Sem meta</span>
         </div>
         <div className="legenda">
-          <span><i className="borda-recente" />Borda verde: atualizada na última hora</span><span><i className="borda-atrasada" />Borda vermelha: mais de 1 h sem atualizar</span>
+          <span><i className="borda-recente" />Borda verde: atualizada nas últimas 2 h</span><span><i className="borda-atrasada" />Borda vermelha: mais de 2 h sem atualizar</span>
         </div>
       </div>
       <div className="pe-minis-grade">
