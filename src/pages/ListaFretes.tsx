@@ -6,6 +6,7 @@ import { ImagemAnuncio, ModalDivulgacao } from '../components/AnuncioFrete';
 import { DetalhesEmbarque, EditarLote } from '../components/DetalhesEmbarque';
 import { BotaoDocumentacao, SolicitarDocumentacao } from '../components/doc/DocumentacaoEmbarque';
 import { NovoEmbarque } from '../components/NovoEmbarque';
+import { BotaoBaixarDocs } from '../components/doc/MinhasSolicitacoes';
 import { ConfirmarEncerramento, ConfirmarSuspensao, EmbarquesSuspensos } from '../components/SuspenderEncerrar';
 import { Alerta, Carregando, EstadoVazio, Icone, Modal, Segmentado, useAviso } from '../components/ui';
 import { useDoc } from '../data/documentacao';
@@ -123,7 +124,7 @@ export function ListaFretes() {
   );
 
   return (
-    <Layout titulo="Lista de Fretes" acoes={acoes}>
+    <Layout titulo="Lista de Fretes" acoes={acoes} aoLadoSino={pode('documentacao.solicitar') && <BotaoBaixarDocs />}>
       <div className="controles-lista">
         <div className="controle-linha">
           <span className="controle-rot">Buscar por</span>

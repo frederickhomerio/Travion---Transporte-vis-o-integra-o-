@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState, useMemo } from 'react';
 import { FilaApoioDashboard } from '../components/analise/FilasOperacao';
+import { MinhasSolicitacoes } from '../components/doc/MinhasSolicitacoes';
 import { Layout } from '../components/Layout';
 import { AbasAnalise } from './analise/AbasAnalise';
 import { Alerta, Carregando, EstadoVazio, Icone, Segmentado } from '../components/ui';
@@ -218,6 +219,7 @@ export function Dashboard() {
     <Layout titulo="Dashboard Embarques">
       <AbasAnalise />
       {conteudo}
+      {(pode('documentacao.solicitar') || pode('cadastro.solicitar')) && <div className="dash ms-dash"><MinhasSolicitacoes /></div>}
     </Layout>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SolicitacaoDoc } from '../types';
-import { acaoDocumentacao, avisosDuplicidade, duracao, FILTROS_FILA, filtrarFila, lerReais, normalizarPlaca, telefoneValido, tempoDoc, tipoCadastro } from './documentacao';
+import { acaoDocumentacao, avisosDuplicidade, docsParaBaixar, duracao, minhasSolicitacoes, FILTROS_FILA, filtrarFila, lerReais, normalizarPlaca, telefoneValido, tempoDoc, tipoCadastro } from './documentacao';
 
 const base = Date.parse('2026-10-27T12:00:00Z');
 const sol = (o: Partial<SolicitacaoDoc>): SolicitacaoDoc => ({
@@ -99,5 +99,26 @@ describe('Cadastro', () => {
     ];
     expect(filtrarFila(ss, { ...FILTROS_FILA, atalho: 'concluidas' }, 'eu').map((s) => s.id).sort()).toEqual(['1', '2']);
     expect(filtrarFila(ss, { ...FILTROS_FILA, tipo: 'cadastro' }, 'eu').map((s) => s.id)).toEqual(['3']);
+  });
+});
+
+describe('Minhas Solicitações', () => {
+  it('traz só emissões e cadastros do usuário, em aberto primeiro', () => {
+    const t = (min: number) => new Date(base - min * 60000).toISOString();
+    const todas = [
+      sol({ id: 'a', solicitante_id: 'eu', status: 'documentacao_disponivel', enviado_em: t(90), concluido_em: t(10) }),
+      sol({ id: 'b', solicitante_id: 'eu', status: 'enviado', enviado_em: t(20) }),
+      sol({ id: 'c', solicitante_id: 'eu', tipo: 'cadastro', status: 'em_atendimento', enviado_em: t(40) }),
+      sol({ id: 'd', solicitante_id: 'outro', status: 'enviado' }),
+      sol({ id: 'e', solicitante_id: 'eu', tipo: 'estadia', status: 'enviado' }),
+      sol({ id: 'f', solicitante_id: 'eu', status: 'cancelado', enviado_em: t(200), atualizado_em: t(5) }),
+    ];
+    expect(minhasSolicitacoes(todas, 'eu').map((s) => s.id)).toEqual(['c', 'b', 'f', 'a']);
+  });
+  it('baixar documentos só na emissão com documentação disponível', () => {
+    expect(docsParaBaixar(sol({ status: 'documentacao_disponivel' }))).toBe(true);
+    expect(docsParaBaixar(sol({ tipo: 'lote_emissao', status: 'documentacao_disponivel' }))).toBe(true);
+    expect(docsParaBaixar(sol({ status: 'em_atendimento' }))).toBe(false);
+    expect(docsParaBaixar(sol({ tipo: 'cadastro', status: 'cadastro_concluido' }))).toBe(false);
   });
 });

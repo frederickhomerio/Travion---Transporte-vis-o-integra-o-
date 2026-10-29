@@ -1396,3 +1396,32 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .qp-tabela thead th { font-size: 0.95rem; font-weight: 800; text-align: center; vertical-align: middle; }
 .qp-faixa-tp .qp-logo { max-width: 200px; object-fit: contain; }
 @media (min-width: 721px) and (max-width: 1500px) { .ao-tabela th, .ao-tabela td { padding-left: 7px; padding-right: 7px; } .ao-acao:has(.btn + .btn) { width: 112px; } }
+
+/* Minhas Solicitações (Dashboard Embarques) e botão Baixar documentos (Lista de Fretes) */
+.ms-dash { margin-top: 16px; }
+.ms .dash-sec-topo { align-items: center; }
+.ms .ms-recorte { flex: 0 0 auto; width: 270px; font-weight: 600; }
+.ms-tabela tr.ms-aberta td { background: var(--cinza-50); border-bottom: 0; }
+.ms-linha-docs td { background: var(--cinza-50); padding-top: 0; }
+.ms-docs { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.ms-docs ul { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.ms-docs li { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--branco); border: 1px solid var(--borda); border-radius: 8px; padding: 6px 10px; font-size: 0.88rem; }
+.ms-docs-msg { margin: 0; font-size: 0.85rem; color: var(--texto-suave); }
+.ms-baixar-btn { height: 40px; }
+.ms-cont { margin-left: 6px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--verde-700, #1f7a3f); color: #fff; font-size: 0.75rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.ms-painel { width: min(560px, calc(100vw - 32px)); }
+.ms-painel li { border-bottom: 1px solid var(--cinza-100); }
+.ms-painel li.ms-sel { background: var(--cinza-50); }
+.ms-painel li.ms-sel .ms-docs { padding: 0 12px 12px; }
+.ms-item { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border-bottom: 0; }
+.ms-item-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+@media (max-width: 720px) {
+  .ms .dash-sec-topo { flex-wrap: wrap; }
+  .ms .ms-recorte { width: 100%; }
+  .ao-tabela tr.ms-linha-docs { display: block; padding: 0 4px 10px; background: var(--cinza-50); }
+  .ms-docs li { flex-wrap: wrap; }
+  .ms-docs li > span:first-child { flex: 1 1 100%; overflow-wrap: anywhere; }
+  .ms-baixar-btn { padding: 0 10px; width: 40px; justify-content: center; position: relative; }
+  .ms-baixar-btn .ms-txt { display: none; }
+  .ms-baixar-btn .ms-cont { position: absolute; top: -6px; right: -6px; margin: 0; }
+}

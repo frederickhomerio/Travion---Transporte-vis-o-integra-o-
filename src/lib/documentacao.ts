@@ -245,3 +245,16 @@ export function resumoDoc(s: SolicitacaoDoc): string {
 export const ehImagem = (mime: string) => ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(mime);
 export const ehPdf = (mime: string) => mime === 'application/pdf';
 export const fmtTamanho = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} MB`);
+
+/** Minhas Solicitações: emissões (lote e emissão + emissão) e cadastros enviados pelo usuário logado.
+ *  Em aberto primeiro (mais antigas no topo, como na fila do apoio); depois as encerradas, mais recentes primeiro. */
+export function minhasSolicitacoes(todas: SolicitacaoDoc[], eu: string): SolicitacaoDoc[] {
+  const minhas = todas.filter((s) => s.solicitante_id === eu && s.tipo !== 'estadia');
+  const abertas = minhas.filter((s) => ABERTOS.includes(s.status)).sort((a, b) => a.enviado_em.localeCompare(b.enviado_em));
+  const fechadas = minhas.filter((s) => !ABERTOS.includes(s.status))
+    .sort((a, b) => (b.concluido_em ?? b.atualizado_em).localeCompare(a.concluido_em ?? a.atualizado_em));
+  return [...abertas, ...fechadas];
+}
+
+/** Emissão com a documentação liberada pelo apoio: o comercial já pode baixar o CT-e, o MDF-e e os demais emitidos. */
+export const docsParaBaixar = (s: SolicitacaoDoc) => (s.tipo === 'emissao' || s.tipo === 'lote_emissao') && s.status === 'documentacao_disponivel';

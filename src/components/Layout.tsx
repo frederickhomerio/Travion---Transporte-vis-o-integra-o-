@@ -90,7 +90,7 @@ const ROTULO_CONEXAO = {
   offline: 'Sem conexão',
 };
 
-export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: string; aoLadoTitulo?: ReactNode; acoes?: ReactNode; children: ReactNode }) {
+export function Layout({ titulo, aoLadoTitulo, aoLadoSino, acoes, children }: { titulo: string; aoLadoTitulo?: ReactNode; aoLadoSino?: ReactNode; acoes?: ReactNode; children: ReactNode }) {
   const { api, estado, pode, definirDemo } = useApp();
   const nav = useNavigate();
   const s = estado.sessao!;
@@ -143,6 +143,7 @@ export function Layout({ titulo, aoLadoTitulo, acoes, children }: { titulo: stri
           <span className="so-celular"><Logo tam={26} /></span>
           {aoLadoTitulo ? <div className="topo-titulo"><h1>{titulo}</h1>{aoLadoTitulo}</div> : <h1>{titulo}</h1>}
           <Sino />
+          {aoLadoSino}
           <span className={`conexao ${estado.conexao}`} title="Estado da conexão com o servidor">{ROTULO_CONEXAO[estado.conexao]}</span>
           {acoes}
         </header>

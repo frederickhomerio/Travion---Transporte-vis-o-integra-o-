@@ -10,7 +10,7 @@ import { LIMITE_CADASTRO, MAX_MOTORISTA, MAX_VEICULO, TIPOS_CADASTRO, telefoneVa
 import { LIMITES_ESTADIA, MOTIVOS_ESTADIA, NUMERO_DOC_RE, RESULTADO_ESTADIA, calcularEstadia, fmtNumeroH, fmtReais, fmtToneladas, pesoToneladas } from '../lib/estadia';
 import { type EventoFluxo, type EventoPainel, type SolPainel, dataSP, diaHoraSP, inicioDiaSP } from '../lib/painelOperacional';
 
-const CHAVE = 'travion-previa-doc-v2';
+const CHAVE = 'travion-previa-doc-v3';
 const TIPOS = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
 const LIMITE = 15 * 1024 * 1024;
 const PLACA = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
@@ -272,7 +272,8 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
     const es = ctx.embarques().filter((e) => e.is_demo);
     if (es.length < 6) return;
     const perfil = (id: string, nome: string) => ({ id, nome, email: null, papel: 'apoio', status: 'ativo', comercial_id: null, criado_em: agora() } as Perfil);
-    const gestor = perfil('perfil-1', 'Gestor Rio Verde (prévia)');
+    // As solicitações do "gestor" da prévia ficam no Administrador, que é o login usado para conferir Minhas Solicitações.
+    const gestor = perfil('perfil-0', 'Administrador (prévia)');
     const sup = perfil('perfil-5', 'Supervisor Jataí (prévia)');
     const lucia = perfil('perfil-2', 'Apoio Operacional (prévia)');
     const paulo = lucia;
@@ -350,7 +351,8 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
     const es = ctx.embarques().filter((e) => e.is_demo);
     if (es.length < 6 || db.solicitacoes.some((s) => s.tipo === 'cadastro')) { salvar(); return; }
     const perfil = (id: string, nome: string) => ({ id, nome } as Perfil);
-    const gestor = perfil('perfil-1', 'Gestor Rio Verde (prévia)');
+    // As solicitações do "gestor" da prévia ficam no Administrador, que é o login usado para conferir Minhas Solicitações.
+    const gestor = perfil('perfil-0', 'Administrador (prévia)');
     const sup = perfil('perfil-5', 'Supervisor Jataí (prévia)');
     const apoio = perfil('perfil-2', 'Apoio Operacional (prévia)');
     const min = (m: number) => new Date(Date.now() - m * 60e3).toISOString();
