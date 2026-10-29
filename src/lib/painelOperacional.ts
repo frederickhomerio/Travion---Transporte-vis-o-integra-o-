@@ -187,13 +187,15 @@ export function linhasDoPainel(d: Pick<DadosPainel, 'solicitacoes' | 'eventos'>,
 // ---------------------------------------------------------------------------
 // Fila atual por operação (situação agora, não média histórica)
 // ---------------------------------------------------------------------------
-export interface FilaOperacao { quantidade: number; retorno: number; media_ms: number | null; mais_antigo_ms: number | null; sem_registro: number }
+export interface FilaOperacao { quantidade: number; em_atendimento: number; retorno: number; media_ms: number | null; mais_antigo_ms: number | null; sem_registro: number }
 
 export function filaAtual(linhas: LinhaChamado[], tipos: TipoSolicitacaoDoc[], agora: number): FilaOperacao {
   const na = linhas.filter((l) => tipos.includes(l.s.tipo) && NA_FILA.includes(l.s.status));
   const esperas = na.filter((l) => l.inicio_fila_atual !== null).map((l) => Math.max(0, agora - l.inicio_fila_atual!));
   return {
     quantidade: na.length,
+    // Já assumidos pelo apoio e sendo trabalhados agora (aguardando informação ou cliente não entram).
+    em_atendimento: linhas.filter((l) => tipos.includes(l.s.tipo) && l.s.status === 'em_atendimento').length,
     retorno: na.filter((l) => l.s.status === 'correcao_recebida').length,
     media_ms: esperas.length ? esperas.reduce((a, b) => a + b, 0) / esperas.length : null,
     mais_antigo_ms: esperas.length ? Math.max(...esperas) : null,

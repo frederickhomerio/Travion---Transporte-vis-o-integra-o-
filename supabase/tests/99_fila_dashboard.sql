@@ -17,7 +17,7 @@ begin
   v := fila_apoio();
   assert v ? 'agora' and jsonb_typeof(v -> 'solicitacoes') = 'array' and jsonb_typeof(v -> 'eventos') = 'array', 'formato da fila';
   assert not exists (select 1 from jsonb_array_elements(v -> 'solicitacoes') x
-                      where x ->> 'status' not in ('enviado', 'correcao_recebida') or coalesce(x ->> 'solicitante_nome', '') <> ''), 'só a fila, sem nomes';
+                      where x ->> 'status' not in ('enviado', 'correcao_recebida', 'em_atendimento') or coalesce(x ->> 'solicitante_nome', '') <> ''), 'só fila e em atendimento, sem nomes';
 end $$;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000098b2', false);

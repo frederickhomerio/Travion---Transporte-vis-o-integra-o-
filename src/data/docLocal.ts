@@ -766,7 +766,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
     async filaApoio() {
       await pronto;
       exigir('analise.fila');
-      const na = db.solicitacoes.filter((s) => s.status === 'enviado' || s.status === 'correcao_recebida');
+      const na = db.solicitacoes.filter((s) => s.status === 'enviado' || s.status === 'correcao_recebida' || s.status === 'em_atendimento');
       const ids = new Set(na.map((s) => s.id));
       return {
         agora: new Date().toISOString(),

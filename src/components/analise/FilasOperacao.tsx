@@ -18,17 +18,17 @@ export function FilasOperacao({ linhas, tipos, agora }: { linhas: LinhaChamado[]
     <div className="po-filas">
       {OPERACOES.filter((op) => op.tipos.some((t) => tipos.includes(t))).map((op) => {
         const f = filaAtual(linhas, op.tipos.filter((t) => tipos.includes(t)), agora);
-        const sit = situacaoPrazo(f.media_ms, op.prazo_min);
-        const sitAntigo = situacaoPrazo(f.mais_antigo_ms, op.prazo_min);
+        // O quadro é pintado pelo chamado mais antigo aguardando (pedido de 29/10/2026: aguardando, em atendimento e mais antigo).
+        const sit = situacaoPrazo(f.mais_antigo_ms, op.prazo_min);
         return (
           <div key={op.id} className={`po-fila${sit ? ` prazo-${sit}` : ''}`}>
             <div className="po-fila-cab">{op.rotulo}{op.prazo_min && <span className="po-prazo">Prazo {fmtPrazo(op.prazo_min)}</span>}</div>
             <div className="po-fila-corpo">
-              <span className="po-fila-rot">Espera média atual</span>
-              <span className="po-fila-val">{fmtDur(f.media_ms)}</span>
+              <span className="po-fila-rot">Mais antigo aguardando</span>
+              <span className="po-fila-val">{fmtDur(f.mais_antigo_ms)}</span>
               <span className={`po-sit${sit ? ` prazo-${sit}` : ''}`}>{sit ? ROTULO_SITUACAO[sit] : f.quantidade ? 'Sem horário de entrada' : 'Fila vazia'}</span>
-              <div className="po-fila-linha"><span>Chamados na fila</span><strong>{f.quantidade}</strong></div>
-              <div className="po-fila-linha"><span>Mais antigo aguardando</span><strong className={sitAntigo ? `txt-prazo-${sitAntigo}` : undefined}>{fmtDur(f.mais_antigo_ms)}</strong></div>
+              <div className="po-fila-linha"><span>Aguardando na fila</span><strong>{f.quantidade}</strong></div>
+              <div className="po-fila-linha"><span>Em atendimento</span><strong>{f.em_atendimento}</strong></div>
               {op.composicao && <span className="po-fila-nota">{op.composicao}</span>}
               {f.retorno > 0 && <span className="po-fila-nota">{f.retorno} na fila de retorno (correção recebida)</span>}
               {f.sem_registro > 0 && <span className="po-fila-nota">{f.sem_registro} sem registro do horário de entrada</span>}
@@ -72,7 +72,7 @@ export function FilaApoioDashboard() {
       <div className="po-q-cab">
         <div>
           <h3>Tempo de fila por operação</h3>
-          <span className="po-q-sub">Situação agora: chamados aguardando o apoio assumir ou retomar, em todas as filiais</span>
+          <span className="po-q-sub">Situação agora: chamados aguardando o apoio e em atendimento, em todas as filiais</span>
         </div>
       </div>
       {erro && !dados ? <p className="po-vazio">Não foi possível carregar a fila: {erro}</p>

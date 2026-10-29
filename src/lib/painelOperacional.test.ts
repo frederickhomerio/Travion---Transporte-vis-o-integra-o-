@@ -90,8 +90,8 @@ describe('fila atual', () => {
         ev('e4', 'enviado', T0), ev('e4', 'assumido', T0 + MIN, ana), ev('e4', 'devolvido', T0 + 2 * MIN, { ...ana, motivo: 'outro' }),
       ],
     }, agora);
-    expect(filaAtual(ls, ['emissao', 'lote_emissao'], agora)).toMatchObject({ quantidade: 2, media_ms: 45 * MIN, mais_antigo_ms: 60 * MIN });
-    expect(filaAtual(ls, ['cadastro'], agora)).toMatchObject({ quantidade: 0, media_ms: null, mais_antigo_ms: null });
+    expect(filaAtual(ls, ['emissao', 'lote_emissao'], agora)).toMatchObject({ quantidade: 2, em_atendimento: 1, media_ms: 45 * MIN, mais_antigo_ms: 60 * MIN });
+    expect(filaAtual(ls, ['cadastro'], agora)).toMatchObject({ quantidade: 0, em_atendimento: 0, media_ms: null, mais_antigo_ms: null });
   });
 });
 
