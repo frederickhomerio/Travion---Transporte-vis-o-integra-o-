@@ -5,6 +5,7 @@ import { nome, separarCidadeUF } from '../lib/cadastros';
 import { normalizar } from '../lib/texto';
 import { fmtData } from '../lib/formato';
 import { parseNumeroBR } from '../lib/texto';
+import { BotaoNovoLocal } from './NovoLocal';
 import { Alerta, Modal, useAviso } from './ui';
 
 export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) {
@@ -131,12 +132,16 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
     const nc = normalizar(cidadeAtual);
     const ops = c.locais.filter((l) => l.ativo && l.tipo !== excluirTipo && (!nc || normalizar(l.cidade) === nc));
     return (
-      <label className="campo"><span>{rot}</span>
-        <input className="entrada" list={`lista-${k}`} autoComplete="off" value={d[k]} placeholder="Armazém, fazenda ou terminal"
-          onChange={(e) => set(k, e.target.value)} />
-        <datalist id={`lista-${k}`}>{ops.map((l) => <option key={l.id} value={l.nome}>{l.cidade ? `${l.cidade}${l.uf ? `/${l.uf}` : ''}` : ''}</option>)}</datalist>
-        <small>{d[k].trim() && !ops.some((l) => normalizar(l.nome) === normalizar(d[k])) ? 'Novo local: será gravado ao salvar.' : 'Escolha da lista ou digite um novo.'}</small>
-      </label>
+      <div className="campo-envolve com-botao">
+        <label className="campo"><span>{rot}</span>
+          <input className="entrada" list={`lista-${k}`} autoComplete="off" value={d[k]} placeholder="Armazém, fazenda ou terminal"
+            onChange={(e) => set(k, e.target.value)} />
+          <datalist id={`lista-${k}`}>{ops.map((l) => <option key={l.id} value={l.nome}>{l.cidade ? `${l.cidade}${l.uf ? `/${l.uf}` : ''}` : ''}</option>)}</datalist>
+          <small>{d[k].trim() && !ops.some((l) => normalizar(l.nome) === normalizar(d[k])) ? 'Novo local: será gravado ao salvar.' : 'Escolha da lista ou digite um novo.'}</small>
+        </label>
+        <BotaoNovoLocal tipo={excluirTipo === 'entrega' ? 'coleta' : 'entrega'} cidade={cidadeAtual} uf={k === 'local_coleta' ? d.origem_uf : d.destino_uf}
+          aoCriar={(_, n) => set(k, n)} />
+      </div>
     );
   };
 
@@ -164,12 +169,16 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
           d.cliente_id ? `Sugerida pelo cadastro do cliente: ${nome(idx.comercial, carteiraSugerida, 'sem carteira')}.${pode('carteira.editar') ? '' : ' Alterar exige permissão.'}` : undefined)}
         {sel('filial_id', 'Filial *', filiais, 'Selecione', false, filiais.length === 0 ? 'Seu centro de custo ainda não tem filiais. Fale com o administrador.' : undefined)}
         {sel('produto_id', 'Produto', c.produtos.filter((x) => x.ativo), 'Não informado')}
-        {cidade('origem', 'Cidade de origem *')}
-        {txt('origem_uf', 'UF de origem', { maxLength: 2, style: { textTransform: 'uppercase' } })}
-        {local('local_coleta', 'Carregamento (coleta)', d.origem_cidade, 'entrega')}
-        {cidade('destino', 'Cidade de destino *')}
-        {txt('destino_uf', 'UF de destino', { maxLength: 2, style: { textTransform: 'uppercase' } })}
-        {local('local_entrega', 'Descarga (entrega)', d.destino_cidade, 'coleta')}
+        <div className="linha-rota">
+          {cidade('origem', 'Cidade de origem *')}
+          <div className="campo-envolve campo-uf">{txt('origem_uf', 'UF', { maxLength: 2 })}</div>
+          {local('local_coleta', 'Carregamento (local de coleta)', d.origem_cidade, 'entrega')}
+        </div>
+        <div className="linha-rota">
+          {cidade('destino', 'Cidade de destino *')}
+          <div className="campo-envolve campo-uf">{txt('destino_uf', 'UF', { maxLength: 2 })}</div>
+          {local('local_entrega', 'Descarga (local de entrega)', d.destino_cidade, 'coleta')}
+        </div>
         {pode('embarques.liberar') && sel('status_liberacao', 'Status de liberação', [{ id: 'nao_informado', nome: 'Não informado' }, { id: 'liberado', nome: 'Liberado' }, { id: 'suspenso', nome: 'Suspenso' }])}
         {pode('embarques.liberar') && txt('data_liberacao', 'Data de liberação', { type: 'date' })}
         {sel('cadencia_unidade', 'Meta diária em *', [{ id: 'veiculos_dia', nome: 'Veículos por dia' }, { id: 'toneladas_dia', nome: 'Toneladas por dia' }])}

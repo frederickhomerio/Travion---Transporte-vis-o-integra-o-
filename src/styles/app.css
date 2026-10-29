@@ -651,8 +651,10 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .se-urgente { color: var(--vermelho-700); font-weight: 700; }
 .cartao-frete .botoes-anuncio { flex-wrap: wrap; }
 .cartao-frete .botoes-anuncio .btn { flex: 1 1 40%; }
-.tabela-fretes .td-acao .botoes-anuncio { display: grid; grid-template-columns: repeat(2, auto); gap: 6px; justify-content: end; }
-.tabela-fretes .td-acao .botoes-anuncio .btn { justify-content: center; }
+.tabela-fretes td.td-acao { width: 1%; white-space: nowrap; }
+.tabela-fretes .td-acao .botoes-anuncio { display: flex; flex-wrap: nowrap; gap: 6px; justify-content: flex-end; }
+.tabela-fretes .td-acao .botoes-anuncio .btn { justify-content: center; min-height: 28px; padding: 0 10px; }
+.tabela-fretes td { padding-top: 4px; padding-bottom: 4px; }
 
 /* ---------------------------------------------------------------------------
    Documentação / Apoio Operacional
@@ -1356,3 +1358,23 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .ac-centro strong { font-size: 0.85rem; }
 .ac-centro.ok { border-color: var(--faixa-verde); background: color-mix(in srgb, var(--faixa-verde) 12%, #fff); color: #14532d; }
 .ac-centro.falta { border-color: var(--faixa-vermelho); background: color-mix(in srgb, var(--faixa-vermelho) 12%, #fff); color: #7f1d1d; }
+
+/* Cidade, UF, local e botão + na mesma linha (Novo embarque e Editar lote, pedido de 29/10). */
+.campo-envolve { min-width: 0; display: flex; flex-direction: column; }
+.campo-envolve.com-botao { flex-direction: row; gap: 6px; align-items: flex-start; }
+.campo-envolve.com-botao > .campo { flex: 1 1 auto; }
+.linha-rota { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.2fr) 64px minmax(0, 1.7fr); gap: 12px; align-items: start; }
+.linha-rota .campo-uf .entrada, .linha-rota .campo-uf input { text-align: center; text-transform: uppercase; padding-left: 4px; padding-right: 4px; }
+.botao-mais { flex: 0 0 auto; width: var(--toque); min-height: var(--toque); margin-top: calc(0.8rem * 1.35 + 4px); padding: 0; justify-content: center; font-size: 1.4rem; font-weight: 700; line-height: 1; }
+@media (max-width: 600px) {
+  .linha-rota { grid-template-columns: minmax(0, 1fr) 64px; }
+  .linha-rota > :nth-child(3) { grid-column: 1 / -1; }
+}
+/* Telas até ~1500px: a cidade pode quebrar em duas linhas para os 4 botões caberem lado a lado. */
+@media (max-width: 1500px) {
+  .tabela-fretes .ponto-rota .cidade { white-space: normal; }
+  .tabela-fretes td { padding-left: 8px; padding-right: 8px; }
+  .tabela-fretes .td-acao .botoes-anuncio { gap: 4px; }
+  .tabela-fretes .td-acao .botoes-anuncio .btn { padding: 0 8px; }
+}
+.linha-rota .campo-uf small { display: none; }

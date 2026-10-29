@@ -1,7 +1,7 @@
 // Formulário que grava apenas os campos alterados e compara com o valor que o usuário viu.
 // Se outra pessoa mudou o mesmo campo, mostra o conflito para revisão (nada é sobrescrito em silêncio).
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { mensagemErro } from '../data/api';
 import type { Conflito, ResultadoGravacao } from '../types';
 import { Alerta, Modal, useAviso } from './ui';
@@ -17,6 +17,10 @@ export interface DefCampo {
   largo?: boolean;
   /** Campo fixo nesta tela (a ajuda explica o motivo; não é falta de permissão). */
   travado?: boolean;
+  /** Campos com a mesma linha ficam lado a lado numa linha própria (ex.: cidade, UF, local e +). */
+  linha?: string;
+  /** Algo ao lado do campo, como o botão + que cadastra uma opção nova e a escolhe. */
+  apos?: (definir: (valor: string) => void) => ReactNode;
 }
 
 type Valores = Record<string, unknown>;
@@ -108,29 +112,38 @@ export function FormVersionado<T extends object>({ campos, registro, salvar, aoS
 
   const fmt = (campo: string, v: unknown) => (exibirConflitoComo ? exibirConflitoComo(campo, v) : v === null || v === undefined || v === '' ? 'vazio' : String(v));
 
+  const campo = (c: DefCampo) => (
+    <div key={c.campo} className={`campo-envolve${c.tipo === 'uf' ? ' campo-uf' : ''}${c.apos ? ' com-botao' : ''}`} style={c.largo || c.tipo === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
+      <label className="campo">
+        <span>{c.rotulo}{sujo(c) && <span className="badge aviso" style={{ marginLeft: 6 }}>alterado</span>}</span>
+        {c.tipo === 'select' ? (
+          <select className="entrada" disabled={!c.pode} value={texto[c.campo]} onChange={(e) => setTexto({ ...texto, [c.campo]: e.target.value })}>
+            {c.vazio !== undefined && <option value="">{c.vazio}</option>}
+            {c.opcoes!.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+          </select>
+        ) : c.tipo === 'textarea' ? (
+          <textarea className="entrada" disabled={!c.pode} value={texto[c.campo]} onChange={(e) => setTexto({ ...texto, [c.campo]: e.target.value })} />
+        ) : (
+          <input className="entrada" disabled={!c.pode} type={c.tipo === 'data' ? 'date' : 'text'}
+            inputMode={c.tipo === 'numero' ? 'decimal' : c.tipo === 'inteiro' ? 'numeric' : undefined}
+            maxLength={c.tipo === 'uf' ? 2 : undefined}
+            value={texto[c.campo]} onChange={(e) => setTexto({ ...texto, [c.campo]: e.target.value })} />
+        )}
+        {c.ajuda && <small>{c.ajuda}</small>}
+        {!c.pode && !c.travado && <small>Somente leitura para o seu perfil.</small>}
+      </label>
+      {c.pode && c.apos?.((v) => setTexto((t) => ({ ...t, [c.campo]: v })))}
+    </div>
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="grade-campos">
-        {campos.map((c) => (
-          <label key={c.campo} className="campo" style={c.largo || c.tipo === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
-            <span>{c.rotulo}{sujo(c) && <span className="badge aviso" style={{ marginLeft: 6 }}>alterado</span>}</span>
-            {c.tipo === 'select' ? (
-              <select className="entrada" disabled={!c.pode} value={texto[c.campo]} onChange={(e) => setTexto({ ...texto, [c.campo]: e.target.value })}>
-                {c.vazio !== undefined && <option value="">{c.vazio}</option>}
-                {c.opcoes!.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
-              </select>
-            ) : c.tipo === 'textarea' ? (
-              <textarea className="entrada" disabled={!c.pode} value={texto[c.campo]} onChange={(e) => setTexto({ ...texto, [c.campo]: e.target.value })} />
-            ) : (
-              <input className="entrada" disabled={!c.pode} type={c.tipo === 'data' ? 'date' : 'text'}
-                inputMode={c.tipo === 'numero' ? 'decimal' : c.tipo === 'inteiro' ? 'numeric' : undefined}
-                maxLength={c.tipo === 'uf' ? 2 : undefined}
-                value={texto[c.campo]} onChange={(e) => setTexto({ ...texto, [c.campo]: e.target.value })} />
-            )}
-            {c.ajuda && <small>{c.ajuda}</small>}
-            {!c.pode && !c.travado && <small>Somente leitura para o seu perfil.</small>}
-          </label>
-        ))}
+        {campos.map((c, i) => {
+          if (c.linha && campos.findIndex((x) => x.linha === c.linha) !== i) return null;
+          if (c.linha) return <div key={c.linha} className="linha-rota">{campos.filter((x) => x.linha === c.linha).map(campo)}</div>;
+          return campo(c);
+        })}
       </div>
       {erro && <Alerta tipo="erro">{erro}</Alerta>}
       {campos.some((c) => c.pode) && (

@@ -10,6 +10,7 @@ import { AbrirPosicoes } from './AbrirPosicoes';
 import { Contador } from './Contador';
 import { DocumentacaoEmbarque } from './doc/DocumentacaoEmbarque';
 import { FormVersionado, type DefCampo } from './FormVersionado';
+import { BotaoNovoLocal } from './NovoLocal';
 import { Alerta, BadgeStatus, Carregando, Gaveta } from './ui';
 
 type Aba = 'resumo' | 'posicao' | 'documentacao' | 'cadastro' | 'financeiro' | 'historico' | 'origem';
@@ -180,8 +181,8 @@ function PosicaoDia({ embarque, posicaoId }: { embarque: Embarque; posicaoId: st
   );
 }
 
-/** Rota e locais ficam fixos no Editar lote (pedido de 29/10): corrige-se pela Ficha completa, com permissão. */
-const ROTA_TRAVADA = ['origem_cidade', 'origem_uf', 'destino_cidade', 'destino_uf', 'local_coleta_id', 'local_entrega_id'];
+/** Cidades e UFs ficam fixas no Editar lote (pedido de 29/10); os locais podem ser trocados ou cadastrados pelo +. */
+const ROTA_TRAVADA = ['origem_cidade', 'origem_uf', 'destino_cidade', 'destino_uf'];
 
 function Cadastro({ e, idx, travarRota = false }: { e: Embarque; idx: Indices; travarRota?: boolean }) {
   const { api, estado, pode: podeApp, aplicarEmbarque, recarregar } = useApp();
@@ -204,14 +205,16 @@ function Cadastro({ e, idx, travarRota = false }: { e: Embarque; idx: Indices; t
     { campo: 'filial_id', rotulo: 'Filial (centro de custo)', tipo: 'select', pode: pode('embarques.editar_cadastro'), opcoes: c.filiais.map((x) => ({ valor: x.id, rotulo: x.nome })) },
     { campo: 'cliente_id', rotulo: 'Cliente', tipo: 'select', pode: pode('embarques.editar_cadastro'), opcoes: c.clientes.map((x) => ({ valor: x.id, rotulo: x.nome })) },
     { campo: 'produto_id', rotulo: 'Produto', tipo: 'select', pode: pode('embarques.editar_cadastro'), vazio: 'Não informado', opcoes: c.produtos.map((x) => ({ valor: x.id, rotulo: x.nome })) },
-    { campo: 'origem_cidade', rotulo: 'Cidade de origem', tipo: 'texto', pode: pode('embarques.editar_cadastro') },
-    { campo: 'origem_uf', rotulo: 'UF de origem', tipo: 'uf', pode: pode('embarques.editar_cadastro') },
-    { campo: 'local_coleta_id', rotulo: 'Carregamento (local de coleta)', tipo: 'select', pode: pode('embarques.editar_cadastro'), vazio: 'Não informado',
-      opcoes: c.locais.filter((l) => l.tipo !== 'entrega').map((l) => ({ valor: l.id, rotulo: `${l.nome}${l.cidade ? ` (${l.cidade})` : ''}` })) },
-    { campo: 'destino_cidade', rotulo: 'Cidade de destino', tipo: 'texto', pode: pode('embarques.editar_cadastro') },
-    { campo: 'destino_uf', rotulo: 'UF de destino', tipo: 'uf', pode: pode('embarques.editar_cadastro') },
-    { campo: 'local_entrega_id', rotulo: 'Descarga (local de entrega)', tipo: 'select', pode: pode('embarques.editar_cadastro'), vazio: 'Não informado',
-      opcoes: c.locais.filter((l) => l.tipo !== 'coleta').map((l) => ({ valor: l.id, rotulo: `${l.nome}${l.cidade ? ` (${l.cidade})` : ''}` })) },
+    { campo: 'origem_cidade', rotulo: 'Cidade de origem', tipo: 'texto', pode: pode('embarques.editar_cadastro'), linha: 'origem' },
+    { campo: 'origem_uf', rotulo: 'UF', tipo: 'uf', pode: pode('embarques.editar_cadastro'), linha: 'origem' },
+    { campo: 'local_coleta_id', rotulo: 'Carregamento (local de coleta)', tipo: 'select', pode: pode('embarques.editar_cadastro'), vazio: 'Não informado', linha: 'origem',
+      opcoes: c.locais.filter((l) => l.tipo !== 'entrega').map((l) => ({ valor: l.id, rotulo: `${l.nome}${l.cidade ? ` (${l.cidade})` : ''}` })),
+      apos: (definir) => <BotaoNovoLocal tipo="coleta" cidade={e.origem_cidade} uf={e.origem_uf ?? ''} aoCriar={(id) => definir(id)} /> },
+    { campo: 'destino_cidade', rotulo: 'Cidade de destino', tipo: 'texto', pode: pode('embarques.editar_cadastro'), linha: 'destino' },
+    { campo: 'destino_uf', rotulo: 'UF', tipo: 'uf', pode: pode('embarques.editar_cadastro'), linha: 'destino' },
+    { campo: 'local_entrega_id', rotulo: 'Descarga (local de entrega)', tipo: 'select', pode: pode('embarques.editar_cadastro'), vazio: 'Não informado', linha: 'destino',
+      opcoes: c.locais.filter((l) => l.tipo !== 'coleta').map((l) => ({ valor: l.id, rotulo: `${l.nome}${l.cidade ? ` (${l.cidade})` : ''}` })),
+      apos: (definir) => <BotaoNovoLocal tipo="entrega" cidade={e.destino_cidade} uf={e.destino_uf ?? ''} aoCriar={(id) => definir(id)} /> },
     { campo: 'observacao_interna', rotulo: 'Observação interna', tipo: 'textarea', pode: pode('embarques.editar_cadastro') },
     { campo: 'situacao', rotulo: 'Situação cadastral', tipo: 'select', pode: pode('embarques.arquivar'),
       opcoes: [{ valor: 'ativo', rotulo: 'Ativo' }, { valor: 'arquivado', rotulo: 'Arquivado' }], ajuda: 'Arquivar é diferente de suspender: arquivado sai da operação.' },
