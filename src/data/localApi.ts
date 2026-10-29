@@ -89,9 +89,9 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila'],
   // Apoio Operacional reúne o antigo papel Operação (contadores e observação) e a fila de documentação.
   apoio: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver', 'analise.operacional', 'estadia.ver', 'analise.fila'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'cadastro.ver', 'analise.operacional', 'estadia.ver', 'analise.fila'],
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'documentacao.cancelar', 'cadastro.ver', 'analise.operacional', 'estadia.ver', 'analise.fila'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'cadastro.ver', 'analise.operacional', 'estadia.ver', 'analise.fila'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
     'embarques.editar_lote', 'embarques.editar_cadastro', 'embarques.editar_capacidade',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',

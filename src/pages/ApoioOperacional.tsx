@@ -4,12 +4,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StatusDocPill, TipoNumero, useAgora } from '../components/doc/Comum';
+import { CancelarDoc } from '../components/doc/DocumentacaoEmbarque';
 import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, Carregando, EstadoVazio, useAviso } from '../components/ui';
 import { mensagemErro } from '../data/api';
 import { useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
-import { type Atalho, FILTROS_FILA, type FiltrosFila, TIPO_FILA, type TipoFila, filtrarFila, filtrarSemAtalho, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
+import { ABERTOS, type Atalho, FILTROS_FILA, type FiltrosFila, TIPO_FILA, type TipoFila, filtrarFila, filtrarSemAtalho, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
 import { fmtHora } from '../lib/formato';
 import { documentosEstadia, periodoEstadia } from '../lib/estadia';
 import type { SolicitacaoDoc } from '../types';
@@ -38,6 +39,8 @@ export function ApoioOperacional() {
   const agora = useAgora(15000);
   const [f, setF] = useState<FiltrosFila>(lerFiltros);
   const [assumindo, setAssumindo] = useState<string | null>(null);
+  // Cancelar direto da fila: só quem tem documentacao.cancelar (padrão: Gestor; ajustável em Permissões).
+  const [cancelando, setCancelando] = useState<SolicitacaoDoc | null>(null);
   const eu = app.sessao?.perfil.id ?? '';
   const todas = useMemo(() => Object.values(estado.solicitacoes), [estado.solicitacoes]);
   const lista = useMemo(() => filtrarFila(todas, f, eu), [todas, f, eu]);
@@ -153,6 +156,9 @@ export function ApoioOperacional() {
                         ) : (
                           <button className="btn peq" onClick={() => nav(`/apoio/${s.id}`)}>Consultar</button>
                         )}
+                        {ABERTOS.includes(s.status) && pode('documentacao.cancelar') && (
+                          <button className="btn perigo peq" onClick={() => setCancelando(s)}>Cancelar solicitação</button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -162,6 +168,7 @@ export function ApoioOperacional() {
           </div>
         )}
       </div>
+      {cancelando && <CancelarDoc s={cancelando} aoFechar={() => setCancelando(null)} />}
     </Layout>
   );
 }

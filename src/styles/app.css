@@ -742,6 +742,9 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .ao-l2 { display: block; font-size: 0.8rem; color: var(--texto-suave); }
 .ao-pend { color: var(--ambar-800); font-weight: 600; }
 .ao-acao { text-align: right; white-space: nowrap; }
+.ao-acao .btn + .btn { margin-top: 6px; }
+.ao-acao:has(.btn + .btn) { white-space: normal; width: 128px; }
+.ao-acao:has(.btn + .btn) .btn { display: flex; width: 100%; justify-content: center; white-space: normal; text-align: center; line-height: 1.15; padding: 4px 8px; }
 @media (max-width: 900px) {
   .ao-filtros { grid-template-columns: 1fr 1fr; }
   .ao-filtros input, .ao-filtros .ao-atalho { grid-column: 1 / -1; }
@@ -1392,3 +1395,4 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .qp-faixa-tp { padding-right: 14px; flex: 0 0 auto; }
 .qp-tabela thead th { font-size: 0.95rem; font-weight: 800; text-align: center; vertical-align: middle; }
 .qp-faixa-tp .qp-logo { max-width: 200px; object-fit: contain; }
+@media (min-width: 721px) and (max-width: 1500px) { .ao-tabela th, .ao-tabela td { padding-left: 7px; padding-right: 7px; } .ao-acao:has(.btn + .btn) { width: 112px; } }
