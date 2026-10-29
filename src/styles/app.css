@@ -382,6 +382,11 @@ textarea.entrada { min-height: 80px; resize: vertical; }
 .controle-corpo .controle-valor { flex: 0 0 auto; width: 260px; max-width: 100%; }
 .controle-botoes .btn { white-space: nowrap; }
 .controles-lista + .ferramentas { margin-left: 122px; }
+/* Filtros na mesma linha de Lista de fretes, PDF e CSV (pedido de 29/10). */
+.controle-botoes > .ferramentas { margin-bottom: 0; align-items: center; }
+.controle-botoes > .painel-filtros { margin-top: 10px; }
+.controle-linha:has(.painel-filtros) { align-items: start; }
+.controle-linha:has(.painel-filtros) > .controle-rot { padding-top: 12px; }
 @media (max-width: 720px) {
   .controle-linha { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .controle-corpo .controle-valor { width: 100%; }
@@ -390,9 +395,12 @@ textarea.entrada { min-height: 80px; resize: vertical; }
   .controle-corpo .segmentado button { min-height: 38px; padding: 2px 3px; font-size: 0.7rem; line-height: 1.15; border: 0; background: var(--branco); overflow-wrap: anywhere; }
   .controle-corpo .segmentado button.ativo { background: var(--azul-700); }
   .controle-corpo .segmentado button + button { border-left: 0; }
-  .controle-botoes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
-  .controle-botoes .btn { justify-content: center; padding: 0 6px; font-size: 0.82rem; white-space: normal; text-align: center; line-height: 1.15; }
+  .controle-botoes { display: block; width: 100%; }
+  .controle-botoes > .ferramentas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .controle-botoes .btn { justify-content: center; padding: 0 4px; font-size: 0.78rem; white-space: normal; text-align: center; line-height: 1.15; gap: 4px; }
   .controle-botoes .btn svg { display: none; }
+  .controle-botoes .btn .badge { padding: 0 6px; }
+  .controle-botoes > .ferramentas > .btn.sutil { grid-column: 1 / -1; }
   .controles-lista + .ferramentas { margin-left: 0; }
 }
 
@@ -721,14 +729,8 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .ao-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 0.85rem; color: var(--texto-suave); }
 .ao-sync-falha { color: var(--vermelho-700); font-weight: 700; }
 .ao-novas { border: 1px solid var(--dourado); background: #fbf3dc; color: var(--ambar-800); border-radius: 999px; padding: 4px 12px; font-weight: 700; cursor: pointer; }
-.ao-caixa { background: var(--branco); border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra); }
-.ao-caixa > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; font-weight: 600; min-height: 44px; }
-.ao-caixa > summary::-webkit-details-marker { display: none; }
-.ao-caixa > summary::after { content: '▾'; margin-left: auto; color: var(--cinza-600); transition: transform .15s; }
-.ao-caixa[open] > summary::after { transform: rotate(180deg); }
-.ao-caixa-res { color: var(--texto-suave); font-weight: 500; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.ao-caixa-corpo { display: grid; gap: 10px; padding: 0 14px 14px; }
-.ao-filtros { display: grid; grid-template-columns: minmax(200px, 2fr) repeat(2, minmax(160px, 1fr)); gap: 8px; }
+.ao-filtros { display: grid; grid-template-columns: minmax(200px, 1.2fr) minmax(200px, 2fr) repeat(2, minmax(160px, 1fr)); gap: 8px; }
+.ao-atalho { font-weight: 600; }
 .ao-tabela-wrap { overflow-x: auto; }
 .ao-tabela { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .ao-tabela th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cinza-600); padding: 10px 12px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
@@ -740,7 +742,7 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .ao-acao { text-align: right; white-space: nowrap; }
 @media (max-width: 900px) {
   .ao-filtros { grid-template-columns: 1fr 1fr; }
-  .ao-filtros input { grid-column: 1 / -1; }
+  .ao-filtros input, .ao-filtros .ao-atalho { grid-column: 1 / -1; }
   .ao-tabela thead { display: none; }
   .ao-tabela, .ao-tabela tbody, .ao-tabela tr, .ao-tabela td { display: block; width: 100%; }
   .ao-tabela tr { border-bottom: 1px solid var(--borda); padding: 8px 4px; display: grid; grid-template-columns: 1fr 1fr; }

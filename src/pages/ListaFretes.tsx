@@ -146,10 +146,9 @@ export function ListaFretes() {
         </div>
         <div className="controle-linha">
           <span className="controle-rot"><strong>{linhas.length}</strong> frete(s)</span>
-          <div className="controle-corpo controle-botoes">{botoesExportar}</div>
+          <div className="controle-corpo controle-botoes"><BarraFiltros linhas={todas} semData semBusca inicio={botoesExportar} /></div>
         </div>
       </div>
-      <BarraFiltros linhas={todas} semData semBusca />
 
       <div className="grupo-btn so-celular" style={{ marginBottom: 12 }}>
         {pode('embarques.liberar') && <BotaoSuspensos n={suspensos.length} aoClicar={() => setVerSuspensos(true)} />}

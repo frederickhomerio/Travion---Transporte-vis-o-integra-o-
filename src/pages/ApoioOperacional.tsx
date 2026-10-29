@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StatusDocPill, TipoNumero, useAgora } from '../components/doc/Comum';
 import { Layout } from '../components/Layout';
-import { AcessoNegado, Alerta, Carregando, EstadoVazio, Icone, Segmentado, useAviso } from '../components/ui';
+import { AcessoNegado, Alerta, Carregando, EstadoVazio, useAviso } from '../components/ui';
 import { mensagemErro } from '../data/api';
 import { useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
@@ -66,7 +66,6 @@ export function ApoioOperacional() {
   // Os números dos atalhos seguem os filtros escolhidos (tipo, responsável e busca).
   const filtradas = useMemo(() => filtrarSemAtalho(todas, f), [todas, f.tipo, f.responsavel, f.busca]); // eslint-disable-line react-hooks/exhaustive-deps
   const contagem = (a: Atalho) => filtradas.filter((s) => noAtalho(s, a, eu)).length;
-  const ativos = [f.busca.trim(), f.tipo, f.responsavel].filter(Boolean).length;
 
   if (!pode('apoio.pagina')) return <Layout titulo="Apoio Operacional"><AcessoNegado /></Layout>;
 
@@ -98,36 +97,21 @@ export function ApoioOperacional() {
           )}
         </div>
 
-        <details className="ao-caixa">
-          <summary>
-            <Icone nome="filtro" />
-            <span className="ao-caixa-tit">Filtros</span>
-            <span className="ao-caixa-res">{ROTULO_ATALHO[f.atalho]} ({contagem(f.atalho)}){ativos ? ` · ${ativos} filtro(s)` : ''}</span>
-          </summary>
-          <div className="ao-caixa-corpo">
-          <Segmentado rotulo="Atalhos da fila" valor={f.atalho} aoMudar={(a) => setF({ ...f, atalho: a })} opcoes={[
-            { valor: 'abertas', rotulo: `${ROTULO_ATALHO.abertas} (${contagem('abertas')})` },
-            { valor: 'novas', rotulo: `${ROTULO_ATALHO.novas} (${contagem('novas')})` },
-            { valor: 'minhas', rotulo: `${ROTULO_ATALHO.minhas} (${contagem('minhas')})` },
-            { valor: 'aguardando', rotulo: `${ROTULO_ATALHO.aguardando} (${contagem('aguardando')})` },
-            { valor: 'cliente', rotulo: `${ROTULO_ATALHO.cliente} (${contagem('cliente')})` },
-            { valor: 'concluidas', rotulo: `${ROTULO_ATALHO.concluidas} (${contagem('concluidas')})` },
-          ]} />
-
-          <div className="ao-filtros">
-            <input className="entrada" type="search" value={f.busca} onChange={(e) => setF({ ...f, busca: e.target.value })}
-              placeholder="Buscar placa, lote, cliente, NF, CT-e ou nº" aria-label="Buscar na fila" />
-            <select className="entrada" value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value as TipoSolicitacaoDoc | '' })} aria-label="Tipo de solicitação">
-              <option value="">Todos os tipos</option>
-              {(Object.keys(TIPO_DOC) as TipoSolicitacaoDoc[]).map((t) => <option key={t} value={t}>{TIPO_DOC[t]}</option>)}
-            </select>
-            <select className="entrada" value={f.responsavel} onChange={(e) => setF({ ...f, responsavel: e.target.value })} aria-label="Responsável">
-              <option value="">Todos os responsáveis</option><option value="-">Sem responsável</option>
-              {opcoes.resp.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
-            </select>
-          </div>
-          </div>
-        </details>
+        <div className="ao-filtros">
+          <select className="entrada ao-atalho" value={f.atalho} onChange={(e) => setF({ ...f, atalho: e.target.value as Atalho })} aria-label="Atalhos da fila">
+            {(Object.keys(ROTULO_ATALHO) as Atalho[]).map((a) => <option key={a} value={a}>{ROTULO_ATALHO[a]} ({contagem(a)})</option>)}
+          </select>
+          <input className="entrada" type="search" value={f.busca} onChange={(e) => setF({ ...f, busca: e.target.value })}
+            placeholder="Buscar placa, lote, cliente, NF, CT-e ou nº" aria-label="Buscar na fila" />
+          <select className="entrada" value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value as TipoSolicitacaoDoc | '' })} aria-label="Tipo de solicitação">
+            <option value="">Todos os tipos</option>
+            {(Object.keys(TIPO_DOC) as TipoSolicitacaoDoc[]).map((t) => <option key={t} value={t}>{TIPO_DOC[t]}</option>)}
+          </select>
+          <select className="entrada" value={f.responsavel} onChange={(e) => setF({ ...f, responsavel: e.target.value })} aria-label="Responsável">
+            <option value="">Todos os responsáveis</option><option value="-">Sem responsável</option>
+            {opcoes.resp.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+          </select>
+        </div>
 
         {!estado.carregado && !estado.erro ? <Carregando texto="Carregando a fila…" /> : estado.erro && !estado.carregado ? (
           <Alerta tipo="erro">{estado.erro}</Alerta>
