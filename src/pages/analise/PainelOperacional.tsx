@@ -124,7 +124,6 @@ function Painel({ perfilId }: { perfilId: string }) {
   const txtPeriodo = pref.inicio === pref.fim ? fmtDataCurta(pref.inicio) : `${fmtDataCurta(pref.inicio)} a ${fmtDataCurta(pref.fim)}`;
   const txtTipos = pref.tipos.length ? pref.tipos.map((t) => ROTULO_TIPO[t]).join(', ') : 'nenhum tipo';
 
-  const inicioRegistro = dados?.inicio_registro ? Date.parse(dados.inicio_registro) : null;
   const semRegistroGrupo = grupo.filter((l) => !l.completo).length;
 
   const ctx: CtxQuadro = { modo: 'normal', agora, linhas: escopo, grupo, pref, mudar, dataEvol, setDataEvol, inicioDados: dados?.inicio_dados ? Date.parse(dados.inicio_dados) : null,
@@ -176,12 +175,6 @@ function Painel({ perfilId }: { perfilId: string }) {
           <>
             {!expandido && (
               <Filtros pref={pref} mudar={mudar} hoje={hoje} txtPeriodo={txtPeriodo} txtTipos={txtTipos} filiais={filiais} centros={centros} colaboradores={colaboradores} solicitantes={solicitantes} />
-            )}
-            {inicioRegistro !== null && inicioRegistro > hist.de && (
-              <Alerta tipo="info">
-                Medição completa desde {fmtDataHora(dados.inicio_registro)}. Nos chamados anteriores valem os horários já gravados (envio, assumido,
-                pendências, respostas e conclusão); neles a retomada após a correção era automática e o motivo da devolução não era registrado.
-              </Alerta>
             )}
             {semRegistroGrupo > 0 && <Alerta tipo="aviso">{semRegistroGrupo} chamado(s) do período sem registro completo dos eventos: ficam fora das medianas.</Alerta>}
 
