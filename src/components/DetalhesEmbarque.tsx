@@ -83,7 +83,7 @@ export function EditarLote({ embarqueId, aoFechar }: { embarqueId: string; aoFec
     <Gaveta titulo={<>Editar lote · {codigoEmbarque(e.codigo)}</>}
       subtitulo={<>{cidadeUF(e.origem_cidade, e.origem_uf)} → {cidadeUF(e.destino_cidade, e.destino_uf)} · {nome(idx.cliente, e.cliente_id)}</>} aoFechar={aoFechar}>
       <h3 className="pequeno" style={{ margin: '0 0 6px' }}>Dados do lote</h3>
-      <Cadastro e={e} idx={idx} />
+      <Cadastro e={e} idx={idx} travarRota />
       {pode('financeiro.ver') && <>
         <h3 className="pequeno" style={{ margin: '14px 0 6px' }}>Frete</h3>
         <FinanceiroAba embarqueId={e.id} existe={!!estado.financeiro[e.id]} />
@@ -180,7 +180,10 @@ function PosicaoDia({ embarque, posicaoId }: { embarque: Embarque; posicaoId: st
   );
 }
 
-function Cadastro({ e, idx }: { e: Embarque; idx: Indices }) {
+/** Rota e locais ficam fixos no Editar lote (pedido de 29/10): corrige-se pela Ficha completa, com permissão. */
+const ROTA_TRAVADA = ['origem_cidade', 'origem_uf', 'destino_cidade', 'destino_uf', 'local_coleta_id', 'local_entrega_id'];
+
+function Cadastro({ e, idx, travarRota = false }: { e: Embarque; idx: Indices; travarRota?: boolean }) {
   const { api, estado, pode: podeApp, aplicarEmbarque, recarregar } = useApp();
   // Encerrado não se altera nem se reativa (o banco também recusa).
   const pode: typeof podeApp = (k) => !e.encerrado_em && podeApp(k);
@@ -213,6 +216,7 @@ function Cadastro({ e, idx }: { e: Embarque; idx: Indices }) {
     { campo: 'situacao', rotulo: 'Situação cadastral', tipo: 'select', pode: pode('embarques.arquivar'),
       opcoes: [{ valor: 'ativo', rotulo: 'Ativo' }, { valor: 'arquivado', rotulo: 'Arquivado' }], ajuda: 'Arquivar é diferente de suspender: arquivado sai da operação.' },
   ];
+  if (travarRota) for (const c of campos) if (ROTA_TRAVADA.includes(c.campo)) { c.pode = false; c.travado = true; c.ajuda = 'Não se altera no Editar lote.'; }
   const cli = idx.cliente.get(e.cliente_id);
   const sugestao = cli && cli.comercial_id !== e.comercial_id ? nome(idx.comercial, cli.comercial_id, 'sem carteira') : null;
   const exibir = (campo: string, v: unknown) => {

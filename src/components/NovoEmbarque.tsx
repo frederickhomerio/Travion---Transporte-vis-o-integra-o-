@@ -179,7 +179,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
         {txt('toneladas_por_veiculo', 'Toneladas médias por veículo', { inputMode: 'decimal', disabled: !pode('embarques.editar_capacidade') }, `Padrão: ${estado.config.capacidade_padrao_t} t.`)}
         {pode('financeiro.editar') && txt('frete_empresa', 'Frete empresa', { inputMode: 'decimal', placeholder: 'ex.: 67,50' })}
         {pode('financeiro.editar') && txt('frete_motorista', 'Frete motorista', { inputMode: 'decimal' }, 'Informado manualmente (sem desconto automático).')}
-        {pode('financeiro.editar') && sel('unidade_frete', 'Unidade do frete', [{ id: 'nao_confirmada', nome: 'Não confirmada' }, { id: 'rs_tonelada', nome: 'R$/t' }, { id: 'rs_viagem', nome: 'R$/viagem' }, { id: 'outra', nome: 'Outra' }])}
+        {pode('financeiro.editar') && sel('unidade_frete', 'Unidade do frete', [{ id: 'nao_confirmada', nome: 'Não confirmada' }, { id: 'rs_tonelada', nome: 'R$/t' }, { id: 'rs_viagem', nome: 'R$/viagem' }, { id: 'rs_m3', nome: 'R$/m³' }, { id: 'outra', nome: 'Outra' }])}
       </div>
       <label className="campo"><span>Observação interna</span>
         <textarea className="entrada" value={d.observacao_interna} onChange={(e) => set('observacao_interna', e.target.value)} />

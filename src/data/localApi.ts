@@ -561,7 +561,7 @@ export function criarLocalApi(): Api {
   const R_FIN: Record<string, Regra> = {
     frete_empresa: { perm: 'financeiro.editar', tipo: 'dinheiro' },
     frete_motorista: { perm: 'financeiro.editar', tipo: 'dinheiro' },
-    unidade_frete: { perm: 'financeiro.editar', tipo: 'enum', valores: ['nao_confirmada', 'rs_tonelada', 'rs_viagem', 'outra'] },
+    unidade_frete: { perm: 'financeiro.editar', tipo: 'enum', valores: ['nao_confirmada', 'rs_tonelada', 'rs_viagem', 'rs_m3', 'outra'] },
   };
 
   const listaCadastro = (tipo: string) => ({ filial: db.filiais, comercial: db.comerciais, produto: db.produtos, local: db.locais, cidade: db.cidades!, centro_custo: db.centros_custo!, cliente: db.clientes } as Record<string, Array<{ id: string; nome: string; is_demo: boolean }>>)[tipo];

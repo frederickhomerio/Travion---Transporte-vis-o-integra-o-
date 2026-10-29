@@ -94,6 +94,7 @@ export const ROTULO_UNIDADE_FRETE: Record<string, string> = {
   nao_confirmada: 'Não confirmada',
   rs_tonelada: 'R$/t',
   rs_viagem: 'R$/viagem',
+  rs_m3: 'R$/m³',
   outra: 'Outra',
 };
 

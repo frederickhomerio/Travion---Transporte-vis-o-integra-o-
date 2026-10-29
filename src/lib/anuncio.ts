@@ -20,7 +20,7 @@ export function cidadeAnuncio(cidade: string, uf: string | null): string {
 }
 
 export const UNIDADE_ANUNCIO: Record<UnidadeFrete, string> = {
-  rs_tonelada: 'por ton', rs_viagem: 'por viagem', outra: '', nao_confirmada: '',
+  rs_tonelada: 'por ton', rs_viagem: 'por viagem', rs_m3: 'por m³', outra: '', nao_confirmada: '',
 };
 
 /** "R$ 139,00" ou null quando não há frete do motorista numérico. */
@@ -53,6 +53,6 @@ export function textosImagem(d: DadosAnuncio) {
     destino: cidadeAnuncio(d.destino_cidade, d.destino_uf).toUpperCase(),
     entrega: d.entrega ? `(${semDemo(d.entrega).toUpperCase()})` : '',
     valor: valor ? valor.replace(' ', '') : 'A COMBINAR',
-    unidade: d.frete?.unidade_frete === 'rs_viagem' ? 'POR VIAGEM' : '',
+    unidade: d.frete?.unidade_frete === 'rs_viagem' ? 'POR VIAGEM' : d.frete?.unidade_frete === 'rs_m3' ? 'POR M³' : '',
   };
 }

@@ -58,7 +58,7 @@ export function FormSolicitacaoDoc({ embarque, lote, doEmbarque, aoFechar, aoEnv
   const { api, estado } = useApp();
   const { aplicar } = useDoc();
   const fin = estado.financeiro[embarque.id];
-  const unidadeFin = (u: string | undefined): UnidadeFreteDoc => (u === 'rs_viagem' ? 'rs_viagem' : 'rs_tonelada');
+  const unidadeFin = (u: string | undefined): UnidadeFreteDoc => (u === 'rs_viagem' || u === 'rs_m3' ? u : 'rs_tonelada');
   const fmtIni = (v: number | null | undefined) => (v ? v.toFixed(2).replace('.', ',') : '');
   const inicial = !lote;
   const loteInicial = lote ? doEmbarque.find((s) => s.id === lote.solicitacao_id) : undefined;

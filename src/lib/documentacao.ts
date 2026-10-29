@@ -14,7 +14,7 @@ export const STATUS_DOC: Record<StatusDoc, string> = {
   aguardando_cliente: 'Aguardando retorno do cliente', pago_pendencia: 'Pago em pendência', aprovada: 'Aprovada',
   aprovada_parcial: 'Aprovada parcialmente', encerrado: 'Encerrado',
 };
-export const UNIDADE_DOC: Record<UnidadeFreteDoc, string> = { rs_tonelada: 'R$/t', rs_viagem: 'R$/viagem' };
+export const UNIDADE_DOC: Record<UnidadeFreteDoc, string> = { rs_tonelada: 'R$/t', rs_viagem: 'R$/viagem', rs_m3: 'R$/m³' };
 export const OPERACAO: Record<TipoOperacao, string> = { exportacao: 'Exportação', mi_tributado: 'Mercado Interno Tributado', mi_isento: 'Mercado Interno Isento' };
 export const PAGAMENTO: Record<FormaPagamento, string> = { cheque: 'Cheque', pagbem: 'Pagbem', pix: 'PIX' };
 export const TITULAR_PIX: Record<TitularPix, string> = { proprietario: 'Chave do proprietário', motorista: 'Chave do motorista' };

@@ -4,7 +4,7 @@ export type Papel = 'administrador' | 'gestor' | 'supervisor' | 'embarcador' | '
 export type StatusUsuario = 'pendente' | 'ativo' | 'bloqueado';
 export type StatusLiberacao = 'liberado' | 'suspenso' | 'nao_informado';
 export type Situacao = 'ativo' | 'arquivado';
-export type UnidadeFrete = 'nao_confirmada' | 'rs_tonelada' | 'rs_viagem' | 'outra';
+export type UnidadeFrete = 'nao_confirmada' | 'rs_tonelada' | 'rs_viagem' | 'rs_m3' | 'outra';
 export type UnidadeCadencia = 'veiculos_dia' | 'toneladas_dia';
 export type TipoLocal = 'coleta' | 'entrega' | 'ambos';
 
@@ -180,7 +180,7 @@ export type StatusDoc = 'enviado' | 'em_atendimento' | 'aguardando_informacao' |
   | 'cancelado';
 /** Motivo da devolução (pedir ajuste); 'sem_registro' só em pendências anteriores à migração 1900. */
 export type MotivoDevolucao = 'documento_ausente' | 'documento_ilegivel' | 'divergencia_dados' | 'informacao_incompleta' | 'outro' | 'sem_registro';
-export type UnidadeFreteDoc = 'rs_tonelada' | 'rs_viagem';
+export type UnidadeFreteDoc = 'rs_tonelada' | 'rs_viagem' | 'rs_m3';
 export type TipoOperacao = 'exportacao' | 'mi_tributado' | 'mi_isento';
 export type FormaPagamento = 'cheque' | 'pagbem' | 'pix';
 export type TitularPix = 'proprietario' | 'motorista';

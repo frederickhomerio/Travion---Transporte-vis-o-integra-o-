@@ -115,7 +115,7 @@ export function resumoFinanceiro(
   const te = mediaSimples(comEmp.map((f) => f.frete_empresa), cfg.ticket_inclui_frete_zero);
   const tm = mediaSimples(comMot.map((f) => f.frete_motorista), cfg.ticket_inclui_frete_zero);
   const naoConf = comFrete.filter((f) => f.unidade_frete === 'nao_confirmada').length;
-  const incomp = comFrete.filter((f) => f.unidade_frete === 'rs_viagem' || f.unidade_frete === 'outra').length;
+  const incomp = comFrete.filter((f) => f.unidade_frete === 'rs_viagem' || f.unidade_frete === 'rs_m3' || f.unidade_frete === 'outra').length;
   const semFrete = fin.length - comEmp.length;
 
   const faturamento = te !== null ? projetado_t * te : null;

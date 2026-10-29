@@ -15,6 +15,8 @@ export interface DefCampo {
   ajuda?: string;
   vazio?: string;
   largo?: boolean;
+  /** Campo fixo nesta tela (a ajuda explica o motivo; não é falta de permissão). */
+  travado?: boolean;
 }
 
 type Valores = Record<string, unknown>;
@@ -126,7 +128,7 @@ export function FormVersionado<T extends object>({ campos, registro, salvar, aoS
                 value={texto[c.campo]} onChange={(e) => setTexto({ ...texto, [c.campo]: e.target.value })} />
             )}
             {c.ajuda && <small>{c.ajuda}</small>}
-            {!c.pode && <small>Somente leitura para o seu perfil.</small>}
+            {!c.pode && !c.travado && <small>Somente leitura para o seu perfil.</small>}
           </label>
         ))}
       </div>
