@@ -38,7 +38,10 @@ export function BotaoDocumentacao({ embarque, aoSolicitar, aoAcompanhar }: {
   if (!pode('documentacao.solicitar') || embarque.situacao !== 'ativo' || embarque.encerrado_em) return null;
   if (carregando) return <button className="btn" disabled>Documentação…</button>;
   return acao.tipo === 'gerar' ? <button className="btn primario" onClick={aoSolicitar}>Gerar lote e emissão</button>
-    : acao.tipo === 'acompanhar' ? <button className="btn" onClick={() => aoAcompanhar(acao.solicitacao.id)}>Acompanhar solicitação</button>
+    : acao.tipo === 'acompanhar' ? <>
+      <button className="btn" onClick={() => aoAcompanhar(acao.solicitacao.id)}>Acompanhar solicitação</button>
+      <button className="btn primario" onClick={aoSolicitar}>Emitir documentação</button>
+    </>
     : <button className="btn primario" onClick={aoSolicitar}>Emitir documentação</button>;
 }
 
@@ -79,12 +82,15 @@ export function DocumentacaoEmbarque({ embarque, solicitacaoInicial }: { embarqu
         </div>
         {podeSolicitar && (
           acao.tipo === 'gerar' ? <button className="btn primario" onClick={() => setForm(true)}>Gerar lote e emissão</button>
-          : acao.tipo === 'acompanhar' ? <button className="btn" onClick={() => setAberta(acao.solicitacao.id)}>Acompanhar solicitação</button>
+          : acao.tipo === 'acompanhar' ? <span className="grupo-btn">
+            <button className="btn" onClick={() => setAberta(acao.solicitacao.id)}>Acompanhar solicitação</button>
+            <button className="btn primario" onClick={() => setForm(true)}>Emitir documentação</button>
+          </span>
           : <button className="btn primario" onClick={() => setForm(true)}>Emitir documentação</button>
         )}
       </div>
       {acao.tipo === 'acompanhar' && (
-        <Alerta tipo="info">A primeira nota (lote e emissão) já foi enviada. Quando o apoio registrar o lote, o botão Emitir documentação libera os próximos veículos.</Alerta>
+        <Alerta tipo="info">A primeira nota (lote e emissão) já foi enviada. Os próximos veículos podem ir por Emitir documentação: entram na fila do apoio e são vinculados ao lote quando ele for registrado.</Alerta>
       )}
 
       {carregando && !doEmbarque.length ? <Carregando texto="Carregando solicitações…" /> : !doEmbarque.length ? (

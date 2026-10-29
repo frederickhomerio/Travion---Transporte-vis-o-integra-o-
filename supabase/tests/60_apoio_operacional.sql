@@ -67,9 +67,9 @@ begin
   -- Reenvio do mesmo formulário devolve a mesma solicitação
   r := criar_solicitacao_doc('00000000-0000-0000-0000-0000000006b1', d, '[]');
   assert (r ->> 'repetido')::boolean and (r -> 'registro' ->> 'id')::uuid = (select v from t6 where k = 's1'), 'idempotente';
-  -- Segunda solicitação inicial bloqueada: acompanha a aberta
-  r := criar_solicitacao_doc('00000000-0000-0000-0000-0000000006b1', d || '{"chave_envio":"10000000-0000-0000-0000-000000000002"}', '[]');
-  assert r ->> 'status' = 'inicial_aberta', 'não duplica a solicitação inicial';
+  -- Com a inicial aberta, o próximo envio vira emissão na fila (migração 3000) e continua exigindo NF
+  begin perform criar_solicitacao_doc('00000000-0000-0000-0000-0000000006b1', d || '{"chave_envio":"10000000-0000-0000-0000-000000000002"}', '[]');
+    raise exception 'emissão na fila sem NF passou'; exception when sqlstate '22023' then null; end;
 end $$;
 
 -- Dois atendentes: só um assume

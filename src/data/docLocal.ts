@@ -622,12 +622,14 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       if (e.situacao !== 'ativo' || e.encerrado_em) erro('Embarque arquivado ou encerrado: não aceita novas solicitações.');
       const lote = db.lotes.find((l) => l.embarque_id === e.id);
       let tipoOp = d.tipo_operacao;
+      const aberta = lote ? undefined : db.solicitacoes.find((s) => s.embarque_id === e.id && s.tipo === 'lote_emissao' && s.status !== 'cancelado');
+      const emissao = !!lote || !!aberta;
       if (lote) {
         tipoOp = db.solicitacoes.find((s) => s.id === lote.solicitacao_id)?.tipo_operacao ?? tipoOp;
       } else {
-        const aberta = db.solicitacoes.find((s) => s.embarque_id === e.id && s.tipo === 'lote_emissao' && s.status !== 'cancelado');
-        if (aberta) return { status: 'inicial_aberta', registro: clone(aberta) };
-        if (!tipoOp) erro('Informe o tipo de operação.');
+        // Primeira nota aberta: a emissão entra na fila e é vinculada ao lote quando ele for registrado.
+        if (aberta) tipoOp = aberta.tipo_operacao ?? tipoOp;
+        else if (!tipoOp) erro('Informe o tipo de operação.');
       }
       const placa = d.placa.toUpperCase().replace(/[^A-Z0-9]/g, '');
       if (!PLACA.test(placa)) erro('Placa inválida: use o formato ABC1D23 ou ABC1234.');
@@ -637,11 +639,11 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       if (d.exige_obs_cte && !d.obs_cte?.trim()) erro('Informe qual observação o cliente exige no CT-e.');
       if (d.forma_pagamento === 'pix' && !['proprietario', 'motorista'].includes(d.pix_titular ?? '')) erro('No PIX, informe se a chave é do proprietário ou do motorista.');
       if (d.forma_pagamento === 'pix' && (!d.pix_chave?.trim() || d.pix_chave.trim().length > 140)) erro('Informe a chave PIX (até 140 caracteres).');
-      const cats: CategoriaAnexo[] = lote ? ['nf'] : ['nf', 'evidencia_frete'];
+      const cats: CategoriaAnexo[] = emissao ? ['nf'] : ['nf', 'evidencia_frete'];
       if (!anexos.some((a) => a.categoria === 'nf')) erro('Anexe ao menos uma NF.');
-      if (!lote && !anexos.some((a) => a.categoria === 'evidencia_frete')) erro('Anexe a evidência do frete.');
+      if (!emissao && !anexos.some((a) => a.categoria === 'evidencia_frete')) erro('Anexe a evidência do frete.');
       const s: SolicitacaoDoc & { chave_envio: string } = {
-        id: uid(), numero: ++db.seq, embarque_id: e.id, lote_id: lote?.id ?? null, tipo: lote ? 'emissao' : 'lote_emissao', status: 'enviado',
+        id: uid(), numero: ++db.seq, embarque_id: e.id, lote_id: lote?.id ?? null, tipo: emissao ? 'emissao' : 'lote_emissao', status: 'enviado',
         placa, placas_reboque: reboques, frete_empresa: d.frete_empresa, frete_empresa_unidade: d.frete_empresa_unidade,
         frete_motorista: d.frete_motorista, frete_motorista_unidade: d.frete_motorista_unidade, tipo_operacao: tipoOp,
         forma_pagamento: d.forma_pagamento, pix_titular: d.forma_pagamento === 'pix' ? d.pix_titular ?? null : null, pix_chave: d.forma_pagamento === 'pix' ? d.pix_chave?.trim() ?? null : null, pedagio: d.pedagio, exige_obs_cte: d.exige_obs_cte, obs_cte: d.exige_obs_cte ? d.obs_cte!.trim() : null,
@@ -653,7 +655,8 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       db.solicitacoes.push(s);
       try { vincular(s, anexos, cats, null); } catch (x) { db.solicitacoes.pop(); db.seq--; throw x; }
       registrarFluxo(s, null);
-      evento(s, 'evento', lote ? `Solicitação de emissão enviada ao apoio (lote ${lote.numero})` : 'Solicitação de lote e emissão enviada ao apoio');
+      evento(s, 'evento', lote ? `Solicitação de emissão enviada ao apoio (lote ${lote.numero})`
+        : aberta ? `Solicitação de emissão enviada ao apoio (na fila: lote em geração na solicitação nº ${aberta.numero})` : 'Solicitação de lote e emissão enviada ao apoio');
       return fim(s);
     },
     assumir: (id) => comTrava(async () => {
@@ -690,6 +693,10 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       }
       const lote = l;
       tocar(s, { lote_id: lote.id, retrato: { ...s.retrato, lote_numero: lote.numero } });
+      // Emissões da fila passam a apontar para o lote registrado.
+      for (const f of db.solicitacoes) {
+        if (f.embarque_id === embarqueId && f.tipo === 'emissao' && !f.lote_id) tocar(f, { lote_id: lote.id, retrato: { ...f.retrato, lote_numero: lote.numero } });
+      }
       emitir({ tabela: 'lotes' });
       return fim(s, { lote: clone(lote) });
     },
@@ -808,6 +815,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       if (s.tipo === 'estadia') erro('Estadia termina pelo retorno do cliente ou por Encerrar.');
       if (!db.anexos.some((a) => a.solicitacao_id === s.id && SAIDA.includes(a.categoria))) erro('Anexe ao menos um documento emitido (CT-e, MDF-e ou outro) antes de liberar.');
       if (s.tipo === 'lote_emissao' && !s.lote_id) erro('Registre o número do lote gerado no ERP antes de liberar a documentação.');
+      if (s.tipo === 'emissao' && !s.lote_id) erro('Esta emissão está na fila do lote em geração: registre o lote na solicitação de lote e emissão antes de liberar.');
       tocar(s, { status: 'documentacao_disponivel', concluido_em: agora(), concluido_por_nome: eu().nome });
       evento(s, 'evento', `Documentação disponível, conferida e liberada por ${eu().nome}`);
       notificar(s.solicitante_id, 'documentacao_disponivel', 'Documentação disponível', `${rotulo(s)} · ${s.retrato.cliente ?? ''}`, s, 'embarque', `disponivel:${s.id}`);

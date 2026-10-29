@@ -60,8 +60,10 @@ export function FormSolicitacaoDoc({ embarque, lote, doEmbarque, aoFechar, aoEnv
   const fin = estado.financeiro[embarque.id];
   const unidadeFin = (u: string | undefined): UnidadeFreteDoc => (u === 'rs_viagem' || u === 'rs_m3' ? u : 'rs_tonelada');
   const fmtIni = (v: number | null | undefined) => (v ? v.toFixed(2).replace('.', ',') : '');
-  const inicial = !lote;
-  const loteInicial = lote ? doEmbarque.find((s) => s.id === lote.solicitacao_id) : undefined;
+  // Sem lote e com a primeira nota aberta: esta emissão entra na fila e é vinculada ao lote quando ele for registrado.
+  const naFila = !lote ? doEmbarque.find((s) => s.tipo === 'lote_emissao' && s.status !== 'cancelado') : undefined;
+  const inicial = !lote && !naFila;
+  const loteInicial = lote ? doEmbarque.find((s) => s.id === lote.solicitacao_id) : naFila;
 
   const [placa, setPlaca] = useState('');
   const [reboques, setReboques] = useState('');
@@ -151,7 +153,9 @@ export function FormSolicitacaoDoc({ embarque, lote, doEmbarque, aoFechar, aoEnv
           <strong>{cidadeAnuncio(r.origem_cidade, r.origem_uf)} ➜ {cidadeAnuncio(r.destino_cidade, r.destino_uf)}</strong>
           <span className="pequeno suave">
             Cliente, carteira, filial, centro de custo, origem, destino, locais e produto vão automaticamente do embarque.
-            {lote ? <> Lote <strong>{lote.numero}</strong>{loteInicial?.tipo_operacao ? ` · ${OPERACAO[loteInicial.tipo_operacao]}` : ''}.</> : ' Primeira nota: o apoio gera o lote no ERP e emite o CT-e nesta mesma solicitação.'}
+            {lote ? <> Lote <strong>{lote.numero}</strong>{loteInicial?.tipo_operacao ? ` · ${OPERACAO[loteInicial.tipo_operacao]}` : ''}.</>
+              : naFila ? <> Lote em geração na solicitação nº <strong>{naFila.numero}</strong>{naFila.tipo_operacao ? ` · ${OPERACAO[naFila.tipo_operacao]}` : ''}. Esta emissão entra na fila do apoio e é vinculada ao lote quando ele for registrado.</>
+              : ' Primeira nota: o apoio gera o lote no ERP e emite o CT-e nesta mesma solicitação.'}
           </span>
         </div>
 

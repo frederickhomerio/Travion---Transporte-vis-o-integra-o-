@@ -136,7 +136,8 @@ export function vezDe(s: SolicitacaoDoc): string | null {
 
 export type AcaoDoc = { tipo: 'gerar' } | { tipo: 'acompanhar'; solicitacao: SolicitacaoDoc } | { tipo: 'emitir'; lote: LoteErp };
 
-/** Botão de Detalhes do embarque: Gerar lote e emissão / Acompanhar solicitação / Emitir documentação. */
+/** Botão de Detalhes do embarque: Gerar lote e emissão / Acompanhar solicitação + Emitir documentação (fila) / Emitir documentação.
+ *  Com a inicial aberta, "acompanhar" também libera novas emissões, que entram na fila até o lote ser registrado. */
 export function acaoDocumentacao(lote: LoteErp | undefined, doEmbarque: SolicitacaoDoc[]): AcaoDoc {
   if (lote) return { tipo: 'emitir', lote };
   const aberta = doEmbarque.find((s) => s.tipo === 'lote_emissao' && s.status !== 'cancelado');
