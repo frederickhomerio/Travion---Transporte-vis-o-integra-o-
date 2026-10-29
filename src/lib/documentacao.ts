@@ -160,7 +160,11 @@ export function avisosDuplicidade(placa: string, nomesNf: string[], doEmbarque: 
 }
 
 export type Atalho = 'abertas' | 'novas' | 'minhas' | 'aguardando' | 'cliente' | 'concluidas';
-export interface FiltrosFila { atalho: Atalho; busca: string; filial: string; centro: string; responsavel: string; tipo: TipoSolicitacaoDoc | '' }
+/** Filtro de tipo da fila: Lote e Emissão e Emissão aparecem juntos como "Emitir documentação". */
+export type TipoFila = 'documentacao' | 'cadastro' | 'estadia';
+export const TIPO_FILA: Record<TipoFila, string> = { documentacao: 'Emitir documentação', cadastro: 'Cadastro', estadia: 'Estadia' };
+const tipoFila = (t: TipoSolicitacaoDoc): TipoFila => (t === 'lote_emissao' || t === 'emissao' ? 'documentacao' : t);
+export interface FiltrosFila { atalho: Atalho; busca: string; filial: string; centro: string; responsavel: string; tipo: TipoFila | '' }
 export const FILTROS_FILA: FiltrosFila = { atalho: 'abertas', busca: '', filial: '', centro: '', responsavel: '', tipo: '' };
 
 export function noAtalho(s: SolicitacaoDoc, atalho: Atalho, eu: string): boolean {
@@ -179,7 +183,7 @@ export function filtrarSemAtalho(ss: SolicitacaoDoc[], f: Omit<FiltrosFila, 'ata
   const t = normalizar(f.busca);
   const tPlaca = normalizarPlaca(f.busca);
   return ss
-    .filter((s) => !f.tipo || s.tipo === f.tipo)
+    .filter((s) => !f.tipo || tipoFila(s.tipo) === f.tipo)
     .filter((s) => !f.filial || s.retrato.filial_id === f.filial)
     .filter((s) => !f.centro || (s.retrato.centro_custo_id ?? '') === f.centro)
     .filter((s) => !f.responsavel || (f.responsavel === '-' ? !s.responsavel_id : s.responsavel_id === f.responsavel))

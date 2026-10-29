@@ -53,17 +53,30 @@ begin
 end $$;
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000f3a2', false);
-do $$ declare r jsonb; e1 uuid := (select v from tf where k = 'e1'); ini uuid := (select v from tf where k = 'ini'); begin
+do $$ declare r jsonb; e1 uuid := (select v from tf where k = 'e1'); e2 uuid := (select v from tf where k = 'e2'); ini uuid := (select v from tf where k = 'ini'); begin
   perform assumir_solicitacao_doc(e1);
+  -- Migração 3100: sem lote vinculado não anexa os emitidos
+  begin perform anexar_documentos_doc(e1, '[{"caminho":"envios/00000000-0000-0000-0000-00000000f3a2/cte.pdf","nome":"cte.pdf","categoria":"cte"}]');
+    raise exception 'anexou sem lote'; exception when sqlstate '55000' then assert sqlerrm like '%código do lote%', sqlerrm; end;
+  -- A emissão da fila pode criar o lote: a inicial e as outras emissões passam a apontar para ele
+  r := registrar_lote_doc(e1, 'L-FILA-1');
+  assert r -> 'registro' ->> 'lote_id' is not null, 'emissão vinculada';
+  assert (select count(*) from solicitacoes_doc where embarque_id = '00000000-0000-0000-0000-00000000f3b1'
+    and lote_id = (r -> 'lote' ->> 'id')::uuid and retrato ->> 'lote_numero' = 'L-FILA-1') = 3, 'inicial e fila vinculadas';
+  assert (select solicitacao_id from lotes_erp where numero = 'L-FILA-1') = ini, 'lote pertence à solicitação inicial';
   perform anexar_documentos_doc(e1, '[{"caminho":"envios/00000000-0000-0000-0000-00000000f3a2/cte.pdf","nome":"cte.pdf","categoria":"cte"}]');
-  begin perform concluir_solicitacao_doc(e1); raise exception 'emissão sem lote liberada';
-  exception when sqlstate '55000' then assert sqlerrm like '%fila do lote%', sqlerrm; end;
-  perform assumir_solicitacao_doc(ini);
-  r := registrar_lote_doc(ini, 'L-FILA-1');
-  assert (select count(*) from solicitacoes_doc where tipo = 'emissao' and embarque_id = '00000000-0000-0000-0000-00000000f3b1'
-    and lote_id = (r -> 'lote' ->> 'id')::uuid and retrato ->> 'lote_numero' = 'L-FILA-1') = 2, 'fila vinculada ao lote';
   r := concluir_solicitacao_doc(e1);
   assert r -> 'registro' ->> 'status' = 'documentacao_disponivel', 'liberada depois do lote';
+  -- Com lote já criado, outra emissão só vincula com o mesmo código
+  perform assumir_solicitacao_doc(e2);
+  begin perform registrar_lote_doc(e2, 'OUTRO'); raise exception 'vinculou código diferente';
+  exception when sqlstate '55000' then assert sqlerrm like '%já tem o lote L-FILA-1%', sqlerrm; end;
+  r := registrar_lote_doc(e2, 'l-fila-1');
+  assert r ->> 'status' = 'sem_alteracao', 'já vinculada: ' || r::text;
+  -- A inicial (dona do lote) ainda corrige o número, e o retrato das vinculadas acompanha
+  perform assumir_solicitacao_doc(ini);
+  r := registrar_lote_doc(ini, 'L-FILA-2');
+  assert (select count(*) from solicitacoes_doc where embarque_id = '00000000-0000-0000-0000-00000000f3b1' and retrato ->> 'lote_numero' = 'L-FILA-2') = 3, 'número corrigido em todas';
 end $$;
 reset role;
 \o

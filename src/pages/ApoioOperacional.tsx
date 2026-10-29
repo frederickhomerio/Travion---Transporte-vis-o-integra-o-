@@ -9,17 +9,20 @@ import { AcessoNegado, Alerta, Carregando, EstadoVazio, useAviso } from '../comp
 import { mensagemErro } from '../data/api';
 import { useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
-import { type Atalho, FILTROS_FILA, type FiltrosFila, TIPO_DOC, filtrarFila, filtrarSemAtalho, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
+import { type Atalho, FILTROS_FILA, type FiltrosFila, TIPO_FILA, type TipoFila, filtrarFila, filtrarSemAtalho, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
 import { fmtHora } from '../lib/formato';
 import { documentosEstadia, periodoEstadia } from '../lib/estadia';
-import type { SolicitacaoDoc, TipoSolicitacaoDoc } from '../types';
+import type { SolicitacaoDoc } from '../types';
 
 const CHAVE_FILTROS = 'travion-fila-apoio';
 let rolagemFila = 0;
 
 function lerFiltros(): FiltrosFila {
   // A fila não filtra por filial nem centro de custo: zera o que tenha ficado salvo de versões anteriores.
-  try { return { ...FILTROS_FILA, ...(JSON.parse(sessionStorage.getItem(CHAVE_FILTROS) ?? '{}') as Partial<FiltrosFila>), filial: '', centro: '' }; } catch { return FILTROS_FILA; }
+  try {
+    const f = { ...FILTROS_FILA, ...(JSON.parse(sessionStorage.getItem(CHAVE_FILTROS) ?? '{}') as Partial<FiltrosFila>), filial: '', centro: '' };
+    return f.tipo && !(f.tipo in TIPO_FILA) ? { ...f, tipo: 'documentacao' } : f;
+  } catch { return FILTROS_FILA; }
 }
 
 const ROTULO_ATALHO: Record<Atalho, string> = {
@@ -103,9 +106,9 @@ export function ApoioOperacional() {
           </select>
           <input className="entrada" type="search" value={f.busca} onChange={(e) => setF({ ...f, busca: e.target.value })}
             placeholder="Buscar placa, lote, cliente, NF, CT-e ou nº" aria-label="Buscar na fila" />
-          <select className="entrada" value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value as TipoSolicitacaoDoc | '' })} aria-label="Tipo de solicitação">
+          <select className="entrada" value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value as TipoFila | '' })} aria-label="Tipo de solicitação">
             <option value="">Todos os tipos</option>
-            {(Object.keys(TIPO_DOC) as TipoSolicitacaoDoc[]).map((t) => <option key={t} value={t}>{TIPO_DOC[t]}</option>)}
+            {(Object.keys(TIPO_FILA) as TipoFila[]).map((t) => <option key={t} value={t}>{TIPO_FILA[t]}</option>)}
           </select>
           <select className="entrada" value={f.responsavel} onChange={(e) => setF({ ...f, responsavel: e.target.value })} aria-label="Responsável">
             <option value="">Todos os responsáveis</option><option value="-">Sem responsável</option>

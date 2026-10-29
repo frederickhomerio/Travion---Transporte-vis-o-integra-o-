@@ -674,28 +674,38 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       offline();
       const s = carregar(id);
       responsavel(s, ['em_atendimento', 'aguardando_informacao']);
-      if (s.tipo !== 'lote_emissao' || !s.embarque_id) erro('Só a solicitação de lote e emissão registra o lote.');
+      if ((s.tipo !== 'lote_emissao' && s.tipo !== 'emissao') || !s.embarque_id) erro('Só Lote e Emissão ou Emissão registram o lote.');
       const embarqueId = s.embarque_id;
       const n = numero.trim();
-      if (!n || n.length > 60) erro('Informe o número do lote gerado no ERP.');
+      if (!n || n.length > 60) erro('Informe o código do lote do ERP.');
+      const ini = db.solicitacoes.find((x) => x.embarque_id === embarqueId && x.tipo === 'lote_emissao' && x.status !== 'cancelado');
       let l = db.lotes.find((x) => x.embarque_id === embarqueId);
       if (l) {
-        if (l.solicitacao_id && l.solicitacao_id !== s.id) erro(`Este embarque já tem lote registrado (${l.numero}).`);
-        // Lote informado na criação do embarque: o apoio confirma (ou corrige) e ele passa a ser desta solicitação.
-        if (!l.solicitacao_id) l.solicitacao_id = s.id;
-        if (l.numero === n) return { status: 'sem_alteracao', registro: clone(s), lote: clone(l) };
-        evento(s, 'evento', `Número do lote corrigido de ${l.numero} para ${n}`, 'lote');
-        Object.assign(l, { numero: n, versao: l.versao + 1, atualizado_em: agora() });
+        if (s.tipo === 'emissao' || (l.solicitacao_id && l.solicitacao_id !== s.id)) {
+          // Lote já criado para o embarque: vincula se o código conferir.
+          if (l.numero.toUpperCase() !== n.toUpperCase()) erro(`Este embarque já tem o lote ${l.numero} criado. Confira o código no ERP.`);
+          if (s.lote_id === l.id) return { status: 'sem_alteracao', registro: clone(s), lote: clone(l) };
+          evento(s, 'evento', `Vinculada ao lote ${l.numero} (já criado no ERP)`, 'lote');
+        } else {
+          // Lote informado na criação do embarque: o apoio confirma (ou corrige) e ele passa a ser desta solicitação.
+          if (!l.solicitacao_id) l.solicitacao_id = s.id;
+          if (l.numero === n && s.lote_id === l.id) return { status: 'sem_alteracao', registro: clone(s), lote: clone(l) };
+          if (l.numero !== n) {
+            evento(s, 'evento', `Número do lote corrigido de ${l.numero} para ${n}`, 'lote');
+            Object.assign(l, { numero: n, versao: l.versao + 1, atualizado_em: agora() });
+          } else evento(s, 'evento', `Vinculada ao lote ${l.numero}`, 'lote');
+        }
       } else {
-        l = { id: uid(), embarque_id: embarqueId, numero: n, solicitacao_id: s.id, registrado_por_nome: eu().nome, registrado_em: agora(), versao: 1, atualizado_em: agora() };
+        l = { id: uid(), embarque_id: embarqueId, numero: n, solicitacao_id: ini?.id ?? s.id, registrado_por_nome: eu().nome, registrado_em: agora(), versao: 1, atualizado_em: agora() };
         db.lotes.push(l);
-        evento(s, 'evento', `Lote ${n} registrado (gerado no ERP). Emissão desta nota segue em atendimento.`, 'lote');
+        evento(s, 'evento', `Lote ${n} registrado (gerado no ERP) e vinculado. A emissão segue em atendimento.`, 'lote');
       }
       const lote = l;
       tocar(s, { lote_id: lote.id, retrato: { ...s.retrato, lote_numero: lote.numero } });
-      // Emissões da fila passam a apontar para o lote registrado.
+      // Demais solicitações do embarque sem lote (a inicial e a fila) passam a apontar para o lote.
       for (const f of db.solicitacoes) {
-        if (f.embarque_id === embarqueId && f.tipo === 'emissao' && !f.lote_id) tocar(f, { lote_id: lote.id, retrato: { ...f.retrato, lote_numero: lote.numero } });
+        if (f.id === s.id || f.embarque_id !== embarqueId || (f.tipo !== 'emissao' && f.tipo !== 'lote_emissao') || f.status === 'cancelado') continue;
+        if (!f.lote_id || (f.lote_id === lote.id && f.retrato.lote_numero !== lote.numero)) tocar(f, { lote_id: lote.id, retrato: { ...f.retrato, lote_numero: lote.numero } });
       }
       emitir({ tabela: 'lotes' });
       return fim(s, { lote: clone(lote) });
@@ -801,6 +811,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       responsavel(s, ['em_atendimento', 'aguardando_informacao']);
       if (s.tipo === 'cadastro') erro('Cadastro não recebe documentos emitidos: confirme a conclusão do cadastro.');
       if (s.tipo === 'estadia') erro('Estadia não recebe documentos emitidos: use a memória de cálculo e o retorno do cliente.');
+      if ((s.tipo === 'lote_emissao' || s.tipo === 'emissao') && !s.lote_id) erro('Informe o código do lote do ERP e vincule a solicitação antes de anexar os documentos emitidos.');
       const n = vincular(s, anexos, SAIDA, null);
       if (!n) erro('Nenhum arquivo para anexar.');
       evento(s, 'evento', `${n} documento(s) emitido(s) anexado(s), em conferência`, 'documentos');

@@ -171,8 +171,13 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
               <Alerta tipo="info">Correção recebida de {s.solicitante_nome}. Aguardando {s.responsavel_nome ?? 'o responsável'} retomar o atendimento.</Alerta>
             )}
             {retomar && <Retomar s={s} executar={executar} />}
-            {editavel && !retomar && s.tipo === 'lote_emissao' && <RegistrarLote s={s} executar={executar} />}
-            {editavel && !retomar && !cad && <AnexarEmitidos s={s} executar={executar} emitidos={saida.length} />}
+            {editavel && !retomar && !cad && <RegistrarLote s={s} executar={executar} />}
+            {editavel && !retomar && !cad && (s.lote_id ? <AnexarEmitidos s={s} executar={executar} emitidos={saida.length} /> : (
+              <div className="cartao cartao-corpo at-bloco at-bloqueado">
+                <strong>Documentos emitidos no ERP</strong>
+                <span className="pequeno suave">Libera depois de informar o código do lote do ERP e vincular a solicitação.</span>
+              </div>
+            ))}
             {editavel && s.status === 'em_atendimento' && <PedirAjuste s={s} executar={executar} referencias={cad ? REFERENCIAS_CADASTRO : REFERENCIAS} />}
             {editavel && !retomar && !cad && <Concluir s={s} executar={executar} emitidos={saida.length} />}
             {editavel && !retomar && cad && <ConcluirCadastro s={s} executar={executar} />}
@@ -210,23 +215,53 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
 
 export type Executar = (f: () => Promise<ResultadoDoc>, ok: string) => Promise<boolean>;
 
+// Passo 1 do atendimento (Lote e Emissão ou Emissão): conferir se o embarque já tem lote, informar o código do
+// lote do ERP e vincular. Só depois os documentos emitidos podem ser anexados (pedido de 29/10/2026).
 function RegistrarLote({ s, executar }: { s: SolicitacaoDoc; executar: Executar }) {
   const { api } = useApp();
+  const { estado } = useDoc();
   const [numero, setNumero] = useRascunho(`travion-rascunho-lote-${s.id}`);
   const [gravando, setGravando] = useState(false);
-  const registrado = s.retrato.lote_numero;
+  const existente = s.embarque_id ? estado.lotes[s.embarque_id] : undefined;
+  const vinculado = !!s.lote_id;
+  // Só a solicitação de lote e emissão dona do lote corrige o número.
+  const corrige = vinculado && s.tipo === 'lote_emissao' && (!existente?.solicitacao_id || existente.solicitacao_id === s.id);
+  const gravar = async (n: string, ok: string) => {
+    setGravando(true);
+    if (await executar(() => api.doc.registrarLote(s.id, n), ok)) setNumero('');
+    setGravando(false);
+  };
+  if (vinculado && !corrige) {
+    return (
+      <div className="cartao cartao-corpo at-bloco">
+        <strong>Lote do ERP: {s.retrato.lote_numero}</strong>
+        <span className="pequeno suave">Solicitação vinculada ao lote. Pode anexar os documentos emitidos.</span>
+      </div>
+    );
+  }
   return (
     <div className="cartao cartao-corpo at-bloco">
-      <strong>{registrado ? `Lote registrado: ${registrado}` : 'Lote do ERP'}</strong>
-      <span className="pequeno suave">{registrado ? 'A emissão desta primeira nota continua neste atendimento. Corrigir o número fica no histórico.' : 'Gere o lote no ERP e informe o número. Isso libera Emitir documentação para os próximos veículos.'}</span>
-      <div className="at-linha">
-        <input className="entrada" value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Número do lote gerado no ERP" aria-label="Número do lote gerado no ERP" maxLength={60} />
-        <button className="btn primario" disabled={gravando || !numero.trim()} onClick={async () => {
-          setGravando(true);
-          if (await executar(() => api.doc.registrarLote(s.id, numero), registrado ? 'Número do lote corrigido.' : 'Lote registrado. A emissão segue em atendimento.')) setNumero('');
-          setGravando(false);
-        }}>{registrado ? 'Corrigir número do lote' : 'Registrar lote do ERP'}</button>
-      </div>
+      <strong>{vinculado ? `Lote do ERP: ${s.retrato.lote_numero}` : '1. Lote do ERP'}</strong>
+      {vinculado ? (
+        <span className="pequeno suave">Solicitação vinculada ao lote. Corrigir o número fica no histórico e atualiza as emissões do lote.</span>
+      ) : existente ? (
+        <span className="pequeno">Este embarque já tem o lote <strong>{existente.numero}</strong> criado. Confira no ERP e vincule esta solicitação a ele.</span>
+      ) : (
+        <span className="pequeno suave">Nenhum lote criado para este embarque. Depois de conferir a documentação, gere o lote no ERP e informe o código.</span>
+      )}
+      {!vinculado && existente && (
+        <div><button className="btn primario" disabled={gravando} onClick={() => void gravar(existente.numero, `Vinculada ao lote ${existente.numero}.`)}>
+          {gravando ? 'Vinculando…' : `Vincular ao lote ${existente.numero}`}
+        </button></div>
+      )}
+      {(vinculado || !existente) && (
+        <div className="at-linha">
+          <input className="entrada" value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Código do lote no ERP" aria-label="Código do lote no ERP" maxLength={60} />
+          <button className="btn primario" disabled={gravando || !numero.trim()} onClick={() => void gravar(numero, vinculado ? 'Número do lote corrigido.' : 'Lote registrado e vinculado.')}>
+            {vinculado ? 'Corrigir número do lote' : 'Registrar e vincular lote'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -322,7 +357,7 @@ function Concluir({ s, executar, emitidos }: { s: SolicitacaoDoc; executar: Exec
   const [gravando, setGravando] = useState(false);
   const faltas = useMemo(() => [
     !emitidos && 'anexar ao menos um documento emitido',
-    s.tipo === 'lote_emissao' && !s.lote_id && 'registrar o número do lote',
+    !s.lote_id && 'informar o código do lote do ERP e vincular',
     s.status !== 'em_atendimento' && 'aguardar a resposta da pendência',
   ].filter(Boolean) as string[], [emitidos, s]);
   return (

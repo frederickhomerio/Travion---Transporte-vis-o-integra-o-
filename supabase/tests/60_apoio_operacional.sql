@@ -100,13 +100,15 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000006a2
 do $$ declare r jsonb; s uuid := (select v from t6 where k = 's1'); begin
   assert (select count(*) from storage.objects where bucket_id = 'documentacao') = 4, 'apoio lê os anexos vinculados e os próprios envios';
   begin perform concluir_solicitacao_doc(s); raise exception 'concluiu sem emitido'; exception when sqlstate '55000' then null; end;
+  -- Sem lote vinculado não anexa os emitidos (migração 3100)
+  begin perform anexar_documentos_doc(s, '[{"caminho":"envios/00000000-0000-0000-0000-0000000006a2/cte.pdf","nome":"cte.pdf","categoria":"cte"}]');
+    raise exception 'anexou sem lote'; exception when sqlstate '55000' then null; end;
+  r := registrar_lote_doc(s, ' L-2026-77 ');
+  assert r -> 'lote' ->> 'numero' = 'L-2026-77' and r -> 'registro' ->> 'status' = 'em_atendimento', 'lote registrado, emissão segue em atendimento';
   begin perform anexar_documentos_doc(s, '[{"caminho":"envios/00000000-0000-0000-0000-0000000006a2/cte.pdf","nome":"cte.pdf","categoria":"nf"}]');
     raise exception 'apoio anexou NF como emitido'; exception when sqlstate '22023' then null; end;
   r := anexar_documentos_doc(s, '[{"caminho":"envios/00000000-0000-0000-0000-0000000006a2/cte.pdf","nome":"cte.pdf","categoria":"cte"}]');
   assert r -> 'registro' ->> 'status' = 'em_atendimento', 'anexar não conclui';
-  begin perform concluir_solicitacao_doc(s); raise exception 'concluiu sem lote'; exception when sqlstate '55000' then null; end;
-  r := registrar_lote_doc(s, ' L-2026-77 ');
-  assert r -> 'lote' ->> 'numero' = 'L-2026-77' and r -> 'registro' ->> 'status' = 'em_atendimento', 'lote registrado, emissão segue em atendimento';
   r := registrar_lote_doc(s, 'L-2026-78');
   assert exists (select 1 from doc_mensagens where solicitacao_id = s and texto like 'Número do lote corrigido de L-2026-77 para L-2026-78%'), 'correção auditada';
   -- Pendência vazia não; com texto notifica o solicitante
