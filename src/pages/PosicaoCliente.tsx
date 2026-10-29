@@ -33,7 +33,8 @@ export function PosicaoCliente() {
   const hoje = hojeSP();
   const [carteira, setCarteira] = useState('');
   const [clienteId, setClienteId] = useState('');
-  const [filialId, setFilialId] = useState('');
+  // Filiais desmarcadas no recorte do cliente (todas vêm marcadas).
+  const [desmarcadas, setDesmarcadas] = useState<Set<string>>(() => new Set());
   const [visao, setVisao] = useState<'mesa' | 'cliente'>('mesa');
   const [distribuir, setDistribuir] = useState(true);
   const [desvio, setDesvio] = useState<number | null>(null);
@@ -77,15 +78,22 @@ export function PosicaoCliente() {
   }, [daCarteira, idx]);
   const opFiliais = useMemo(() => {
     const m = new Map<string, string>();
-    for (const l of daCarteira) if (l.embarque.cliente_id === clienteId) m.set(l.embarque.filial_id, nome(idx.filial, l.embarque.filial_id));
+    for (const l of base) if (l.embarque.cliente_id === clienteId) m.set(l.embarque.filial_id, nome(idx.filial, l.embarque.filial_id));
     return [...m].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
-  }, [daCarteira, clienteId, idx]);
+  }, [base, clienteId, idx]);
 
   useEffect(() => { if (carteira && !opCarteiras.some(([v]) => v === carteira)) setCarteira(''); }, [carteira, opCarteiras]);
   useEffect(() => { if (clienteId && !opClientes.some(([v]) => v === clienteId)) setClienteId(''); }, [clienteId, opClientes]);
-  useEffect(() => { if (filialId && !opFiliais.some(([v]) => v === filialId)) setFilialId(''); }, [filialId, opFiliais]);
+  useEffect(() => { setDesmarcadas(new Set()); }, [clienteId]);
 
-  const recorte = useMemo(() => (clienteId ? recorteCliente(daCarteira, clienteId, filialId, idx) : []), [daCarteira, clienteId, filialId, idx]);
+  // Cliente escolhido: todas as posições dele (a carteira só filtra a lista de clientes), menos as filiais desmarcadas.
+  const naFilial = (filialId: string) => !desmarcadas.has(filialId);
+  const recorte = useMemo(() => (clienteId ? recorteCliente(base, clienteId, '', idx).filter((l) => !desmarcadas.has(l.embarque.filial_id)) : []), [base, clienteId, desmarcadas, idx]);
+  const filiaisMarcadas = opFiliais.filter(([v]) => naFilial(v)).map(([, r]) => r);
+  const rotuloFiliais = filiaisMarcadas.length === opFiliais.length ? null : filiaisMarcadas.join(', ') || 'nenhuma filial';
+  function alternarFilial(id: string) {
+    setDesmarcadas((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
   const quadro = useMemo(() => (clienteId ? montarQuadro(recorte, clienteId, data, idx, estado.config.logo_empresa) : null), [recorte, clienteId, data, idx, estado.config.logo_empresa]);
   const mesa = useMemo(() => infoMesa(recorte, data, agoraMs), [recorte, data, agoraMs]);
   const relatorio = useMemo(() => relatorioFiliais(recorte, data, agoraMs, idx), [recorte, data, agoraMs, idx]);
@@ -103,7 +111,7 @@ export function PosicaoCliente() {
     const w = el.scrollWidth;
     const h = el.scrollHeight;
     const escala = Math.min(2, LADO_MAX / w, LADO_MAX / h, Math.sqrt(AREA_MAX / (w * h)));
-    if (escala < 1) throw new Error(`O quadro tem ${q.linhas.length} embarques e passou do tamanho que o navegador consegue gerar. Filtre por filial para dividir o envio.`);
+    if (escala < 1) throw new Error(`O quadro tem ${q.linhas.length} embarques e passou do tamanho que o navegador consegue gerar. Desmarque filiais para dividir o envio.`);
     const { default: html2canvas } = await import('html2canvas');
     const canvas = await html2canvas(el, { scale: escala, backgroundColor: '#ffffff', logging: false, useCORS: true, width: w, height: h, windowWidth: 1280 });
     const blob = await new Promise<Blob | null>((r) => {
@@ -163,7 +171,7 @@ export function PosicaoCliente() {
   }
 
   const suspensos = recorte.filter((l) => l.embarque.status_liberacao === 'suspenso').length;
-  const semPosicao = clienteId ? daCarteira.filter((l) => l.embarque.cliente_id === clienteId && (!filialId || l.embarque.filial_id === filialId) && !l.posicao && l.embarque.situacao === 'ativo').length : 0;
+  const semPosicao = clienteId ? base.filter((l) => l.embarque.cliente_id === clienteId && naFilial(l.embarque.filial_id) && !l.posicao && l.embarque.situacao === 'ativo').length : 0;
 
   return (
     <Layout titulo="Posição do Cliente">
@@ -191,13 +199,15 @@ export function PosicaoCliente() {
               {opClientes.map(([v, c]) => <option key={v} value={v}>{c.nome}{c.tem ? '' : ' (sem posição na data)'}</option>)}
             </select>
           </label>
-          <label className="filtro-botao"><span>Filial</span>
-            <select value={filialId} disabled={!clienteId} onChange={(e) => setFilialId(e.target.value)}>
-              <option value="">Todas</option>
-              {opFiliais.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
-            </select>
-          </label>
         </div>
+        {clienteId && opFiliais.length > 0 && (
+          <fieldset className="pc-filiais">
+            <legend>Filiais</legend>
+            {opFiliais.map(([v, r]) => (
+              <label key={v} className="check"><input type="checkbox" checked={naFilial(v)} onChange={() => alternarFilial(v)} />{r}</label>
+            ))}
+          </fieldset>
+        )}
         <label className="check pc-distribuir">
           <input type="checkbox" checked={distribuir} onChange={(e) => setDistribuir(e.target.checked)} />
           Distribuir destinos lado a lado quando houver mais de 4 destinos
@@ -253,7 +263,7 @@ export function PosicaoCliente() {
               )}
             </div>
 
-            {visao === 'mesa' && <RelatorioFiliais linhas={relatorio} data={data} agoraMs={agoraMs} filial={filialId ? nome(idx.filial, filialId) : null} cliente={quadro.cliente} relogioServidor={desvio !== null} />}
+            {visao === 'mesa' && <RelatorioFiliais linhas={relatorio} data={data} agoraMs={agoraMs} filial={rotuloFiliais} cliente={quadro.cliente} relogioServidor={desvio !== null} />}
           </>
         )}
       </div>

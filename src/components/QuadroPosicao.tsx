@@ -81,7 +81,7 @@ export const QuadroPosicao = forwardRef<HTMLDivElement, {
                   <td className="c" data-rot="Em trânsito">{n(l.transito)}</td>
                   <td className="c" data-rot="Carregados hoje">{n(l.carregados)}</td>
                   <td className="qp-obs" data-rot={mesa ? 'Observação / status' : 'Observação'}>
-                    <span>{l.observacao ?? '—'}</span>
+                    {(l.observacao || !m) && <span>{l.observacao ?? '—'}</span>}
                     {m && (
                       <span className="qp-status">
                         <span className={`qp-st ${m.status}`}>{ROTULO_STATUS[m.status]}</span>
