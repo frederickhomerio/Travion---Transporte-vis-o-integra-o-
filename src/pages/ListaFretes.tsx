@@ -124,7 +124,7 @@ export function ListaFretes() {
   );
 
   return (
-    <Layout titulo="Lista de Fretes" acoes={acoes} aoLadoSino={pode('documentacao.solicitar') && <BotaoBaixarDocs />}>
+    <Layout titulo="Lista de Fretes" acoes={acoes} aoLadoSino={pode('documentacao.ver') && <BotaoBaixarDocs />}>
       <div className="controles-lista">
         <div className="controle-linha">
           <span className="controle-rot">Buscar por</span>

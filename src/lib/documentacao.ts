@@ -258,3 +258,14 @@ export function minhasSolicitacoes(todas: SolicitacaoDoc[], eu: string): Solicit
 
 /** Emissão com a documentação liberada pelo apoio: o comercial já pode baixar o CT-e, o MDF-e e os demais emitidos. */
 export const docsParaBaixar = (s: SolicitacaoDoc) => (s.tipo === 'emissao' || s.tipo === 'lote_emissao') && s.status === 'documentacao_disponivel';
+
+/** Baixar documentos (Lista de Fretes): emissões liberadas de TODO o escopo do usuário, não só as que ele enviou.
+ *  O servidor só entrega solicitações de embarques das filiais dos centros de custo do usuário (Gerencial = todas),
+ *  então quem é do mesmo centro de custo vê as mesmas emissões. Mais recentes primeiro; a busca olha cliente, lote, placa e quem enviou. */
+export function docsDoEscopo(todas: SolicitacaoDoc[], busca = ''): SolicitacaoDoc[] {
+  const q = busca.trim().toUpperCase().replace(/[\s-]/g, '');
+  return todas.filter(docsParaBaixar)
+    .filter((s) => !q || [s.retrato.cliente, s.retrato.lote_numero, s.placa, ...s.placas_reboque, s.solicitante_nome, String(s.numero)]
+      .some((v) => (v ?? '').toUpperCase().replace(/[\s-]/g, '').includes(q)))
+    .sort((a, b) => (b.concluido_em ?? b.atualizado_em).localeCompare(a.concluido_em ?? a.atualizado_em));
+}

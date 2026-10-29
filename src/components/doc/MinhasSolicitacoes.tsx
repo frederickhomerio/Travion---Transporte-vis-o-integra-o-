@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDoc } from '../../data/documentacao';
 import { useApp } from '../../data/store';
-import { ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, TIPO_DOC, docsParaBaixar, fmtPlaca, minhasSolicitacoes, rotaDoc, tempoDoc } from '../../lib/documentacao';
+import { ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, TIPO_DOC, docsDoEscopo, docsParaBaixar, fmtPlaca, minhasSolicitacoes, rotaDoc, tempoDoc } from '../../lib/documentacao';
 import { mensagemErro } from '../../data/api';
 import type { SolicitacaoDoc } from '../../types';
 import { Icone } from '../ui';
@@ -112,10 +112,12 @@ export function MinhasSolicitacoes() {
   );
 }
 
-/** Botão ao lado das notificações (Lista de Fretes): abre as emissões liberadas por Cliente e lote / Placa e rota. */
+/** Botão ao lado das notificações (Lista de Fretes): emissões liberadas de todo o centro de custo do usuário,
+ *  por Cliente e lote / Placa e rota. */
 export function BotaoBaixarDocs() {
-  const { lista, ativo } = useMinhas();
+  const { estado } = useDoc();
   const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState('');
   const [sel, setSel] = useState<string | null>(null);
   const caixa = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -127,23 +129,26 @@ export function BotaoBaixarDocs() {
     window.addEventListener('keydown', esc);
     return () => { document.removeEventListener('mousedown', fora); window.removeEventListener('keydown', esc); };
   }, [aberto]);
-  if (!ativo) return null;
-  const prontas = lista.filter(docsParaBaixar);
+  const todas = useMemo(() => docsDoEscopo(Object.values(estado.solicitacoes)), [estado.solicitacoes]);
+  if (!estado.ativo) return null;
+  const prontas = busca ? docsDoEscopo(todas, busca) : todas;
   return (
     <div className="sino ms-baixar" ref={caixa}>
       <button className="btn ms-baixar-btn" aria-label="Baixar documentos" title="Baixar documentos" onClick={() => setAberto((a) => !a)} aria-expanded={aberto}>
-        <Icone nome="baixar" tam={18} /><span className="ms-txt">Baixar documentos</span>{prontas.length > 0 && <span className="ms-cont">{prontas.length}</span>}
+        <Icone nome="baixar" tam={18} /><span className="ms-txt">Baixar documentos</span>{todas.length > 0 && <span className="ms-cont">{todas.length > 99 ? '99+' : todas.length}</span>}
       </button>
       {aberto && (
         <div className="sino-painel ms-painel" role="dialog" aria-label="Baixar documentos">
-          <div className="sino-cab"><strong>Documentação disponível</strong><span className="suave pequeno">Suas emissões liberadas</span></div>
-          {!prontas.length ? <p className="suave sino-vazio">Nenhuma emissão com documentação disponível.</p> : (
+          <div className="sino-cab"><strong>Documentação disponível</strong><span className="suave pequeno">Emissões liberadas do seu centro de custo</span></div>
+          {todas.length > 5 && <div className="ms-busca"><input className="entrada" type="search" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente, lote, placa ou quem enviou" aria-label="Buscar documentação" autoFocus /></div>}
+          {!prontas.length ? <p className="suave sino-vazio">{todas.length ? 'Nada encontrado com esta busca.' : 'Nenhuma emissão com documentação disponível.'}</p> : (
             <ul>
               {prontas.map((s) => (
                 <li key={s.id} className={sel === s.id ? 'ms-sel' : ''}>
                   <button className="sino-item ms-item" aria-expanded={sel === s.id} onClick={() => setSel(sel === s.id ? null : s.id)}>
                     <span className="ms-item-col"><strong>{s.retrato.cliente}</strong><span className="suave pequeno">{clienteLote(s)}</span></span>
                     <span className="ms-item-col"><strong>{fmtPlaca(s.placa)}</strong><span className="suave pequeno">{rotaDoc(s)}</span></span>
+                    <span className="ms-item-por suave pequeno">{TIPO_DOC[s.tipo]} nº {s.numero} · enviada por {s.solicitante_nome}</span>
                   </button>
                   {sel === s.id && <DocsEmitidos s={s} />}
                 </li>

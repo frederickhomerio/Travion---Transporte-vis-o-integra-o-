@@ -1425,3 +1425,5 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
   .ms-baixar-btn .ms-txt { display: none; }
   .ms-baixar-btn .ms-cont { position: absolute; top: -6px; right: -6px; margin: 0; }
 }
+.ms-busca { padding: 8px 12px; border-bottom: 1px solid var(--cinza-100); }
+.ms-item-por { grid-column: 1 / -1; }

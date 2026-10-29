@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SolicitacaoDoc } from '../types';
-import { acaoDocumentacao, avisosDuplicidade, docsParaBaixar, duracao, minhasSolicitacoes, FILTROS_FILA, filtrarFila, lerReais, normalizarPlaca, telefoneValido, tempoDoc, tipoCadastro } from './documentacao';
+import { acaoDocumentacao, avisosDuplicidade, docsDoEscopo, docsParaBaixar, duracao, minhasSolicitacoes, FILTROS_FILA, filtrarFila, lerReais, normalizarPlaca, telefoneValido, tempoDoc, tipoCadastro } from './documentacao';
 
 const base = Date.parse('2026-10-27T12:00:00Z');
 const sol = (o: Partial<SolicitacaoDoc>): SolicitacaoDoc => ({
@@ -120,5 +120,19 @@ describe('Minhas Solicitações', () => {
     expect(docsParaBaixar(sol({ tipo: 'lote_emissao', status: 'documentacao_disponivel' }))).toBe(true);
     expect(docsParaBaixar(sol({ status: 'em_atendimento' }))).toBe(false);
     expect(docsParaBaixar(sol({ tipo: 'cadastro', status: 'cadastro_concluido' }))).toBe(false);
+  });
+});
+
+describe('Baixar documentos do escopo', () => {
+  it('traz as emissões liberadas de todos do centro, mais recentes primeiro, com busca', () => {
+    const t = (min: number) => new Date(base - min * 60000).toISOString();
+    const todas = [
+      sol({ id: 'a', solicitante_id: 'renato', solicitante_nome: 'Renato', status: 'documentacao_disponivel', concluido_em: t(30), placa: 'RVD2A41' }),
+      sol({ id: 'b', solicitante_id: 'thiago', solicitante_nome: 'Thiago', tipo: 'lote_emissao', status: 'documentacao_disponivel', concluido_em: t(5), placa: 'QWE4F21' }),
+      sol({ id: 'c', solicitante_id: 'renato', status: 'em_atendimento' }),
+    ];
+    expect(docsDoEscopo(todas).map((s) => s.id)).toEqual(['b', 'a']);
+    expect(docsDoEscopo(todas, 'rvd-2a').map((s) => s.id)).toEqual(['a']);
+    expect(docsDoEscopo(todas, 'thia').map((s) => s.id)).toEqual(['b']);
   });
 });
