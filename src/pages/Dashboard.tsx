@@ -1,13 +1,14 @@
 import { type ReactNode, useEffect, useRef, useState, useMemo } from 'react';
 import { FilaApoioDashboard } from '../components/analise/FilasOperacao';
 import { MinhasSolicitacoes } from '../components/doc/MinhasSolicitacoes';
+import { InfoPendencias } from '../components/analise/InfoPendencias';
 import { Layout } from '../components/Layout';
 import { AbasAnalise } from './analise/AbasAnalise';
 import { Alerta, Carregando, EstadoVazio, Icone, Segmentado } from '../components/ui';
 import { mensagemErro } from '../data/api';
 import { linhasDaData, useApp, useIndices } from '../data/store';
 import { nome } from '../lib/cadastros';
-import { type Indicadores, type TipoPeriodo, diasDoIntervalo, indicadores, faixaBarra, indicadoresPorGrupo, intervaloPeriodo } from '../lib/dashboard';
+import { type Indicadores, type TipoPeriodo, diasDoIntervalo, indicadores, faixaBarra, indicadoresPorGrupo, intervaloPeriodo, pendenciasFinanceiras } from '../lib/dashboard';
 import { FILTROS_VAZIOS, aplicarFiltros } from '../lib/filtros';
 import { fmtDataCurta, fmtNum, fmtPct, fmtReais, fmtT, hojeSP } from '../lib/formato';
 import type { LinhaFrete } from '../types';
@@ -69,6 +70,8 @@ export function Dashboard() {
     [porDia, estado.config, fin, idx]);
   const porCliente = useMemo(() => indicadoresPorGrupo(porDia, (l) => l.embarque.cliente_id, estado.config, fin), [porDia, estado.config, fin]);
 
+  const pendencias = useMemo(() => (fin ? pendenciasFinanceiras(porDia) : []), [porDia, fin]);
+  const info = pendencias.length ? <InfoPendencias itens={pendencias} /> : undefined;
   const exibirRs = fin && (r.valido || mostrarNaoValidado);
   const rs = (v: number | null) => (exibirRs ? mil(v) : fin ? 'Não validado' : '—');
 
@@ -118,7 +121,7 @@ export function Dashboard() {
             {fin && !r.valido && (
               <Alerta tipo="aviso">
                 <div style={{ flex: 1 }}>
-                  <strong>Valores em R$ não validados.</strong> Faturamento e margens precisam de frete em R$/t confirmado.
+                  <strong>Valores em R$ não validados.</strong> Faturamento e margens precisam de frete em R$/t confirmado. {info}
                   <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{r.motivos.map((m) => <li key={m}>{m}</li>)}</ul>
                 </div>
                 <label className="check" style={{ whiteSpace: 'nowrap' }}><input type="checkbox" checked={mostrarNaoValidado} onChange={(e) => setMostrarNaoValidado(e.target.checked)} />Ver estimativa mesmo assim</label>
@@ -130,12 +133,12 @@ export function Dashboard() {
             <Destaque r={r} tipo={tipo} fin={exibirRs} />
 
             <div className="dash-kpis">
-              {fin && <Kpi rot="Faturamento projetado" val={rs(r.faturamento)} det={r.faturamento_disponibilizado ? `Meta ${rs(r.faturamento_disponibilizado)} · ${fmtPct(r.faturamento !== null ? (r.faturamento / r.faturamento_disponibilizado) * 100 : null)}` : 'Sem meta'} />}
+              {fin && <Kpi info={info} rot="Faturamento projetado" val={rs(r.faturamento)} det={r.faturamento_disponibilizado ? `Meta ${rs(r.faturamento_disponibilizado)} · ${fmtPct(r.faturamento !== null ? (r.faturamento / r.faturamento_disponibilizado) * 100 : null)}` : 'Sem meta'} />}
               <Kpi rot="Volume projetado" val={fmtT(r.projetado_t)} det={r.disponibilizado_t === null ? 'Sem volume disponibilizado' : `Disponibilizado ${fmtT(r.disponibilizado_t)}`} />
-              {fin && <Kpi rot="Ticket médio empresa" val={exibirRs ? `${fmtReais(r.ticket_empresa)}/t` : rs(null)} det="média ponderada pelo volume" />}
-              {fin && <Kpi rot="Ticket médio motorista" val={exibirRs ? `${fmtReais(r.ticket_motorista)}/t` : rs(null)} det="média ponderada pelo volume" />}
-              {fin && <Kpi rot="Margem bruta projetada" val={rs(r.margem_bruta)} det={exibirRs ? `${fmtPct(r.margem_bruta_pct)} do faturamento` : ''} />}
-              {fin && <Kpi rot="Margem líquida" val={rs(r.margem_liquida)} det={exibirRs ? `${fmtPct(r.margem_liquida_pct)} · bruta − 1,8% do faturamento` : ''} />}
+              {fin && <Kpi info={info} rot="Ticket médio empresa" val={exibirRs ? `${fmtReais(r.ticket_empresa)}/t` : rs(null)} det="média ponderada pelo volume" />}
+              {fin && <Kpi info={info} rot="Ticket médio motorista" val={exibirRs ? `${fmtReais(r.ticket_motorista)}/t` : rs(null)} det="média ponderada pelo volume" />}
+              {fin && <Kpi info={info} rot="Margem bruta projetada" val={rs(r.margem_bruta)} det={exibirRs ? `${fmtPct(r.margem_bruta_pct)} do faturamento` : ''} />}
+              {fin && <Kpi info={info} rot="Margem líquida" val={rs(r.margem_liquida)} det={exibirRs ? `${fmtPct(r.margem_liquida_pct)} · bruta − 1,8% do faturamento` : ''} />}
               {!fin && <Kpi rot="Aderência" val={fmtPct(r.aderencia_pct)} det="projetado ÷ disponibilizado" />}
               {!fin && <Kpi rot="Carregados" val={`${fmtNum(r.carregados)} veículos`} det={tipo === 'dia' ? 'no dia' : 'somados no período'} />}
             </div>
@@ -288,10 +291,10 @@ function classeFaixa(pct: number | null | undefined): string {
   return f ? `faixa-${f}` : 'faixa-neutra';
 }
 
-function Kpi({ rot, val, det }: { rot: string; val: string; det?: string }) {
+function Kpi({ rot, val, det, info }: { rot: string; val: string; det?: string; info?: ReactNode }) {
   return (
     <div className="cartao dash-kpi">
-      <span className="rot">{rot}</span>
+      <span className="rot">{rot}{info}</span>
       <span className="val">{val}</span>
       {det && <span className="det">{det}</span>}
     </div>

@@ -1,7 +1,7 @@
 // Regras de cálculo do Travion (fonte única para Lista de Fretes, Dashboard e Posições de Embarque).
 // Ver docs/REGRAS_DE_NEGOCIO.md para a origem de cada fórmula na planilha.
 
-import type { Configuracoes, Embarque, Financeiro, LinhaFrete, Posicao, UnidadeCadencia } from '../types';
+import type { Configuracoes, Embarque, Financeiro, LinhaFrete, Posicao, UnidadeCadencia, UnidadeFrete } from '../types';
 
 export interface ContadoresCapacidade {
   porta: number | null;
@@ -99,15 +99,22 @@ export interface ResumoFinanceiro {
   lotes_com_frete_motorista: number;
   lotes_unidade_nao_confirmada: number;
   lotes_unidade_incompativel: number;
+  /** Lotes com frete por viagem ou por m³: ficam fora do faturamento, tickets e margem em R$/t (não invalidam). */
+  lotes_fora_rs_t: number;
   /** Projeções só são válidas com fretes em R$/t confirmados. */
   valido: boolean;
   motivos: string[];
 }
 
+/** Unidades que não se convertem em toneladas: o lote sai do cálculo em R$/t em vez de invalidar o escopo inteiro. */
+export const FORA_RS_T: UnidadeFrete[] = ['rs_viagem', 'rs_m3'];
+const foraRsT = (l: LinhaFrete) => !!l.financeiro && FORA_RS_T.includes(l.financeiro.unidade_frete);
+
 export function resumoFinanceiro(
   fin: Array<Financeiro | null>,
   projetado_t: number,
   cfg: Pick<Configuracoes, 'ticket_inclui_frete_zero'>,
+  fora = 0,
 ): ResumoFinanceiro {
   const comEmp = fin.filter((f) => f && typeof f.frete_empresa === 'number') as Financeiro[];
   const comMot = fin.filter((f) => f && typeof f.frete_motorista === 'number') as Financeiro[];
@@ -115,7 +122,7 @@ export function resumoFinanceiro(
   const te = mediaSimples(comEmp.map((f) => f.frete_empresa), cfg.ticket_inclui_frete_zero);
   const tm = mediaSimples(comMot.map((f) => f.frete_motorista), cfg.ticket_inclui_frete_zero);
   const naoConf = comFrete.filter((f) => f.unidade_frete === 'nao_confirmada').length;
-  const incomp = comFrete.filter((f) => f.unidade_frete === 'rs_viagem' || f.unidade_frete === 'rs_m3' || f.unidade_frete === 'outra').length;
+  const incomp = comFrete.filter((f) => f.unidade_frete === 'outra' || FORA_RS_T.includes(f.unidade_frete)).length;
   const semFrete = fin.length - comEmp.length;
 
   const faturamento = te !== null ? projetado_t * te : null;
@@ -125,6 +132,7 @@ export function resumoFinanceiro(
   const motivos: string[] = [];
   if (naoConf > 0) motivos.push(`${naoConf} lote(s) com unidade do frete não confirmada`);
   if (incomp > 0) motivos.push(`${incomp} lote(s) com frete em unidade incompatível com toneladas`);
+  if (fora > 0) motivos.push(`${fora} lote(s) com frete por viagem ou por m³ fora do cálculo em R$/t`);
   if (semFrete > 0) motivos.push(`${semFrete} lote(s) sem frete empresa numérico`);
   if (te === null) motivos.push('Nenhum frete empresa numérico no escopo');
   if (tm === null) motivos.push('Nenhum frete motorista numérico no escopo');
@@ -139,6 +147,7 @@ export function resumoFinanceiro(
     lotes_com_frete_motorista: comMot.length,
     lotes_unidade_nao_confirmada: naoConf,
     lotes_unidade_incompativel: incomp,
+    lotes_fora_rs_t: fora,
     valido: naoConf === 0 && incomp === 0 && te !== null && tm !== null,
     motivos,
   };
@@ -153,6 +162,13 @@ export interface Resumo extends Volumes {
   lotes_sem_informacao: number;
   lotes_suspensos_com_veiculos: number;
   financeiro: ResumoFinanceiro | null;
+}
+
+/** Financeiro só dos lotes em R$/t (ou a confirmar): volume projetado e fretes desses lotes; os demais são contados à parte. */
+function financeiroDentro(comPos: LinhaFrete[], cfg: Configuracoes): ResumoFinanceiro {
+  const dentro = comPos.filter((l) => !foraRsT(l));
+  const proj = dentro.reduce((s, l) => s + volumes(l.posicao as Posicao).projetado_t, 0);
+  return resumoFinanceiro(dentro.map((l) => l.financeiro), proj, cfg, comPos.length - dentro.length);
 }
 
 /**
@@ -195,7 +211,7 @@ export function resumir(linhas: LinhaFrete[], cfg: Configuracoes, comFinanceiro:
     aderencia_pct: aderencia(acc.projetado_t, disponibilizado),
     lotes_sem_informacao: semInfo,
     lotes_suspensos_com_veiculos: suspensosComVeiculos,
-    financeiro: comFinanceiro ? resumoFinanceiro(comPos.map((l) => l.financeiro), acc.projetado_t, cfg) : null,
+    financeiro: comFinanceiro ? financeiroDentro(comPos, cfg) : null,
   };
 }
 

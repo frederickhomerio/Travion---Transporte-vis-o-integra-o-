@@ -132,3 +132,29 @@ export function faixaBarra(pct: number | null | undefined): FaixaBarra | null {
   if (p <= 80) return 'amarelo';
   return 'verde';
 }
+
+/** Lote que impede (erro) ou fica de fora (aviso) dos valores em R$: base do ícone de informação do Dashboard. */
+export interface PendenciaFinanceira { embarque_id: string; tipo: 'erro' | 'aviso'; problema: string }
+
+/** Lotes com problema no frete, um por embarque (vale o problema mais grave), erros primeiro. */
+export function pendenciasFinanceiras(porDia: LinhaFrete[][]): PendenciaFinanceira[] {
+  const out = new Map<string, PendenciaFinanceira>();
+  for (const ls of porDia) {
+    for (const l of ls) {
+      if (!l.posicao) continue;
+      const f = l.financeiro;
+      const p: PendenciaFinanceira | null = !f || typeof f.frete_empresa !== 'number'
+        ? { embarque_id: l.embarque.id, tipo: 'aviso', problema: 'Sem frete empresa em número: fica fora do ticket e do faturamento' }
+        : f.unidade_frete === 'nao_confirmada' ? { embarque_id: l.embarque.id, tipo: 'erro', problema: 'Unidade do frete não confirmada: confirme se é R$/t, por viagem ou por m³' }
+        : f.unidade_frete === 'outra' ? { embarque_id: l.embarque.id, tipo: 'erro', problema: 'Unidade do frete "outra": não dá para converter em toneladas' }
+        : f.unidade_frete === 'rs_m3' ? { embarque_id: l.embarque.id, tipo: 'aviso', problema: 'Frete em R$/m³: fica fora do faturamento, tickets e margem em R$/t' }
+        : f.unidade_frete === 'rs_viagem' ? { embarque_id: l.embarque.id, tipo: 'aviso', problema: 'Frete por viagem: fica fora do faturamento, tickets e margem em R$/t' }
+        : typeof f.frete_motorista !== 'number' ? { embarque_id: l.embarque.id, tipo: 'aviso', problema: 'Sem frete motorista em número: fica fora do ticket motorista' }
+        : null;
+      if (!p) continue;
+      const atual = out.get(p.embarque_id);
+      if (!atual || (atual.tipo === 'aviso' && p.tipo === 'erro')) out.set(p.embarque_id, p);
+    }
+  }
+  return [...out.values()].sort((a, b) => (a.tipo === b.tipo ? 0 : a.tipo === 'erro' ? -1 : 1));
+}

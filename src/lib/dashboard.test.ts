@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG_PADRAO, type Embarque, type Financeiro, type LinhaFrete, type Posicao } from '../types';
-import { diasDoIntervalo, faixaBarra, indicadores, indicadoresPorGrupo, intervaloPeriodo } from './dashboard';
+import { diasDoIntervalo, faixaBarra, indicadores, indicadoresPorGrupo, intervaloPeriodo, pendenciasFinanceiras } from './dashboard';
 
 const emb = (id: string, filial: string): Embarque => ({
   id, codigo: 1, cliente_id: 'c1', comercial_id: null, filial_id: filial, produto_id: null,
@@ -81,5 +81,27 @@ describe('faixaBarra', () => {
     expect(faixaBarra(null)).toBeNull();
     expect(faixaBarra(undefined)).toBeNull();
     expect(faixaBarra(Infinity)).toBeNull();
+  });
+});
+
+describe('lote em R$/m³ ou por viagem', () => {
+  it('fica fora do R$/t sem invalidar o dia, e aparece como aviso', () => {
+    const m3 = linha('m', 'f1', '2026-10-30', 0, 1, 90, 80);
+    m3.financeiro = { ...m3.financeiro!, unidade_frete: 'rs_m3' };
+    const ok = linha('a', 'f1', '2026-10-30', 0, 2, 200, 180);
+    const r = indicadores([[ok, m3]], CONFIG_PADRAO, true);
+    expect(r.valido).toBe(true);
+    expect(r.ticket_empresa).toBe(200);
+    expect(r.faturamento).toBe(200 * 80); // só os 80 t do lote em R$/t
+    expect(r.projetado_t).toBe(120); // o volume do lote em m³ continua no total
+    expect(pendenciasFinanceiras([[ok, m3]])).toEqual([expect.objectContaining({ embarque_id: 'm', tipo: 'aviso' })]);
+  });
+  it('unidade não confirmada invalida e vem como erro, antes dos avisos', () => {
+    const nc = linha('n', 'f1', '2026-10-30', 0, 1);
+    nc.financeiro = { ...nc.financeiro!, unidade_frete: 'nao_confirmada' };
+    const m3 = linha('m', 'f1', '2026-10-30', 0, 1);
+    m3.financeiro = { ...m3.financeiro!, unidade_frete: 'rs_m3' };
+    expect(indicadores([[nc, m3]], CONFIG_PADRAO, true).valido).toBe(false);
+    expect(pendenciasFinanceiras([[m3, nc]]).map((p) => p.tipo)).toEqual(['erro', 'aviso']);
   });
 });
