@@ -269,3 +269,66 @@ export function docsDoEscopo(todas: SolicitacaoDoc[], busca = ''): SolicitacaoDo
       .some((v) => (v ?? '').toUpperCase().replace(/[\s-]/g, '').includes(q)))
     .sort((a, b) => (b.concluido_em ?? b.atualizado_em).localeCompare(a.concluido_em ?? a.atualizado_em));
 }
+
+// ---------------------------------------------------------------------------
+// Minhas solicitações (Dashboard Embarques, 02/11/2026): fila única de Cadastro, Emissão e Lote e Emissão
+// ---------------------------------------------------------------------------
+
+/** Tipos acompanhados no quadro (Estadia tem tela própria). */
+export const TIPOS_ACOMPANHAMENTO: TipoSolicitacaoDoc[] = ['cadastro', 'emissao', 'lote_emissao'];
+
+/** Cadastro, Emissão e Lote e Emissão visíveis no escopo: abertas primeiro (mais antigas no topo), depois as fechadas (mais recentes). */
+export function solicitacoesAcompanhamento(todas: SolicitacaoDoc[]): SolicitacaoDoc[] {
+  const lista = todas.filter((s) => TIPOS_ACOMPANHAMENTO.includes(s.tipo));
+  const abertas = lista.filter((s) => ABERTOS.includes(s.status)).sort((a, b) => a.enviado_em.localeCompare(b.enviado_em));
+  const fechadas = lista.filter((s) => !ABERTOS.includes(s.status))
+    .sort((a, b) => (b.concluido_em ?? b.cancelado_em ?? b.atualizado_em).localeCompare(a.concluido_em ?? a.cancelado_em ?? a.atualizado_em));
+  return [...abertas, ...fechadas];
+}
+
+export interface FiltroAcompanhamento { placa: string; filialId: string; enviadoPor: string }
+
+export const filialDaSolicitacao = (s: SolicitacaoDoc) => s.retrato?.filial_id ?? s.filial_id ?? null;
+
+/** Os três filtros do quadro, combináveis. A placa procura a do cavalo e as dos reboques. */
+export function filtrarAcompanhamento(lista: SolicitacaoDoc[], f: FiltroAcompanhamento): SolicitacaoDoc[] {
+  const placa = normalizarPlaca(f.placa);
+  return lista.filter((s) => (!placa || [s.placa, ...(s.placas_reboque ?? [])].some((p) => normalizarPlaca(p ?? '').includes(placa)))
+    && (!f.filialId || filialDaSolicitacao(s) === f.filialId)
+    && (!f.enviadoPor || s.solicitante_id === f.enviadoPor));
+}
+
+/** Tempo de atendimento: corre do Assumir (assumido_em, gravado pelo servidor) até a finalização (concluido_em, ou
+ *  cancelado_em se cancelada depois de assumida). Não começa no envio, não reinicia nem pausa em pendência.
+ *  Sem início registrado num chamado que já saiu da fila: "indisponível" (nunca usa o horário do envio no lugar). */
+export type TempoAtendimento =
+  | { tipo: 'aguardando' }
+  | { tipo: 'indisponivel' }
+  | { tipo: 'cancelada' }
+  | { tipo: 'correndo'; ms: number }
+  | { tipo: 'finalizado'; ms: number };
+
+export function tempoAtendimento(s: Pick<SolicitacaoDoc, 'status' | 'assumido_em' | 'concluido_em' | 'cancelado_em'>, agoraMs: number): TempoAtendimento {
+  const inicio = s.assumido_em ? Date.parse(s.assumido_em) : NaN;
+  if (Number.isNaN(inicio)) {
+    if (s.status === 'enviado') return { tipo: 'aguardando' };
+    if (s.status === 'cancelado') return { tipo: 'cancelada' };
+    return { tipo: 'indisponivel' };
+  }
+  const fim = s.concluido_em ?? (s.status === 'cancelado' ? s.cancelado_em : null);
+  if (fim) {
+    const f = Date.parse(fim);
+    return Number.isNaN(f) || f < inicio ? { tipo: 'indisponivel' } : { tipo: 'finalizado', ms: f - inicio };
+  }
+  if (CONCLUIDOS.includes(s.status)) return { tipo: 'indisponivel' };
+  return { tipo: 'correndo', ms: Math.max(0, agoraMs - inicio) };
+}
+
+/** Duração em HH:MM:SS com horas totais (passa de 24: "27:05:09"). */
+export function fmtHMS(ms: number): string {
+  const t = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}

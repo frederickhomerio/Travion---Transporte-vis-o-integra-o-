@@ -26,7 +26,8 @@ describe('normalização da planilha', () => {
   it('UF e status', () => {
     expect(parseUF('GO ')).toBe('GO');
     expect(parseUF('Goiás')).toBeUndefined();
-    expect(parseStatus('')).toBe('nao_informado');
+    expect(parseStatus('')).toBe('liberado');
+    expect(parseStatus('Não informado')).toBe('liberado');
     expect(parseStatus('Liberado')).toBe('liberado');
     expect(parseStatus('SUSPENSO')).toBe('suspenso');
   });

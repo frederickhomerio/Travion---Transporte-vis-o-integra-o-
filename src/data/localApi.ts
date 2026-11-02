@@ -38,7 +38,8 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['embarques.editar_capacidade', 'Embarques', 'Alterar toneladas médias por veículo'],
   ['embarques.editar_lote', 'Embarques', 'Botão Editar lote no Detalhes da Lista de Fretes (os campos seguem as demais permissões)'],
   ['embarques.arquivar', 'Embarques', 'Arquivar ou reativar embarques'],
-  ['embarques.encerrar', 'Embarques', 'Encerrar embarque definitivamente (sem reativação)'],
+  ['embarques.encerrar', 'Embarques', 'Encerrar embarques preservando o histórico'],
+  ['embarques.reativar_encerrado', 'Embarques', 'Reativar embarques encerrados, com motivo e histórico'],
   ['carteira.editar', 'Comercial', 'Alterar a carteira (responsável comercial) de clientes e embarques'],
   ['posicoes.pagina', 'Posições', 'Acessar a página Posições de Embarque'],
   ['posicoes.abrir', 'Posições', 'Abrir posição para nova data operacional'],
@@ -182,7 +183,7 @@ function semear(): Banco {
     [0, 0, 0, 'Rio Verde', 0, 'Santos', 'SP', 4, 'liberado', 3, 155, 144, 1, 1, 2],
     [1, 1, 2, 'Jataí', 1, 'Uberaba', 'MG', 5, 'liberado', null, 230, 180, 0, 3, 1],
     [2, 1, 1, 'Jataí', 1, 'Araguari', 'MG', 6, 'suspenso', null, 140, 130, 2, 0, 0],
-    [2, 2, 0, 'Itumbiara', 2, 'Santos', 'SP', 4, 'nao_informado', null, 260, 241, 0, 0, 0],
+    [2, 2, 0, 'Itumbiara', 2, 'Santos', 'SP', 4, 'liberado', null, 260, 241, 0, 0, 0],
     [3, 2, 1, 'Itumbiara', 2, 'Uberaba', 'MG', 5, 'liberado', 4, 79, 73, 5, 4, 6],
     [4, 3, 0, 'Montividiu', 3, 'Quirinópolis', 'GO', 7, 'liberado', null, 91, 84, 2, 0, 1],
     [4, 3, 0, 'Montividiu', 3, 'Quirinópolis', 'GO', 7, 'liberado', null, 65, 60, 2, 2, 9],
@@ -256,6 +257,8 @@ const emailEquipe = (nome: string) => `${normalizar(nome).toLowerCase().replace(
 
 /** Inclui a equipe fictícia (também em bancos da prévia gravados antes dela), sem mexer no resto. */
 function completarEquipe(db: Banco): Banco {
+  // 02/11/2026: "Não informado" deixou de existir; prévias antigas guardadas no navegador passam a Liberado.
+  for (const e of db.embarques) if ((e.status_liberacao as string) === 'nao_informado') e.status_liberacao = 'liberado';
   const nomeSemDemo = (n: string) => normalizar(n.replace('[DEMO]', '').trim());
   for (const x of EQUIPE_PREVIA) {
     if (db.perfis.some((p) => p.id === x.id)) continue;
@@ -550,7 +553,7 @@ export function criarLocalApi(): Api {
     origem_uf: { perm: 'embarques.editar_cadastro', tipo: 'uf' }, local_coleta_id: { perm: 'embarques.editar_cadastro', tipo: 'uuid' },
     destino_cidade: { perm: 'embarques.editar_cadastro', tipo: 'texto_obrigatorio' }, destino_uf: { perm: 'embarques.editar_cadastro', tipo: 'uf' },
     local_entrega_id: { perm: 'embarques.editar_cadastro', tipo: 'uuid' }, observacao_interna: { perm: 'embarques.editar_cadastro', tipo: 'texto' },
-    status_liberacao: { perm: 'embarques.liberar', tipo: 'enum', valores: ['liberado', 'suspenso', 'nao_informado'] },
+    status_liberacao: { perm: 'embarques.liberar', tipo: 'enum', valores: ['liberado', 'suspenso'] },
     data_liberacao: { perm: 'embarques.liberar', tipo: 'data' },
     cadencia_valor: { perm: 'embarques.editar_cadencia', tipo: 'positivo_obrigatorio' },
     cadencia_unidade: { perm: 'embarques.editar_cadencia', tipo: 'enum', valores: ['veiculos_dia', 'toneladas_dia'] },
@@ -566,17 +569,15 @@ export function criarLocalApi(): Api {
 
   const listaCadastro = (tipo: string) => ({ filial: db.filiais, comercial: db.comerciais, produto: db.produtos, local: db.locais, cidade: db.cidades!, centro_custo: db.centros_custo!, cliente: db.clientes } as Record<string, Array<{ id: string; nome: string; is_demo: boolean }>>)[tipo];
 
-  function abrir(data: string, transportar: boolean, ids: string[] | null) {
-    let criadas = 0, ja = 0, semAnt = 0;
+  /** Posições de uma nova data nascem sempre zeradas (02/11/2026); o pedido legado de transportar saldo é ignorado. */
+  function abrir(data: string, _transportarLegado: boolean, ids: string[] | null) {
+    let criadas = 0, ja = 0;
     for (const e of db.embarques) {
       if (e.situacao !== 'ativo' || !veEmbarque(e) || (ids && !ids.includes(e.id))) continue;
       if (db.posicoes.some((p) => p.embarque_id === e.id && p.data_operacional === data)) { ja++; continue; }
-      const ant = db.posicoes.filter((p) => p.embarque_id === e.id && p.data_operacional < data)
-        .sort((a, b) => b.data_operacional.localeCompare(a.data_operacional))[0];
-      if (transportar && !ant) semAnt++;
       const p: Posicao = {
         id: uid(), embarque_id: e.id, data_operacional: data,
-        porta: transportar && ant ? ant.porta : 0, transito: transportar && ant ? ant.transito : 0, carregados: 0,
+        porta: 0, transito: 0, carregados: 0,
         toneladas_por_veiculo: e.toneladas_por_veiculo, meta_valor: e.cadencia_valor, meta_unidade: e.cadencia_unidade,
         obs_operacional: null, obs_cliente: null, is_demo: e.is_demo, origem: 'abertura', versao: 1,
         atualizado_em: agora(), atualizado_por_nome: nomeUsuario(),
@@ -584,10 +585,10 @@ export function criarLocalApi(): Api {
       db.posicoes.push(p);
       registrar({ entidade: 'posicao', registro_id: p.id, embarque_id: e.id, posicao_id: p.id, cliente_id: e.cliente_id,
         data_operacional: data, campo: 'abertura',
-        valor_novo: transportar && ant ? `Porta ${ant.porta ?? 'não informado'} e trânsito ${ant.transito ?? 'não informado'} transportados de ${ant.data_operacional.split('-').reverse().join('/')}; carregados iniciado em 0` : 'Porta, trânsito e carregados iniciados em 0' });
+        valor_novo: 'Porta, trânsito e carregados iniciados em 0' });
       criadas++;
     }
-    return { criadas, ja_existiam: ja, sem_posicao_anterior: semAnt };
+    return { criadas, ja_existiam: ja, sem_posicao_anterior: 0 };
   }
 
   const doc = criarDocLocal({
@@ -773,6 +774,39 @@ export function criarLocalApi(): Api {
       salvar();
       return clone(e);
     },
+    async reativarEncerrado(id, motivo, versao) {
+      exigir('embarques.reativar_encerrado');
+      const m = motivo.trim();
+      if (!m || m.length > 500) erro('Informe o motivo da reativação (até 500 caracteres).');
+      const e = db.embarques.find((x) => x.id === id);
+      if (!e || !veEmbarque(e)) erro('Embarque não encontrado ou fora do seu escopo.');
+      if (!e.encerrado_em || e.situacao !== 'arquivado') erro('Este embarque não está encerrado.');
+      if (versao !== e.versao) return { status: 'conflito', registro: clone(e) };
+      const anterior = JSON.stringify({ situacao: e.situacao, status_liberacao: e.status_liberacao, encerrado_em: e.encerrado_em,
+        encerrado_por_nome: e.encerrado_por_nome, encerrado_motivo: e.encerrado_motivo });
+      Object.assign(e, { situacao: 'ativo', status_liberacao: 'liberado', suspenso_em: null, encerrado_em: null, encerrado_por_nome: null,
+        encerrado_motivo: null, versao: e.versao + 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario() });
+      registrar({ entidade: 'embarque', registro_id: e.id, embarque_id: e.id, cliente_id: e.cliente_id, campo: 'reativacao_encerrado',
+        valor_anterior: anterior, valor_novo: JSON.stringify({ status: 'liberado', motivo: m }), sensivel: true });
+      emitir({ tabela: 'embarques', tipo: 'UPDATE', registro: clone(e) });
+      salvar();
+      return { status: 'ok', registro: clone(e) };
+    },
+    async vitrineFretes(demo) {
+      if (!ativo()) erro('Acesso negado: usuário inativo ou sem cadastro.');
+      encerrarVencidos();
+      return db.embarques.filter((e) => e.is_demo === demo && e.situacao === 'ativo' && !e.encerrado_em && e.status_liberacao === 'liberado')
+        .sort((a, b) => a.codigo - b.codigo)
+        .map((e) => {
+          const f = db.financeiro.find((x) => x.embarque_id === e.id);
+          return {
+            id: e.id, codigo: e.codigo, filial_id: e.filial_id, centro_custo_id: db.filiais.find((x) => x.id === e.filial_id)?.centro_custo_id ?? null,
+            produto_id: e.produto_id, origem_cidade: e.origem_cidade, origem_uf: e.origem_uf, local_coleta_id: e.local_coleta_id,
+            destino_cidade: e.destino_cidade, destino_uf: e.destino_uf, local_entrega_id: e.local_entrega_id,
+            frete_motorista: f?.frete_motorista ?? null, unidade_frete: f?.unidade_frete ?? null, atualizado_em: e.atualizado_em, no_escopo: veEmbarque(e),
+          };
+        });
+    },
     async atualizarFinanceiro(id, alt, base, forcar = false) {
       exigir('financeiro.ver');
       exigir('financeiro.editar');
@@ -803,7 +837,7 @@ export function criarLocalApi(): Api {
       if (!tem('embarques.editar_cadencia') && !tem('embarques.editar_cadencia_proprio')) erro('Você não tem permissão para definir a meta diária do embarque.');
       const loteErp = typeof d.lote_erp === 'string' ? d.lote_erp.trim() : '';
       if (loteErp.length > 60) erro('O número do lote do ERP tem no máximo 60 caracteres.');
-      if (d.status_liberacao && d.status_liberacao !== 'nao_informado') exigir('embarques.liberar');
+      if (d.status_liberacao === 'suspenso' || d.data_liberacao) exigir('embarques.liberar');
       if (!noEscopo(d.filial_id as string, comercial)) erro('A filial ou carteira escolhida está fora do seu escopo.');
       db.seq++;
       const e: Embarque = {
@@ -811,7 +845,7 @@ export function criarLocalApi(): Api {
         produto_id: (d.produto_id as string) ?? null, origem_cidade: String(d.origem_cidade).trim(),
         origem_uf: d.origem_uf ? String(d.origem_uf).toUpperCase() : null, local_coleta_id: (d.local_coleta_id as string) ?? null,
         destino_cidade: String(d.destino_cidade).trim(), destino_uf: d.destino_uf ? String(d.destino_uf).toUpperCase() : null,
-        local_entrega_id: (d.local_entrega_id as string) ?? null, status_liberacao: (d.status_liberacao as Embarque['status_liberacao']) ?? 'nao_informado',
+        local_entrega_id: (d.local_entrega_id as string) ?? null, status_liberacao: d.status_liberacao === 'suspenso' ? 'suspenso' : 'liberado',
         data_liberacao: (d.data_liberacao as string) ?? null, cadencia_valor: (d.cadencia_valor as number) ?? null,
         cadencia_unidade: (d.cadencia_unidade as Embarque['cadencia_unidade']) ?? 'veiculos_dia', toneladas_por_veiculo: cap,
         observacao_interna: (d.observacao_interna as string) ?? null, situacao: 'ativo', is_demo: demo, chave_importacao: null,
@@ -833,10 +867,10 @@ export function criarLocalApi(): Api {
       }
       return clone(e);
     },
-    async abrirPosicoes(data, transportar, ids) {
+    async abrirPosicoes(data, ids) {
       exigir('posicoes.abrir');
       if (data > somarDias(hojeSP(), 1)) erro('Só é possível abrir posições até o dia seguinte.');
-      const r = abrir(data, transportar, ids);
+      const r = abrir(data, false, ids);
       salvar();
       return r;
     },
@@ -1027,7 +1061,7 @@ export function criarLocalApi(): Api {
             local_coleta_id: obter(db.locais, l.coleta, { cidade: l.origem_cidade, uf: l.origem_uf ?? null, tipo: 'coleta' } as never, l.origem_cidade),
             destino_cidade: String(l.destino_cidade), destino_uf: (l.destino_uf as string) ?? null,
             local_entrega_id: obter(db.locais, l.entrega, { cidade: l.destino_cidade, uf: l.destino_uf ?? null, tipo: 'entrega' } as never, l.destino_cidade),
-            status_liberacao: (l.status as Embarque['status_liberacao']) ?? 'nao_informado', data_liberacao: null,
+            status_liberacao: l.status === 'suspenso' ? 'suspenso' : 'liberado', data_liberacao: null,
             cadencia_valor: (l.cadencia_valor as number) ?? null, cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: db.config.capacidade_padrao_t,
             observacao_interna: null, situacao: 'ativo', is_demo: demo, chave_importacao: String(l.chave), versao: 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario(),
           };

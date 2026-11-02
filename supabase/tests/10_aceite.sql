@@ -86,7 +86,7 @@ do $$ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- Posição de ontem e abertura de hoje com transporte explícito
+-- Posição de ontem e abertura de hoje: sempre zerada, mesmo com o pedido legado de transportar saldos (02/11/2026)
 -- ---------------------------------------------------------------------------
 select id as pos_ontem from posicoes_diarias where embarque_id = :'emb1' \gset
 select set_config('t.pos_ontem', :'pos_ontem', false);
@@ -98,14 +98,16 @@ select abrir_posicoes(private.hoje_sp(), true) as abertura \gset
 select set_config('t.abertura', :'abertura', false);
 do $$ begin
   assert (current_setting('t.abertura')::jsonb ->> 'criadas')::int = 3, 'abre 3 posições hoje';
-  assert (current_setting('t.abertura')::jsonb ->> 'sem_posicao_anterior')::int = 2, 'dois sem posição anterior';
+  assert (current_setting('t.abertura')::jsonb ->> 'sem_posicao_anterior')::int = 0, 'campo legado sempre 0';
 end $$;
 select id as pos_hoje from posicoes_diarias where embarque_id = :'emb1' and data_operacional = private.hoje_sp() \gset
 select set_config('t.pos_hoje', :'pos_hoje', false);
 do $$ declare p posicoes_diarias; begin
   select * into p from posicoes_diarias where id = current_setting('t.pos_hoje')::uuid;
-  assert p.porta = 3 and p.transito = 2, 'porta e trânsito transportados';
+  assert p.porta = 0 and p.transito = 0, 'porta e trânsito começam em 0 (transporte legado ignorado)';
   assert p.carregados = 0, 'carregados começa em zero';
+  assert p.confirmado_em is null and p.obs_operacional is null and p.obs_cliente is null, 'abertura não confirma nem copia observações';
+  assert (select porta from posicoes_diarias where id = current_setting('t.pos_ontem')::uuid) = 3, 'porta de ontem preservada';
   assert (select carregados from posicoes_diarias where id = current_setting('t.pos_ontem')::uuid) = 4, 'posição anterior preservada';
 end $$;
 
@@ -117,7 +119,7 @@ do $$ begin assert current_setting('t.criadas2')::int = 0, 'reabertura não dupl
 -- ---------------------------------------------------------------------------
 -- Critério: cálculo com porta 3, trânsito 2, carregados 4 e 40 t
 -- ---------------------------------------------------------------------------
-select atualizar_posicao(:'pos_hoje', '{"carregados":4}', '{"carregados":0}') ->> 'status' as st \gset
+select atualizar_posicao(:'pos_hoje', '{"porta":3,"transito":2,"carregados":4}', '{"porta":0,"transito":0,"carregados":0}') ->> 'status' as st \gset
 select set_config('t.st', :'st', false);
 do $$ declare p posicoes_diarias; begin
   select * into p from posicoes_diarias where id = current_setting('t.pos_hoje')::uuid;

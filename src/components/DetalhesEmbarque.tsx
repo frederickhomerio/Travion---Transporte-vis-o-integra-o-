@@ -45,11 +45,11 @@ export function DetalhesEmbarque({ embarqueId, aoFechar, solicitacaoDoc }: { emb
       aoFechar={aoFechar}
     >
       {e.status_liberacao === 'suspenso' && !e.encerrado_em && (
-        <Alerta tipo="erro"><span><strong>Embarque suspenso.</strong> Fora da Lista de Fretes e das Posições de Embarque; reative em Lista de Fretes → Suspensos. Sem reativação em 7 dias, é encerrado automaticamente.</span></Alerta>
+        <Alerta tipo="erro"><span><strong>Embarque suspenso.</strong> Fora da Lista de Fretes e das Posições de Embarque; reative em Lista de Fretes → aba Suspensos. Sem reativação em 7 dias, é encerrado automaticamente.</span></Alerta>
       )}
       {e.encerrado_em ? (
-        <Alerta tipo="aviso"><span><strong>Embarque encerrado</strong> em {fmtDataAsHora(e.encerrado_em)} por {e.encerrado_por_nome ?? 'Sistema'}{e.encerrado_motivo ? ` (${e.encerrado_motivo})` : ''}. Somente consulta, sem reativação.</span></Alerta>
-      ) : e.situacao === 'arquivado' && <Alerta tipo="aviso">Embarque arquivado: somente consulta. Reative na aba Cadastro para voltar a atualizar.</Alerta>}
+        <Alerta tipo="aviso"><span><strong>Embarque encerrado</strong> em {fmtDataAsHora(e.encerrado_em)} por {e.encerrado_por_nome ?? 'Sistema'}{e.encerrado_motivo ? ` (${e.encerrado_motivo})` : ''}. Somente consulta. Para voltar à Lista de Fretes, use a aba Encerrados → Reativar (exige permissão e motivo).</span></Alerta>
+      ) : e.situacao === 'arquivado' && <Alerta tipo="aviso">Embarque arquivado: somente consulta.</Alerta>}
 
       <div className="abas" role="tablist">
         {abas.filter((a) => a[2]).map(([k, r]) => (
@@ -113,7 +113,7 @@ function Resumo({ e, idx }: { e: Embarque; idx: Indices }) {
           <dt>Meta diária</dt><dd>{e.cadencia_valor ? `${fmtNum(e.cadencia_valor, 1)} ${ROTULO_CADENCIA[e.cadencia_unidade]}` : 'Sem meta: preencha a meta diária do embarque'}</dd>
           <dt>Toneladas médias por veículo</dt><dd>{fmtT(e.toneladas_por_veiculo)}</dd>
           <dt>Lote no ERP</dt><dd><LoteDoEmbarque embarqueId={e.id} /></dd>
-          <dt>Situação cadastral</dt><dd>{e.situacao === 'ativo' ? 'Ativo' : 'Arquivado'}</dd>
+          <dt>Situação</dt><dd>{e.encerrado_em ? 'Encerrado' : e.situacao === 'ativo' ? 'Ativo' : 'Arquivado'}</dd>
           {e.observacao_interna && <><dt>Observação interna</dt><dd>{e.observacao_interna}</dd></>}
           <dt>Última alteração do cadastro</dt><dd>{fmtDataHora(e.atualizado_em)}{e.atualizado_por_nome ? ` · ${e.atualizado_por_nome}` : ''}</dd>
         </dl>
@@ -193,7 +193,7 @@ function Cadastro({ e, idx, travarRota = false }: { e: Embarque; idx: Indices; t
   const c = estado.cadastros;
   const campos: DefCampo[] = [
     { campo: 'status_liberacao', rotulo: 'Status de liberação', tipo: 'select', pode: pode('embarques.liberar'),
-      opcoes: Object.entries(ROTULO_STATUS).map(([valor, rotulo]) => ({ valor, rotulo })) },
+      opcoes: [{ valor: 'liberado', rotulo: 'Liberado' }, { valor: 'suspenso', rotulo: 'Suspenso' }] },
     { campo: 'data_liberacao', rotulo: 'Data de liberação', tipo: 'data', pode: pode('embarques.liberar') },
     { campo: 'cadencia_valor', rotulo: 'Meta diária', tipo: 'numero', pode: podeMeta, ajuda: 'Obrigatória: veículos ou toneladas por dia, conforme a unidade abaixo. Vale para hoje em diante.' },
     { campo: 'cadencia_unidade', rotulo: 'Meta diária em', tipo: 'select', pode: podeMeta,
@@ -216,8 +216,7 @@ function Cadastro({ e, idx, travarRota = false }: { e: Embarque; idx: Indices; t
       opcoes: c.locais.filter((l) => l.tipo !== 'coleta').map((l) => ({ valor: l.id, rotulo: `${l.nome}${l.cidade ? ` (${l.cidade})` : ''}` })),
       apos: (definir) => <BotaoNovoLocal tipo="entrega" cidade={e.destino_cidade} uf={e.destino_uf ?? ''} aoCriar={(id) => definir(id)} /> },
     { campo: 'observacao_interna', rotulo: 'Observação interna', tipo: 'textarea', pode: pode('embarques.editar_cadastro') },
-    { campo: 'situacao', rotulo: 'Situação cadastral', tipo: 'select', pode: pode('embarques.arquivar'),
-      opcoes: [{ valor: 'ativo', rotulo: 'Ativo' }, { valor: 'arquivado', rotulo: 'Arquivado' }], ajuda: 'Arquivar é diferente de suspender: arquivado sai da operação.' },
+    // Situação não se altera aqui: encerrar e reativar encerrado têm botões próprios na Lista de Fretes (preservam o histórico).
   ];
   if (travarRota) for (const c of campos) if (ROTA_TRAVADA.includes(c.campo)) { c.pode = false; c.travado = true; c.ajuda = 'Não se altera no Editar lote.'; }
   const cli = idx.cliente.get(e.cliente_id);
@@ -284,8 +283,19 @@ const ROTULO_CAMPO_HIST: Record<string, string> = {
   filial_id: 'Filial', cliente_id: 'Cliente', produto_id: 'Produto', local_coleta_id: 'Local de coleta', local_entrega_id: 'Local de entrega',
   origem_cidade: 'Cidade de origem', origem_uf: 'UF de origem', destino_cidade: 'Cidade de destino', destino_uf: 'UF de destino',
   observacao_interna: 'Observação interna', situacao: 'Situação', frete_empresa: 'Frete empresa', frete_motorista: 'Frete motorista',
-  unidade_frete: 'Unidade do frete', meta_valor: 'Meta da posição',
+  unidade_frete: 'Unidade do frete', meta_valor: 'Meta da posição', encerramento: 'Encerramento', reativacao_encerrado: 'Reativação de encerrado',
 };
+
+/** Reativação de encerrado: o servidor guarda o encerramento anterior e o motivo em JSON; aqui vira texto. */
+function textoReativacao(v: string): string {
+  try {
+    const j = JSON.parse(v) as Record<string, string | null>;
+    if ('encerrado_em' in j) {
+      return `Encerrado${j.encerrado_em ? ` em ${fmtDataHora(j.encerrado_em)}` : ''}${j.encerrado_por_nome ? ` por ${j.encerrado_por_nome}` : ''}${j.encerrado_motivo ? ` (${j.encerrado_motivo})` : ''}`;
+    }
+    return `Liberado${j.motivo ? ` · motivo: ${j.motivo}` : ''}`;
+  } catch { return v; }
+}
 
 function HistoricoAba({ embarqueId, idx }: { embarqueId: string; idx: Indices }) {
   const { api, estado } = useApp();
@@ -303,7 +313,8 @@ function HistoricoAba({ embarqueId, idx }: { embarqueId: string; idx: Indices })
     if (v === null || v === '') return '—';
     const m: Record<string, Map<string, { nome: string }>> = { comercial_id: idx.comercial, filial_id: idx.filial, cliente_id: idx.cliente, produto_id: idx.produto, local_coleta_id: idx.local, local_entrega_id: idx.local };
     if (m[campo]) return m[campo].get(v)?.nome ?? v;
-    if (campo === 'status_liberacao') return ROTULO_STATUS[v] ?? v;
+    if (campo === 'status_liberacao') return v === 'nao_informado' ? 'Não informado (antigo)' : ROTULO_STATUS[v] ?? v;
+    if (campo === 'reativacao_encerrado') return textoReativacao(v);
     return v;
   };
   return (

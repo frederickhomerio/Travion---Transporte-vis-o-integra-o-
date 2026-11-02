@@ -18,7 +18,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
   const [d, setD] = useState({
     cliente_id: '', comercial_id: '', filial_id: filiais.length === 1 ? filiais[0].id : '', produto_id: '',
     origem_cidade: '', origem_uf: '', local_coleta: '', destino_cidade: '', destino_uf: '', local_entrega: '',
-    status_liberacao: pode('embarques.liberar') ? 'liberado' : 'nao_informado', data_liberacao: '', cadencia_valor: '', cadencia_unidade: estado.config.cadencia_unidade_padrao,
+    status_liberacao: 'liberado', data_liberacao: '', cadencia_valor: '', cadencia_unidade: estado.config.cadencia_unidade_padrao,
     toneladas_por_veiculo: String(estado.config.capacidade_padrao_t), observacao_interna: '',
     frete_empresa: '', frete_motorista: '', unidade_frete: 'rs_tonelada', abrir: pode('posicoes.abrir'), lote_erp: '',
   });
@@ -42,8 +42,11 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
     if (d.lote_erp.trim().length > 60) { setErro('O número do lote do ERP tem no máximo 60 caracteres.'); return; }
     const dados: Record<string, unknown> = {
       cliente_id: d.cliente_id, filial_id: d.filial_id, origem_cidade: d.origem_cidade.trim(), destino_cidade: d.destino_cidade.trim(),
-      status_liberacao: d.status_liberacao, cadencia_unidade: d.cadencia_unidade,
+      cadencia_unidade: d.cadencia_unidade,
     };
+    // Todo embarque novo nasce Liberado (o servidor assume Liberado quando o campo não vem). Suspender já na criação
+    // continua exigindo a permissão de liberação.
+    if (pode('embarques.liberar') && d.status_liberacao === 'suspenso') dados.status_liberacao = 'suspenso';
     if (d.produto_id) dados.produto_id = d.produto_id;
     if (d.origem_uf) dados.origem_uf = d.origem_uf.trim().toUpperCase();
     if (d.destino_uf) dados.destino_uf = d.destino_uf.trim().toUpperCase();
@@ -179,7 +182,7 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
           <div className="campo-envolve campo-uf">{txt('destino_uf', 'UF', { maxLength: 2 })}</div>
           {local('local_entrega', 'Descarga (local de entrega)', d.destino_cidade, 'coleta')}
         </div>
-        {pode('embarques.liberar') && sel('status_liberacao', 'Status de liberação', [{ id: 'nao_informado', nome: 'Não informado' }, { id: 'liberado', nome: 'Liberado' }, { id: 'suspenso', nome: 'Suspenso' }])}
+        {pode('embarques.liberar') && sel('status_liberacao', 'Status de liberação', [{ id: 'liberado', nome: 'Liberado' }, { id: 'suspenso', nome: 'Suspenso' }])}
         {pode('embarques.liberar') && txt('data_liberacao', 'Data de liberação', { type: 'date' })}
         {sel('cadencia_unidade', 'Meta diária em *', [{ id: 'veiculos_dia', nome: 'Veículos por dia' }, { id: 'toneladas_dia', nome: 'Toneladas por dia' }])}
         {txt('cadencia_valor', `Meta diária (${d.cadencia_unidade === 'toneladas_dia' ? 't/dia' : 'veículos/dia'}) *`, { inputMode: 'decimal', placeholder: d.cadencia_unidade === 'toneladas_dia' ? 'ex.: 120' : 'ex.: 3' },

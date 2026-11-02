@@ -35,9 +35,10 @@ function useGrupos(admin: boolean): GrupoMenu[] {
     ] },
     { id: 'apoio', rotulo: 'Apoio Operacional', icone: 'analise', itens: [
       ...se(pode('apoio.pagina'), { to: '/apoio', icone: 'lista', rotulo: 'Apoio Operacional' }),
-      ...se(pode('analise.operacional'), { to: '/analise/operacional', icone: 'analise', rotulo: 'Painel Operacional' }),
     ] },
     { id: 'gestao', rotulo: 'Gestão', icone: 'config', itens: [
+      ...se(pode('embarques.ver'), { to: '/gestao/painel-embarques', icone: 'painel', rotulo: 'Painel de embarques' }),
+      ...se(pode('analise.operacional'), { to: '/gestao/painel-operacional', icone: 'analise', rotulo: 'Painel Operacional' }),
       ...se(pode('compartilhamento.preparar'), { to: '/posicao-cliente', icone: 'cliente', rotulo: 'Posição do Cliente' }),
       ...se(admin, { to: '/admin', icone: 'config', rotulo: 'Administração' }),
     ] },

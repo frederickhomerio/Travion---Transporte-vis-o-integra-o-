@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { mensagemErro } from '../../data/api';
+import { useDoc } from '../../data/documentacao';
 import { useApp } from '../../data/store';
 import { duracao } from '../../lib/documentacao';
 import { type DadosPainel, type LinhaChamado, OPERACOES, type SituacaoPrazo, filaAtual, linhasDoPainel, situacaoPrazo } from '../../lib/painelOperacional';
@@ -42,13 +43,20 @@ export function FilasOperacao({ linhas, tipos, agora }: { linhas: LinhaChamado[]
 
 const TODOS: TipoSolicitacaoDoc[] = ['cadastro', 'emissao', 'lote_emissao', 'estadia'];
 
-/** Dashboard Embarques: fila do Apoio inteiro (sem nomes), atualizada a cada 15 s enquanto a tela está aberta. */
+/** Dashboard Embarques: fila do Apoio inteiro (sem nomes). Mesmo componente e mesmos cálculos do Painel Operacional
+ *  (FilasOperacao + filaAtual). Atualiza a cada 15 s e, em tempo real, logo depois de qualquer mudança nas solicitações
+ *  (reconciliação com o servidor, para não ficar com valor velho). */
 export function FilaApoioDashboard() {
   const { api } = useApp();
+  const { estado: doc } = useDoc();
   const [dados, setDados] = useState<Pick<DadosPainel, 'agora' | 'solicitacoes' | 'eventos'> | null>(null);
   const [desvio, setDesvio] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
   const [tique, setTique] = useState(Date.now());
+  const [mudou, setMudou] = useState(0);
+  // Cada evento de tempo real das solicitações (status, assumir, concluir) pede uma nova leitura da fila.
+  const assinatura = useMemo(() => Object.values(doc.solicitacoes).map((s) => `${s.id}:${s.versao}`).join('|'), [doc.solicitacoes]);
+  useEffect(() => { const t = setTimeout(() => setMudou((n) => n + 1), 700); return () => clearTimeout(t); }, [assinatura]);
   useEffect(() => {
     let vivo = true;
     const buscar = async () => {
@@ -64,7 +72,7 @@ export function FilaApoioDashboard() {
     void buscar();
     const t = setInterval(() => { setTique(Date.now()); void buscar(); }, 15000);
     return () => { vivo = false; clearInterval(t); };
-  }, [api]);
+  }, [api, mudou]);
   const agora = tique + desvio;
   const linhas = useMemo(() => (dados ? linhasDoPainel(dados, agora) : []), [dados, agora]);
   return (

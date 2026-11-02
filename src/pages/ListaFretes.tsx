@@ -7,17 +7,17 @@ import { DetalhesEmbarque, EditarLote } from '../components/DetalhesEmbarque';
 import { BotaoDocumentacao, SolicitarDocumentacao } from '../components/doc/DocumentacaoEmbarque';
 import { NovoEmbarque } from '../components/NovoEmbarque';
 import { BotaoBaixarDocs } from '../components/doc/MinhasSolicitacoes';
-import { ConfirmarEncerramento, ConfirmarSuspensao, EmbarquesSuspensos } from '../components/SuspenderEncerrar';
+import { ConfirmarEncerramento, ConfirmarSuspensao, PainelEncerrados, PainelSuspensos } from '../components/SuspenderEncerrar';
 import { Alerta, Carregando, EstadoVazio, Icone, Modal, Segmentado, useAviso } from '../components/ui';
 import { useDoc } from '../data/documentacao';
 import { useApp, useIndices, useLinhas } from '../data/store';
 import { type DadosAnuncio, cidadeAnuncio, semDemo, valorFrete, UNIDADE_ANUNCIO } from '../lib/anuncio';
 import { type Indices, codigoEmbarque, nome } from '../lib/cadastros';
-import { aplicarFiltros } from '../lib/filtros';
+import { FILTROS_VAZIOS, aplicarFiltros } from '../lib/filtros';
 import { fmtPct, fmtReais, fmtT, hojeSP } from '../lib/formato';
 import { normalizar } from '../lib/texto';
 import { type ItemLista, baixarListaPdf, desenharLista, textoLista } from '../lib/listaExport';
-import { reativavel } from '../lib/suspensao';
+import { type AbaEmbarque, type LinhaVitrine, abaDoEmbarque, linhasDoEscopo, linhasVitrine } from '../lib/vitrine';
 import type { Embarque, Financeiro, LinhaFrete } from '../types';
 
 type Campo = 'origem' | 'destino' | 'filial' | 'produto';
@@ -36,9 +36,19 @@ export function ListaFretes() {
   useEffect(() => { const h = hojeSP(); if (estado.data !== h) definirData(h); }, [estado.data, definirData]);
   const [buscarPor, setBuscarPor] = useState<CampoBusca>('nenhum');
   const [texto, setTexto] = useState('');
-  // Vitrine para a equipe de campo: só fretes liberados e ativos.
-  const liberados = useMemo(() => aplicarFiltros(todas, { ...estado.filtros, busca: '' }, idx)
-    .filter((l) => l.embarque.status_liberacao === 'liberado' && l.embarque.situacao === 'ativo'), [todas, estado.filtros, idx]);
+  const [aba, setAba] = useState<AbaEmbarque>('liberados');
+  // Vitrine para a equipe de campo: fretes liberados de TODOS os centros de custo (02/11/2026). Fora do centro de custo
+  // autorizado a linha só tem o que a lista e a divulgação usam; Detalhes, Suspender e Encerrar ficam só no próprio centro.
+  const vitrine = useMemo<LinhaVitrine[]>(() => (estado.vitrine
+    ? linhasVitrine(estado.vitrine, estado.embarques, estado.financeiro)
+    : linhasDoEscopo(todas, (f) => idx.filial.get(f)?.centro_custo_id ?? null)), [estado.vitrine, estado.embarques, estado.financeiro, todas, idx]);
+  const f = estado.filtros;
+  // Só os filtros que valem para todos os centros (filial, produto, origem e destino); cliente e carteira não chegam de outros centros.
+  const liberados = useMemo(() => aplicarFiltros(vitrine, { ...FILTROS_VAZIOS, filial_id: f.filial_id, produto_id: f.produto_id, origem: f.origem, destino: f.destino }, idx) as LinhaVitrine[],
+    [vitrine, f.filial_id, f.produto_id, f.origem, f.destino, idx]);
+  const doEscopo = useMemo(() => Object.values(estado.embarques).filter((e) => !e.is_demo === !estado.demo), [estado.embarques, estado.demo]);
+  const suspensos = useMemo(() => doEscopo.filter((e) => abaDoEmbarque(e) === 'suspensos'), [doEscopo]);
+  const encerrados = useMemo(() => doEscopo.filter((e) => abaDoEmbarque(e) === 'encerrados'), [doEscopo]);
   const linhas = useMemo(() => {
     const t = normalizar(texto);
     return t && buscarPor !== 'nenhum' ? liberados.filter((l) => normalizar(chaveGrupo(l, buscarPor, idx)) === t) : liberados;
@@ -67,11 +77,10 @@ export function ListaFretes() {
   const [imagem, setImagem] = useState<DadosAnuncio | null>(null);
   const [suspender, setSuspender] = useState<Embarque | null>(null);
   const [encerrar, setEncerrar] = useState<Embarque | null>(null);
-  const [verSuspensos, setVerSuspensos] = useState(false);
   const avisar = useAviso();
-  const suspensos = useMemo(() => todas.map((l) => l.embarque).filter(reativavel), [todas]);
 
-  const dadosAnuncio = (l: LinhaFrete): DadosAnuncio => anuncioDe(l, idx, estado.financeiro[l.embarque.id] ?? null);
+  const dadosAnuncio = (l: LinhaFrete): DadosAnuncio => anuncioDe(l, idx, l.financeiro);
+  // A divulgação vale para todos os fretes da vitrine; as demais ações só no centro de custo autorizado (o servidor confere de novo).
   const acoesLinha: AcoesLinha = {
     detalhes: (id) => setRapido(id),
     imagem: (l) => setImagem(dadosAnuncio(l)),
@@ -82,7 +91,7 @@ export function ListaFretes() {
 
   const grupos = useMemo(() => {
     if (agrupar === 'nenhum') return [{ chave: '', titulo: '', linhas }];
-    const m = new Map<string, LinhaFrete[]>();
+    const m = new Map<string, LinhaVitrine[]>();
     for (const l of linhas) {
       const k = chaveGrupo(l, agrupar, idx);
       if (!m.has(k)) m.set(k, []);
@@ -97,9 +106,9 @@ export function ListaFretes() {
 
   // Lista para divulgar, na mesma ordem e agrupamento da tela.
   const itensLista = (): ItemLista[] => grupos.flatMap((g) => g.linhas.map((l) => {
-    const d = anuncioDe(l, idx, estado.financeiro[l.embarque.id] ?? null);
+    const d = anuncioDe(l, idx, l.financeiro);
     const v = valorFrete(d.frete);
-    return { grupo: g.titulo, cliente: nome(idx.cliente, l.embarque.cliente_id), origem_cidade: d.origem_cidade, origem_uf: d.origem_uf, coleta: d.coleta,
+    return { grupo: g.titulo, cliente: nome(idx.cliente, l.embarque.cliente_id, ''), origem_cidade: d.origem_cidade, origem_uf: d.origem_uf, coleta: d.coleta,
       destino_cidade: d.destino_cidade, destino_uf: d.destino_uf, entrega: d.entrega, produto: d.produto, frete: v, anuncio: d };
   }));
   const gerarPdf = async () => {
@@ -118,13 +127,28 @@ export function ListaFretes() {
 
   const acoes = (
     <div className="grupo-btn esconder-celular">
-      {pode('embarques.liberar') && <BotaoSuspensos n={suspensos.length} aoClicar={() => setVerSuspensos(true)} />}
       {pode('embarques.criar') && <button className="btn primario" onClick={() => setNovo(true)}><Icone nome="mais" tam={18} />Novo embarque</button>}
+    </div>
+  );
+  const abas = (
+    <div className="lf-abas" role="tablist" aria-label="Situação dos embarques">
+      {([['liberados', 'Liberados', liberados.length], ['suspensos', 'Suspensos', suspensos.length], ['encerrados', 'Encerrados', encerrados.length]] as const).map(([id, rot, n]) => (
+        <button key={id} type="button" role="tab" aria-selected={aba === id} className={`lf-aba lf-aba-${id}${aba === id ? ' ativa' : ''}`} onClick={() => setAba(id)}>
+          {rot}<span className="lf-aba-n">{n}</span>
+        </button>
+      ))}
     </div>
   );
 
   return (
     <Layout titulo="Lista de Fretes" acoes={acoes} aoLadoSino={pode('documentacao.ver') && <BotaoBaixarDocs />}>
+      {abas}
+      {pode('embarques.criar') && <div className="grupo-btn so-celular" style={{ marginBottom: 12 }}>
+        <button className="btn primario" onClick={() => setNovo(true)}><Icone nome="mais" tam={18} />Novo embarque</button>
+      </div>}
+      {aba === 'suspensos' && <PainelSuspensos embarques={suspensos} aoDetalhes={(id) => setDetalhe(id)} />}
+      {aba === 'encerrados' && <PainelEncerrados embarques={encerrados} aoDetalhes={(id) => setDetalhe(id)} />}
+      {aba === 'liberados' && <>
       <div className="controles-lista">
         <div className="controle-linha">
           <span className="controle-rot">Buscar por</span>
@@ -148,21 +172,16 @@ export function ListaFretes() {
         </div>
         <div className="controle-linha">
           <span className="controle-rot"><strong>{linhas.length}</strong> frete(s)</span>
-          <div className="controle-corpo controle-botoes"><BarraFiltros linhas={todas} semData semBusca inicio={botoesExportar} /></div>
+          <div className="controle-corpo controle-botoes"><BarraFiltros linhas={vitrine} semData semBusca vitrine inicio={botoesExportar} /></div>
         </div>
-      </div>
-
-      <div className="grupo-btn so-celular" style={{ marginBottom: 12 }}>
-        {pode('embarques.liberar') && <BotaoSuspensos n={suspensos.length} aoClicar={() => setVerSuspensos(true)} />}
-          {pode('embarques.criar') && <button className="btn primario" onClick={() => setNovo(true)}><Icone nome="mais" tam={18} />Novo embarque</button>}
       </div>
 
       {estado.erro && <Alerta tipo="erro"><span><strong>Erro ao carregar:</strong> {estado.erro}</span></Alerta>}
 
 
-      {estado.carregando && Object.keys(estado.embarques).length === 0 ? <Carregando /> : linhas.length === 0 ? (
-        <div className="cartao"><EstadoVazio titulo={todas.length === 0 ? 'Nenhum embarque cadastrado' : 'Nenhum frete liberado'}>
-          <p>{todas.length === 0 ? (pode('embarques.criar') ? 'Cadastre um embarque ou importe a planilha em Administração.' : 'Ainda não há embarques no seu escopo.') : 'Nenhum frete liberado com estes filtros. Embarques suspensos ficam no botão Suspensos.'}</p>
+      {estado.carregando && Object.keys(estado.embarques).length === 0 && !estado.vitrine ? <Carregando /> : linhas.length === 0 ? (
+        <div className="cartao"><EstadoVazio titulo={vitrine.length === 0 ? 'Nenhum frete liberado' : 'Nenhum frete com estes filtros'}>
+          <p>{vitrine.length === 0 ? (pode('embarques.criar') ? 'Cadastre um embarque em Novo embarque.' : 'Ainda não há fretes liberados.') : 'Nenhum frete liberado com estes filtros. Embarques suspensos e encerrados ficam nas abas ao lado.'}</p>
         </EstadoVazio></div>
       ) : (
         <>
@@ -188,6 +207,7 @@ export function ListaFretes() {
           </div>
         </>
       )}
+      </>}
 
       {rapido && <DetalhesRapidos embarqueId={rapido} aoFechar={() => setRapido(null)} aoFichaCompleta={() => { setDetalhe(rapido); setRapido(null); }}
         aoEditar={() => { setEditarLote(rapido); setRapido(null); }}
@@ -202,12 +222,11 @@ export function ListaFretes() {
       )}
       {suspender && <ConfirmarSuspensao e={suspender} aoFechar={() => setSuspender(null)} />}
       {encerrar && <ConfirmarEncerramento e={encerrar} aoFechar={() => setEncerrar(null)} />}
-      {verSuspensos && <EmbarquesSuspensos embarques={suspensos} aoFechar={() => setVerSuspensos(false)} />}
       {editarLote && <EditarLote embarqueId={editarLote} aoFechar={() => setEditarLote(null)} />}
       {detalhe && <DetalhesEmbarque embarqueId={detalhe} solicitacaoDoc={docAberta} aoFechar={() => { setDetalhe(null); setDocAberta(null); }} />}
       {novo && <NovoEmbarque aoFechar={(id) => { setNovo(false); if (id) setAnuncioNovo(id); }} />}
       {anuncioNovo && estado.embarques[anuncioNovo] && (
-        <ImagemAnuncio titulo="Anúncio do novo frete" dados={anuncioDe({ embarque: estado.embarques[anuncioNovo] } as LinhaFrete, idx, estado.financeiro[anuncioNovo] ?? null)}
+        <ImagemAnuncio titulo="Anúncio do novo frete" dados={anuncioDe({ embarque: estado.embarques[anuncioNovo] } as LinhaFrete, idx, estado.financeiro[anuncioNovo] ?? estado.vitrine?.find((v) => v.id === anuncioNovo) ?? null)}
           aoFechar={() => setAnuncioNovo(null)} />
       )}
     </Layout>
@@ -227,7 +246,7 @@ function subtituloGrupo(linhas: LinhaFrete[]) {
   return `${linhas.length} frete(s)`;
 }
 
-function TituloGrupo({ titulo, linhas }: { titulo: string; linhas: LinhaFrete[] }) {
+function TituloGrupo({ titulo, linhas }: { titulo: string; linhas: LinhaVitrine[] }) {
   return <div className="grupo-titulo"><span>{titulo}</span><span className="pequeno suave" style={{ fontWeight: 500 }}>{subtituloGrupo(linhas)}</span></div>;
 }
 
@@ -236,18 +255,14 @@ type AcoesLinha = {
   suspender?: (l: LinhaFrete) => void; encerrar?: (l: LinhaFrete) => void;
 };
 
-function BotaoSuspensos({ n, aoClicar }: { n: number; aoClicar: () => void }) {
-  return <button className="btn" onClick={aoClicar}>Suspensos{n > 0 && <span className="contador-suspensos">{n}</span>}</button>;
-}
-
-function anuncioDe(l: LinhaFrete, idx: Indices, fin: Financeiro | null): DadosAnuncio {
+function anuncioDe(l: LinhaFrete, idx: Indices, fin: Pick<Financeiro, 'frete_motorista' | 'unidade_frete'> | null): DadosAnuncio {
   const e = l.embarque;
   return {
     origem_cidade: e.origem_cidade, origem_uf: e.origem_uf, coleta: e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null,
     destino_cidade: e.destino_cidade, destino_uf: e.destino_uf, entrega: e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null,
     produto: e.produto_id ? nome(idx.produto, e.produto_id) : null,
     link_mapa: (e.local_coleta_id && idx.local.get(e.local_coleta_id)?.link_mapa) || null,
-    frete: fin ? { frete_motorista: fin.frete_motorista, unidade_frete: fin.unidade_frete } : null,
+    frete: fin && fin.unidade_frete ? { frete_motorista: fin.frete_motorista, unidade_frete: fin.unidade_frete } : null,
   };
 }
 
@@ -288,21 +303,30 @@ function Margem({ fin }: { fin: Financeiro | null | undefined }) {
   );
 }
 
-function BotoesAnuncio({ l, acoes }: { l: LinhaFrete; acoes: AcoesLinha }) {
+function BotoesAnuncio({ l, acoes }: { l: LinhaVitrine; acoes: AcoesLinha }) {
+  const meu = l.noEscopo;
   return (
     <div className="grupo-btn botoes-anuncio">
-      <button className="btn peq" onClick={() => acoes.detalhes(l.embarque.id)}>Detalhes</button>
+      {meu && <button className="btn peq" onClick={() => acoes.detalhes(l.embarque.id)}>Detalhes</button>}
       <button className="btn peq primario" onClick={() => acoes.imagem(l)} title="Imagem e texto para divulgar no WhatsApp">Divulgação</button>
-      {acoes.suspender && <button className="btn peq suspender" onClick={() => acoes.suspender!(l)} title="Tirar da Lista de Fretes e das Posições de Embarque">Suspender</button>}
-      {acoes.encerrar && <button className="btn peq encerrar" onClick={() => acoes.encerrar!(l)} title="Encerrar e arquivar, sem reativação">Encerrar</button>}
+      {meu && acoes.suspender && <button className="btn peq suspender" onClick={() => acoes.suspender!(l)} title="Tirar da Lista de Fretes e das Posições de Embarque">Suspender</button>}
+      {meu && acoes.encerrar && <button className="btn peq encerrar" onClick={() => acoes.encerrar!(l)} title="Encerrar: vai para a aba Encerrados, com data, responsável e motivo">Encerrar</button>}
     </div>
   );
 }
 
+/** Frete de outro centro de custo: só consulta e divulgação. */
+function OutroCentro({ l }: { l: LinhaVitrine }) {
+  const idx = useIndices();
+  if (l.noEscopo) return null;
+  const centro = l.centroCustoId ? nome(idx.centroCusto, l.centroCustoId, '') : '';
+  return <span className="lf-outro-centro" title="Frete de outro centro de custo: você pode consultar e divulgar; Detalhes e ações ficam com o centro responsável.">
+    {centro ? `Centro ${semDemo(centro)}` : 'Outro centro de custo'}</span>;
+}
+
 function GrupoTabela({ g, idx, verFrete, acoes }: {
-  g: { chave: string; titulo: string; linhas: LinhaFrete[] }; idx: Indices; verFrete: boolean; acoes: AcoesLinha;
+  g: { chave: string; titulo: string; linhas: LinhaVitrine[] }; idx: Indices; verFrete: boolean; acoes: AcoesLinha;
 }) {
-  const { estado } = useApp();
   return (
     <>
       {g.titulo && (
@@ -314,8 +338,8 @@ function GrupoTabela({ g, idx, verFrete, acoes }: {
           <tr key={e.id}>
             <td><PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} /></td>
             <td><PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></td>
-            <td className="td-produto">{semDemo(nome(idx.produto, e.produto_id))}<LoteErp embarqueId={e.id} /></td>
-            {verFrete && <><td className="n-frete"><FreteMotorista fin={estado.financeiro[e.id]} /></td><td className="n-frete"><Margem fin={estado.financeiro[e.id]} /></td></>}
+            <td className="td-produto">{semDemo(nome(idx.produto, e.produto_id))}<LoteErp embarqueId={e.id} /><OutroCentro l={l} /></td>
+            {verFrete && <><td className="n-frete"><FreteMotorista fin={l.financeiro} /></td><td className="n-frete"><Margem fin={l.financeiro} /></td></>}
             <td className="td-acao"><BotoesAnuncio l={l} acoes={acoes} /></td>
           </tr>
         );
@@ -324,8 +348,7 @@ function GrupoTabela({ g, idx, verFrete, acoes }: {
   );
 }
 
-function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaFrete; idx: Indices; verFrete: boolean; acoes: AcoesLinha }) {
-  const { estado } = useApp();
+function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaVitrine; idx: Indices; verFrete: boolean; acoes: AcoesLinha }) {
   const e = l.embarque;
   return (
     <article className="cartao cartao-frete">
@@ -337,8 +360,8 @@ function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaFrete; idx: Indices;
           <PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></div>
       </div>
       <div className="rodape">
-        <span className="pequeno suave">{semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))}<LoteErp embarqueId={e.id} /></span>
-        {verFrete && <span style={{ textAlign: 'right' }}><FreteMotorista fin={estado.financeiro[e.id]} /><br /><span className="pequeno">Margem <Margem fin={estado.financeiro[e.id]} /></span></span>}
+        <span className="pequeno suave">{semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))}<LoteErp embarqueId={e.id} /><OutroCentro l={l} /></span>
+        {verFrete && <span style={{ textAlign: 'right' }}><FreteMotorista fin={l.financeiro} /><br /><span className="pequeno">Margem <Margem fin={l.financeiro} /></span></span>}
       </div>
       <BotoesAnuncio l={l} acoes={acoes} />
     </article>

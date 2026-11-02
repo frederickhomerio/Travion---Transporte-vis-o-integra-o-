@@ -21,7 +21,6 @@ import {
 } from '../../lib/painelOperacional';
 import type { MotivoDevolucao, StatusDoc } from '../../types';
 import { ResultadoPill } from '../Estadia';
-import { AbasAnalise } from './AbasAnalise';
 
 type IdQuadro = 'filas' | 'equipe' | 'estadias' | 'mapa' | 'evolucao' | 'resumo';
 const QUADROS: Array<{ id: IdQuadro; rotulo: string }> = [
@@ -72,7 +71,7 @@ const fmtDur = (ms: number | null) => (ms === null ? '—' : duracao(ms));
 export function PainelOperacional() {
   const { pode, estado } = useApp();
   const ok = pode('analise.operacional');
-  if (!ok) return <Layout titulo="Painel Operacional"><AbasAnalise /><AcessoNegado motivo="Seu usuário não tem acesso ao Painel Operacional (Administração → Permissões)." /></Layout>;
+  if (!ok) return <Layout titulo="Painel Operacional"><AcessoNegado motivo="Seu usuário não tem acesso ao Painel Operacional (Administração → Permissões)." /></Layout>;
   return <Painel perfilId={estado.sessao!.perfil.id} />;
 }
 
@@ -150,7 +149,6 @@ function Painel({ perfilId }: { perfilId: string }) {
 
   return (
     <Layout titulo="Painel Operacional">
-      <AbasAnalise />
       <div className="po">
         <div className="po-topo">
           <div className="po-topo-txt">

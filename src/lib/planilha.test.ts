@@ -38,7 +38,7 @@ describe('análise da Lista de Fretes', () => {
     expect(r2.filter((l) => l.situacao === 'valida').map((l) => l.dados!.chave)).toEqual(validas.map((l) => l.dados!.chave));
     expect(validas[1].dados!.frete_empresa).toBe(67.5);
     expect(validas[1].dados!.porta).toBeNull(); // ausente não vira zero
-    expect(validas[1].dados!.status).toBe('nao_informado');
+    expect(validas[1].dados!.status).toBe('liberado');
     expect(validas[1].sugestaoSuspenso).toBe(true);
     expect(validas[0].dados!.extras).toEqual({ PONTO: 1 });
     expect(r1.find((l) => l.motivo === 'Linha de total')).toBeTruthy();

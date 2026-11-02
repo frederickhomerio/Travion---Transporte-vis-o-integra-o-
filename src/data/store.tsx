@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { CADASTROS_VAZIOS, type Cadastros, type Indices, indexar } from '../lib/cadastros';
 import { FILTROS_VAZIOS, type Filtros } from '../lib/filtros';
 import { hojeSP } from '../lib/formato';
-import { CONFIG_PADRAO, type Configuracoes, type Embarque, type Financeiro, type LinhaFrete, type Permissao, type Posicao, type Sessao } from '../types';
+import { CONFIG_PADRAO, type Configuracoes, type Embarque, type Financeiro, type ItemVitrine, type LinhaFrete, type Permissao, type Posicao, type Sessao } from '../types';
 import { type Api, type EstadoConexao, mensagemErro } from './api';
 
 export interface Estado {
@@ -21,6 +21,8 @@ export interface Estado {
   embarques: Record<string, Embarque>;
   financeiro: Record<string, Financeiro>;
   posicoes: Record<string, Posicao>;
+  /** Vitrine da Lista de Fretes: liberados de todos os centros de custo (só campos da lista/divulgação). null = não carregada. */
+  vitrine: ItemVitrine[] | null;
   /** intervalos de datas já carregados */
   datasCarregadas: string[];
   data: string;
@@ -36,7 +38,7 @@ class Store {
   constructor(demoInicial: boolean) {
     this.estado = {
       pronto: false, sessao: null, demo: demoInicial, carregando: false, erro: null, conexao: 'conectando',
-      cadastros: CADASTROS_VAZIOS, config: CONFIG_PADRAO, embarques: {}, financeiro: {}, posicoes: {},
+      cadastros: CADASTROS_VAZIOS, config: CONFIG_PADRAO, embarques: {}, financeiro: {}, posicoes: {}, vitrine: null,
       datasCarregadas: [], data: hojeSP(), filtros: FILTROS_VAZIOS,
     };
   }
@@ -54,6 +56,8 @@ interface Contexto {
   store: Store;
   pode: (p: Permissao) => boolean;
   recarregar: () => Promise<void>;
+  /** Busca de novo a vitrine (depois de suspender, encerrar, reativar ou de um evento de tempo real). */
+  recarregarVitrine: () => Promise<void>;
   garantirPeriodo: (inicio: string, fim: string) => Promise<void>;
   aplicarPosicao: (p: Posicao) => void;
   aplicarEmbarque: (e: Embarque) => void;
@@ -87,6 +91,19 @@ export function ProvedorDados({ api, children }: { api: Api; children: ReactNode
     });
   }, [api, store]);
 
+  // Vitrine: a RLS não manda eventos de embarques fora do escopo, então ela é reconciliada a cada evento de embarque
+  // (com espera curta), ao voltar para a aba do navegador e a cada 60 s com a tela visível.
+  const recarregarVitrine = useCallback(async () => {
+    const { sessao, demo } = store.get();
+    if (!sessao || sessao.perfil.status !== 'ativo') return;
+    try {
+      const v = await api.vitrineFretes(demo);
+      if (store.get().demo === demo) store.set({ vitrine: v });
+    } catch (e) {
+      store.set({ erro: mensagemErro(e) });
+    }
+  }, [api, store]);
+
   const recarregar = useCallback(async () => {
     const { sessao, demo, data } = store.get();
     if (!sessao || sessao.perfil.status !== 'ativo') return;
@@ -98,6 +115,7 @@ export function ProvedorDados({ api, children }: { api: Api; children: ReactNode
         api.carregarEmbarques(demo),
         sessao.permissoes.has('financeiro.ver') ? api.carregarFinanceiro(demo) : Promise.resolve([] as Financeiro[]),
       ]);
+      void recarregarVitrine();
       store.set({
         cadastros, config,
         embarques: Object.fromEntries(embarques.map((e) => [e.id, e])),
@@ -109,7 +127,7 @@ export function ProvedorDados({ api, children }: { api: Api; children: ReactNode
     } catch (e) {
       store.set({ carregando: false, erro: mensagemErro(e) });
     }
-  }, [api, store, carregarData]);
+  }, [api, store, carregarData, recarregarVitrine]);
 
   const atualizarSessao = useCallback(async () => {
     try {
@@ -124,7 +142,7 @@ export function ProvedorDados({ api, children }: { api: Api; children: ReactNode
   useEffect(() => {
     void atualizarSessao();
     return api.aoMudarAutenticacao((ev) => {
-      if (ev === 'SIGNED_OUT') store.set({ sessao: null, embarques: {}, posicoes: {}, financeiro: {}, cadastros: CADASTROS_VAZIOS });
+      if (ev === 'SIGNED_OUT') store.set({ sessao: null, embarques: {}, posicoes: {}, financeiro: {}, vitrine: null, cadastros: CADASTROS_VAZIOS });
       else if (ev === 'SIGNED_IN' || ev === 'USER_UPDATED') void atualizarSessao();
     });
   }, [api, store, atualizarSessao]);
@@ -136,6 +154,11 @@ export function ProvedorDados({ api, children }: { api: Api; children: ReactNode
     if (!sessao || sessao.perfil.status !== 'ativo') return;
     void recarregar();
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let timerVitrine: ReturnType<typeof setTimeout> | undefined;
+    const vitrineEmBreve = () => { clearTimeout(timerVitrine); timerVitrine = setTimeout(() => void recarregarVitrine(), 800); };
+    const aoVoltar = () => { if (!document.hidden) vitrineEmBreve(); };
+    document.addEventListener('visibilitychange', aoVoltar);
+    const ciclo = setInterval(() => { if (!document.hidden) void recarregarVitrine(); }, 60000);
     const cancelar = api.assinar((ev) => {
       const { demo } = store.get();
       if (ev.tabela === 'recarregar') {
@@ -145,19 +168,21 @@ export function ProvedorDados({ api, children }: { api: Api; children: ReactNode
         if (ev.registro.is_demo === demo) store.set((e) => ({ posicoes: { ...e.posicoes, [ev.registro.id]: maisRecente(e.posicoes[ev.registro.id], ev.registro) } }));
       } else if (ev.tabela === 'embarques') {
         if (ev.registro.is_demo === demo) store.set((e) => ({ embarques: { ...e.embarques, [ev.registro.id]: maisRecente(e.embarques[ev.registro.id], ev.registro) } }));
+        vitrineEmBreve();
       } else if (ev.tabela === 'embarque_financeiro') {
+        vitrineEmBreve();
         store.set((e) => (e.embarques[ev.registro.embarque_id]
           ? { financeiro: { ...e.financeiro, [ev.registro.embarque_id]: maisRecente(e.financeiro[ev.registro.embarque_id], ev.registro) } }
           : {}));
       }
     }, (conexao) => store.set({ conexao }));
-    return () => { clearTimeout(timer); cancelar(); };
-  }, [api, store, sessaoId, recarregar]);
+    return () => { clearTimeout(timer); clearTimeout(timerVitrine); clearInterval(ciclo); document.removeEventListener('visibilitychange', aoVoltar); cancelar(); };
+  }, [api, store, sessaoId, recarregar, recarregarVitrine]);
 
   const ctx = useMemo<Contexto>(() => ({
     api, store,
     pode: (p) => store.get().sessao?.permissoes.has(p) ?? false,
-    recarregar,
+    recarregar, recarregarVitrine,
     garantirPeriodo: async (inicio, fim) => {
       const ja = store.get().datasCarregadas.some((r) => { const [a, b] = r.split('..'); return a <= inicio && b >= fim; });
       if (!ja) await carregarData(inicio, fim);
@@ -172,10 +197,10 @@ export function ProvedorDados({ api, children }: { api: Api; children: ReactNode
     definirFiltros: (f) => store.set((e) => ({ filtros: { ...e.filtros, ...f } })),
     definirDemo: (demo) => {
       try { localStorage.setItem(CHAVE_DEMO, demo ? '1' : '0'); } catch { /* preferência só desta sessão */ }
-      store.set({ demo, filtros: FILTROS_VAZIOS });
+      store.set({ demo, filtros: FILTROS_VAZIOS, vitrine: null });
     },
     atualizarSessao,
-  }), [api, store, recarregar, carregarData, atualizarSessao]);
+  }), [api, store, recarregar, recarregarVitrine, carregarData, atualizarSessao]);
 
   return <Ctx.Provider value={ctx}>{children}</Ctx.Provider>;
 }

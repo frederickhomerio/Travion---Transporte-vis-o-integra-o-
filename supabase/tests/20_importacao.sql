@@ -18,12 +18,12 @@ select set_config('t.payload', $json$
   "linhas": [
     {"linha": 2, "chave": "k1#1", "carteira": "LEANDRO", "filial": "Itumbiara", "cliente": "CARAMURU ALIMENTOS S/A",
      "origem_cidade": "BELA VISTA", "coleta": "COAPIL", "destino_cidade": "IPAMERI", "destino_uf": "GO", "entrega": "CARAMURU",
-     "produto": "SOJA EM GRÃOS", "status": "nao_informado", "frete_empresa": 61, "frete_motorista": 56,
+     "produto": "SOJA EM GRÃOS", "status": "liberado", "frete_empresa": 61, "frete_motorista": 56,
      "frete_motorista_original": "=ROUNDDOWN(J2*0.93,0)", "porta": 7, "transito": 0, "carregados": 2,
      "extras": {"PONTO": 1}},
     {"linha": 3, "chave": "k1#2", "carteira": "LEANDRO", "filial": "Itumbiara", "cliente": "CARAMURU ALIMENTOS S/A",
      "origem_cidade": "BELA VISTA", "coleta": "COAPIL", "destino_cidade": "IPAMERI", "destino_uf": "GO", "entrega": "CARAMURU",
-     "produto": "SOJA EM GRÃOS", "status": "nao_informado", "frete_empresa": 67.5, "frete_motorista": null,
+     "produto": "SOJA EM GRÃOS", "status": "liberado", "frete_empresa": 67.5, "frete_motorista": null,
      "porta": null, "transito": 1, "carregados": 0, "obs_operacional": "LOTE SUSPENSO"}
   ]
 }
@@ -36,7 +36,7 @@ do $$ declare r jsonb := current_setting('t.rel1')::jsonb; begin
   assert (r ->> 'posicoes_criadas')::int = 2, 'duas posições';
   assert (select porta from posicoes_diarias p join embarques e on e.id = p.embarque_id where e.chave_importacao = 'k1#2') is null,
     'ausente continua ausente (não vira zero)';
-  assert (select status_liberacao from embarques where chave_importacao = 'k1#2') = 'nao_informado',
+  assert (select status_liberacao from embarques where chave_importacao = 'k1#2') = 'liberado',
     'observação "suspenso" não altera status sozinha';
   assert (select restricao_comercial from clientes where nome = 'CLIENTE BLOQUEADO') = 'NÃO CARREGAR', 'restrição preservada';
   assert (select comercial_id from clientes where nome = 'CLIENTE BLOQUEADO') is null, '"NÃO CARREGAR" não vira comercial';

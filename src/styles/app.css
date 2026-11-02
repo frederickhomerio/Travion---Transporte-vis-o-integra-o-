@@ -107,7 +107,8 @@ h3 { font-size: 0.98rem; }
   border-bottom: 1px solid #f2c94c; color: #6b4a00; padding: 8px 20px; font-size: 0.86rem; font-weight: 600;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
 }
-.faixa-demo select { padding: 4px 8px; border-radius: 6px; border: 1px solid #e0b84a; background: #fffaf0; }
+.faixa-demo select { padding: 4px 8px; border-radius: 6px; border: 1px solid #e0b84a; background: #fffaf0; max-width: 100%; min-width: 0; }
+.faixa-demo label { min-width: 0; max-width: 100%; }
 
 /* ---------- Conexão ---------- */
 .conexao { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
@@ -1444,3 +1445,55 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .ip-painel li.erro .ip-prob { color: var(--vermelho-700); font-weight: 600; }
 .dash-kpi:nth-child(n+4) .ip-painel { left: auto; right: 0; }
 @media (max-width: 720px) { .ip-painel { position: fixed; left: 16px; right: 16px; top: 80px; width: auto; } }
+
+/* Lista de Fretes: abas Liberados / Suspensos / Encerrados (02/11/2026) */
+.lf-abas { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--borda); overflow-x: auto; }
+.lf-aba { appearance: none; background: none; border: 0; border-bottom: 3px solid transparent; padding: 9px 14px; font: inherit; font-weight: 700; color: var(--cinza-700); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; min-height: var(--toque); }
+.lf-aba:hover { color: var(--vinho); }
+.lf-aba.ativa { color: var(--vinho); border-bottom-color: var(--vinho); }
+.lf-aba-n { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--cinza-100); color: var(--cinza-700); font-size: 0.75rem; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.lf-aba.ativa .lf-aba-n { background: var(--vinho); color: #fff; }
+.lf-aba-suspensos.ativa .lf-aba-n { background: var(--vermelho-700); }
+.lf-aba-encerrados.ativa .lf-aba-n { background: var(--cinza-700); }
+.lf-outro-centro { display: block; margin-top: 3px; font-size: 0.72rem; font-weight: 600; color: var(--cinza-600); }
+.lf-outro-centro::before { content: '◇ '; }
+.se-painel .se-lista { max-height: none; overflow: visible; }
+.se-encerramento { display: grid; grid-template-columns: auto auto 1fr; gap: 6px 18px; margin: 0; font-size: 0.86rem; }
+.se-encerramento dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-suave); }
+.se-encerramento dd { margin: 0; font-weight: 600; }
+@media (max-width: 720px) { .se-encerramento { grid-template-columns: 1fr 1fr; } .se-encerramento .se-motivo { grid-column: 1 / -1; } }
+
+/* Dashboard Embarques: Tempo de fila + Minhas solicitações (02/11/2026) */
+@media (max-width: 720px) {
+  .dash-embarques .po-filas { grid-template-columns: 1fr; gap: 10px; }
+  .dash-embarques .po-fila-cab { padding: 10px 14px; font-size: 1rem; }
+  .dash-embarques .po-fila-corpo { padding: 12px 14px; gap: 6px; }
+  .dash-embarques .po-fila-val { font-size: 1.6rem; }
+  .dash-embarques .po-fila-rot { font-size: 0.74rem; }
+  .dash-embarques .po-fila-linha { flex-direction: row; font-size: 0.88rem; }
+  .dash-embarques .po-fila-nota { font-size: 0.74rem; }
+}
+.ms-filtros { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin: 4px 0 12px; }
+@media (max-width: 720px) { .ms-filtros { grid-template-columns: 1fr; } }
+/* A tabela rola dentro do quadro; a página não ganha rolagem lateral. */
+.ms-tabela-wrap { position: relative; width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--borda); border-radius: var(--raio-campo); }
+.ms-acomp-tabela { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.ms-acomp-tabela th, .ms-acomp-tabela td { padding: 9px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--cinza-100); vertical-align: middle; }
+.ms-acomp-tabela thead th { background: var(--cinza-50); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-suave); font-weight: 700; }
+.ms-acomp-tabela tr.ms-aberta td { background: var(--cinza-50); border-bottom: 0; }
+.ms-acomp-tabela .ms-linha-docs td { white-space: normal; }
+.ms-tipo { font-weight: 800; color: var(--vinho-escuro); }
+.ms-num { font-size: 0.78rem; color: var(--texto-suave); }
+.ms-tempo { font-variant-numeric: tabular-nums; }
+.ms-tempo.correndo .mono { font-weight: 800; color: var(--vinho); font-size: 0.95rem; }
+.ms-tempo.correndo::before { content: '● '; color: var(--verde-700); font-size: 0.7rem; }
+.ms-tempo.finalizado .mono { font-weight: 700; color: var(--texto); font-size: 0.95rem; }
+.ms-tempo-fim { font-size: 0.72rem; color: var(--texto-suave); }
+.ms-tempo.aguardando { color: var(--cinza-700); font-style: italic; }
+.ms-acoes { display: flex; gap: 6px; }
+.ms-acomp { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.ms-acomp > div { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.ms-acomp-rot { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-suave); font-weight: 700; }
+.ms-acomp-tempo { font-size: 1.6rem; font-family: var(--fonte-titulo); }
+.ms-acomp-tempo .ms-tempo.correndo .mono, .ms-acomp-tempo .ms-tempo.finalizado .mono { font-size: 1.6rem; }
+@media (max-width: 520px) { .ms-acomp { grid-template-columns: 1fr; } }

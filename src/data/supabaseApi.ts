@@ -169,6 +169,11 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
     agoraServidor: () => rpc<string>('agora_servidor', {}),
     atualizarEmbarque: (id, alteracoes, base, forcar = false) =>
       rpc('atualizar_embarque', { p_embarque_id: id, p_alteracoes: alteracoes, p_base: base, p_forcar: forcar }),
+    async vitrineFretes(demo) {
+      return ok(await sb.rpc('lista_fretes_vitrine', { p_is_demo: demo })) ?? [];
+    },
+    reativarEncerrado: (id, motivo, versao) =>
+      rpc('reativar_embarque_encerrado', { p_embarque_id: id, p_motivo: motivo, p_versao: versao }),
     async encerrarEmbarque(id, motivo) {
       const r = await rpc<{ registro: never }>('encerrar_embarque', { p_embarque_id: id, p_motivo: motivo });
       return r.registro;
@@ -179,8 +184,9 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
       const r = await rpc<{ registro: never }>('criar_embarque', { p_dados: dados, p_is_demo: demo });
       return r.registro;
     },
-    abrirPosicoes: (data, transportar, ids, demo) =>
-      rpc('abrir_posicoes', { p_data: data, p_transportar_saldos: transportar, p_embarque_ids: ids, p_is_demo: demo }),
+    // p_transportar_saldos é legado: o servidor ignora e sempre abre zerado; o app manda false.
+    abrirPosicoes: (data, ids, demo) =>
+      rpc('abrir_posicoes', { p_data: data, p_transportar_saldos: false, p_embarque_ids: ids, p_is_demo: demo }),
     salvarCadastro: (tipo, id, dados, demo) => rpc('salvar_cadastro', { p_tipo: tipo, p_id: id, p_dados: dados, p_is_demo: demo }),
     obterLocal: (nome, cidade, uf, tipo, demo) =>
       rpc('obter_local', { p_nome: nome, p_cidade: cidade, p_uf: uf, p_tipo: tipo, p_is_demo: demo }),

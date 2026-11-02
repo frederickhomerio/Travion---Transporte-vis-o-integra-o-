@@ -47,12 +47,13 @@ export function parseUF(v: unknown): string | null | undefined {
   return /^[A-Z]{2}$/.test(s) ? s : undefined;
 }
 
-export function parseStatus(v: unknown): 'liberado' | 'suspenso' | 'nao_informado' | undefined {
+/** Status da planilha. Só existem Liberado e Suspenso (Encerrado não se importa): vazio ou "Não informado" vira Liberado. */
+export function parseStatus(v: unknown): 'liberado' | 'suspenso' | undefined {
   const s = normalizar(v);
-  if (!s) return 'nao_informado';
+  if (!s) return 'liberado';
   if (s.startsWith('LIBERAD')) return 'liberado';
   if (s.startsWith('SUSPENS')) return 'suspenso';
-  if (s === 'NAO INFORMADO') return 'nao_informado';
+  if (s === 'NAO INFORMADO') return 'liberado';
   return undefined;
 }
 

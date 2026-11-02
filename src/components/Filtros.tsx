@@ -6,12 +6,14 @@ import type { LinhaFrete } from '../types';
 import { Icone } from './ui';
 
 /** Data operacional + busca + filtros. O mesmo estado é usado na Lista de Fretes e no Dashboard. */
-export function BarraFiltros({ linhas, semBusca = false, semData = false, inicio, extra }: { linhas: LinhaFrete[]; semBusca?: boolean; semData?: boolean; inicio?: React.ReactNode; extra?: React.ReactNode }) {
+/** `vitrine`: Lista de Fretes de todos os centros de custo — só Filial, Produto, Origem e Destino (cliente, carteira e
+ *  status não valem para fretes de outros centros; os estados ficam nas abas Liberados, Suspensos e Encerrados). */
+export function BarraFiltros({ linhas, semBusca = false, semData = false, vitrine = false, inicio, extra }: { linhas: LinhaFrete[]; semBusca?: boolean; semData?: boolean; vitrine?: boolean; inicio?: React.ReactNode; extra?: React.ReactNode }) {
   const { estado, definirData, definirFiltros } = useApp();
   const idx = useIndices();
   const f = estado.filtros;
   const [aberto, setAberto] = useState(false);
-  const n = filtrosAtivos(f);
+  const n = vitrine ? (['filial_id', 'produto_id', 'origem', 'destino'] as const).filter((k) => f[k]).length : filtrosAtivos(f);
   const hoje = hojeSP();
   const c = estado.cadastros;
 
@@ -43,14 +45,15 @@ export function BarraFiltros({ linhas, semBusca = false, semData = false, inicio
       </div>
       {aberto && (
         <div className="cartao painel-filtros">
-          <Sel rot="Cliente" v={f.cliente_id} on={(v) => definirFiltros({ cliente_id: v })} ops={c.clientes.filter((x) => linhas.some((l) => l.embarque.cliente_id === x.id)).map((x) => [x.id, x.nome])} />
+          {!vitrine && <Sel rot="Cliente" v={f.cliente_id} on={(v) => definirFiltros({ cliente_id: v })} ops={c.clientes.filter((x) => linhas.some((l) => l.embarque.cliente_id === x.id)).map((x) => [x.id, x.nome])} />}
           <Sel rot="Filial" v={f.filial_id} on={(v) => definirFiltros({ filial_id: v })} ops={c.filiais.map((x) => [x.id, x.nome])} />
-          <Sel rot="Carteira" v={f.comercial_id} on={(v) => definirFiltros({ comercial_id: v })} ops={[...c.comerciais.map((x) => [x.id, x.nome] as [string, string]), ['__sem', 'Sem carteira']]} />
+          {!vitrine && <Sel rot="Carteira" v={f.comercial_id} on={(v) => definirFiltros({ comercial_id: v })} ops={[...c.comerciais.map((x) => [x.id, x.nome] as [string, string]), ['__sem', 'Sem carteira']]} />}
           <Sel rot="Produto" v={f.produto_id} on={(v) => definirFiltros({ produto_id: v })} ops={c.produtos.map((x) => [x.id, x.nome])} />
           <Sel rot="Origem" v={f.origem} on={(v) => definirFiltros({ origem: v })} ops={cidades(linhas, 'origem_cidade').map((x) => [x.valor, x.rotulo])} />
           <Sel rot="Destino" v={f.destino} on={(v) => definirFiltros({ destino: v })} ops={cidades(linhas, 'destino_cidade').map((x) => [x.valor, x.rotulo])} />
+          {!vitrine && <>
           <Sel rot="Status de liberação" v={f.status} on={(v) => definirFiltros({ status: v as never })}
-            ops={[['liberado', 'Liberado'], ['suspenso', 'Suspenso'], ['nao_informado', 'Não informado']]} />
+            ops={[['liberado', 'Liberado'], ['suspenso', 'Suspenso']]} />
           <div className="campo" style={{ justifyContent: 'flex-end' }}>
             <label className="check"><input type="checkbox" checked={f.soMovimentacao} onChange={(e) => definirFiltros({ soMovimentacao: e.target.checked })} />Apenas com movimentação</label>
           </div>
@@ -60,6 +63,7 @@ export function BarraFiltros({ linhas, semBusca = false, semData = false, inicio
           <div className="campo" style={{ justifyContent: 'flex-end' }}>
             <label className="check"><input type="checkbox" checked={f.incluirArquivados} onChange={(e) => definirFiltros({ incluirArquivados: e.target.checked })} />Incluir arquivados</label>
           </div>
+          </>}
           {idx.filial.size === 0 && <p className="suave pequeno">Nenhuma filial cadastrada.</p>}
         </div>
       )}

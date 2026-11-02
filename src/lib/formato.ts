@@ -76,7 +76,7 @@ export function fmtPct(n: number | null | undefined, casas = 1): string {
 export const ROTULO_STATUS: Record<string, string> = {
   liberado: 'Liberado',
   suspenso: 'Suspenso',
-  nao_informado: 'Não informado',
+  encerrado: 'Encerrado',
 };
 
 export const ROTULO_PAPEL: Record<string, string> = {

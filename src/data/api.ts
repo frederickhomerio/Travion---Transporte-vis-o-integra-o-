@@ -7,7 +7,7 @@ import type { DadosPainel } from '../lib/painelOperacional';
 import type {
   AnexoDoc, CategoriaAnexo, ConferenciaEstadia, DadosCadastroDoc, DadosEstadia, DuplicadaEstadia, PagamentoEstadia, ParametrosConferencia,
   ResultadoEstadia, RetornoEstadia, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
-  Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
+  Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, ItemVitrine, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
 
@@ -140,6 +140,9 @@ export interface Api {
   carregarCadastros(demo: boolean): Promise<Cadastros>;
   carregarConfiguracoes(): Promise<Configuracoes>;
   carregarEmbarques(demo: boolean): Promise<Embarque[]>;
+  /** Vitrine da Lista de Fretes: liberados de TODOS os centros de custo, só com os campos da lista e da divulgação
+   *  (função lista_fretes_vitrine, migração 3400). `no_escopo` diz se a pessoa pode abrir Detalhes e agir. */
+  vitrineFretes(demo: boolean): Promise<ItemVitrine[]>;
   carregarPosicoes(demo: boolean, inicio: string, fim: string): Promise<Posicao[]>;
   carregarFinanceiro(demo: boolean): Promise<Financeiro[]>;
   carregarHistorico(embarqueId: string): Promise<Historico[]>;
@@ -154,11 +157,15 @@ export interface Api {
   /** Horário do servidor (ISO), referência da janela de duas horas. */
   agoraServidor(): Promise<string>;
   atualizarEmbarque(id: string, alteracoes: Partial<Embarque>, base: Partial<Embarque>, forcar?: boolean): Promise<ResultadoGravacao<Embarque> & { posicoes_atualizadas?: number }>;
-  /** Encerra de vez (arquivado sem reativação). Só gestor e administrador. */
+  /** Encerra (situacao arquivado, com data, responsável e motivo) pela função encerrar_embarque. */
   encerrarEmbarque(id: string, motivo: string | null): Promise<Embarque>;
+  /** Volta um encerrado para Liberado (mesmo ID, código e histórico). Exige embarques.reativar_encerrado, escopo, motivo
+   *  (até 500 caracteres) e a versão que a tela mostrava: 'conflito' devolve o registro atual sem gravar. */
+  reativarEncerrado(id: string, motivo: string, versao: number): Promise<{ status: 'ok' | 'conflito'; registro: Embarque }>;
   atualizarFinanceiro(embarqueId: string, alteracoes: Partial<Financeiro>, base: Partial<Financeiro>, forcar?: boolean): Promise<ResultadoGravacao<Financeiro>>;
   criarEmbarque(dados: Record<string, unknown>, demo: boolean): Promise<Embarque>;
-  abrirPosicoes(data: string, transportar: boolean, embarqueIds: string[] | null, demo: boolean): Promise<ResultadoAbertura>;
+  /** Abre as posições que faltam na data. Toda posição nova nasce com porta, trânsito e carregados em 0. */
+  abrirPosicoes(data: string, embarqueIds: string[] | null, demo: boolean): Promise<ResultadoAbertura>;
   salvarCadastro(tipo: TipoCadastro, id: string | null, dados: Record<string, unknown>, demo: boolean): Promise<unknown>;
   /** Reaproveita o local (coleta/entrega) com o mesmo nome na mesma cidade ou cria um novo. */
   obterLocal(nome: string, cidade: string | null, uf: string | null, tipo: 'coleta' | 'entrega', demo: boolean): Promise<string | null>;

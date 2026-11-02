@@ -49,7 +49,7 @@ reset role;
 
 do $$ begin
   begin update embarques set situacao = 'ativo' where id = '00000000-0000-0000-0000-0000000005b1';
-    raise exception 'nem gravação direta reativa'; exception when sqlstate '55000' then null; end;
+    raise exception 'nem gravação direta reativa'; exception when sqlstate '55000' or sqlstate '42501' then null; end;
 end $$;
 
 -- Encerramento automático (pg_cron roda sem usuário): só suspensos há mais de 7 dias

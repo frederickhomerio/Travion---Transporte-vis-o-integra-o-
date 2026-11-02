@@ -5,11 +5,12 @@ import type { Permissao } from '../types';
 export const ABAS_APP: Array<{ id: string; rotulo: string; chaves: Permissao[] }> = [
   { id: 'lista', rotulo: 'Lista de Fretes', chaves: [
     'embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia', 'embarques.editar_cadencia_proprio',
-    'embarques.editar_capacidade', 'embarques.editar_lote', 'embarques.arquivar', 'embarques.encerrar', 'carteira.editar', 'financeiro.ver', 'financeiro.editar',
+    'embarques.editar_capacidade', 'embarques.editar_lote', 'embarques.arquivar', 'embarques.encerrar', 'embarques.reativar_encerrado', 'carteira.editar', 'financeiro.ver', 'financeiro.editar',
     'historico.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente',
     'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar'] },
-  { id: 'dashboard', rotulo: 'Dashboard Embarques', chaves: ['embarques.ver', 'financeiro.ver', 'analise.fila'] },
-  { id: 'painel', rotulo: 'Painel Operacional', chaves: ['analise.operacional'] },
+  { id: 'dashboard', rotulo: 'Dashboard Embarques', chaves: ['analise.fila', 'documentacao.ver', 'documentacao.solicitar', 'cadastro.ver', 'cadastro.solicitar'] },
+  { id: 'painel-embarques', rotulo: 'Gestão → Painel de embarques', chaves: ['embarques.ver', 'financeiro.ver'] },
+  { id: 'painel', rotulo: 'Gestão → Painel Operacional', chaves: ['analise.operacional'] },
   { id: 'posicoes', rotulo: 'Posições de Embarque', chaves: ['posicoes.pagina', 'embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional'] },
   { id: 'cliente', rotulo: 'Posição do Cliente', chaves: ['compartilhamento.preparar', 'compartilhamento.links', 'posicoes.editar_obs_cliente'] },
   { id: 'apoio', rotulo: 'Apoio Operacional', chaves: ['apoio.pagina', 'apoio.atender', 'documentacao.ver', 'documentacao.cancelar', 'estadia.ver'] },

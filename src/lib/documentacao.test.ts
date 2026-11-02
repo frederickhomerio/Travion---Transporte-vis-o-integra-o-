@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SolicitacaoDoc } from '../types';
-import { acaoDocumentacao, avisosDuplicidade, docsDoEscopo, docsParaBaixar, duracao, minhasSolicitacoes, FILTROS_FILA, filtrarFila, lerReais, normalizarPlaca, telefoneValido, tempoDoc, tipoCadastro } from './documentacao';
+import { acaoDocumentacao, avisosDuplicidade, docsDoEscopo, docsParaBaixar, duracao, minhasSolicitacoes, FILTROS_FILA, filtrarAcompanhamento, filtrarFila, fmtHMS, lerReais, normalizarPlaca, solicitacoesAcompanhamento, telefoneValido, tempoAtendimento, tempoDoc, tipoCadastro } from './documentacao';
 
 const base = Date.parse('2026-10-27T12:00:00Z');
 const sol = (o: Partial<SolicitacaoDoc>): SolicitacaoDoc => ({
@@ -134,5 +134,46 @@ describe('Baixar documentos do escopo', () => {
     expect(docsDoEscopo(todas).map((s) => s.id)).toEqual(['b', 'a']);
     expect(docsDoEscopo(todas, 'rvd-2a').map((s) => s.id)).toEqual(['a']);
     expect(docsDoEscopo(todas, 'thia').map((s) => s.id)).toEqual(['b']);
+  });
+});
+
+describe('Minhas solicitações: fila única, filtros e cronômetro (02/11/2026)', () => {
+  const ini = '2026-11-02T10:00:00Z';
+  const t0 = Date.parse(ini);
+  it('antes de assumir não há contagem', () => {
+    expect(tempoAtendimento({ status: 'enviado', assumido_em: null, concluido_em: null, cancelado_em: null }, t0)).toEqual({ tipo: 'aguardando' });
+  });
+  it('conta do Assumir, sem usar o envio, e não reinicia em pendência', () => {
+    const s = { status: 'aguardando_informacao' as const, assumido_em: ini, concluido_em: null, cancelado_em: null };
+    expect(tempoAtendimento(s, t0 + 443000)).toEqual({ tipo: 'correndo', ms: 443000 });
+    expect(tempoAtendimento({ ...s, status: 'correcao_recebida' }, t0 + 1929000)).toEqual({ tipo: 'correndo', ms: 1929000 });
+  });
+  it('congela na finalização, inclusive cadastro concluído', () => {
+    const fim = new Date(t0 + 3723000).toISOString();
+    expect(tempoAtendimento({ status: 'documentacao_disponivel', assumido_em: ini, concluido_em: fim, cancelado_em: null }, t0 + 9e9)).toEqual({ tipo: 'finalizado', ms: 3723000 });
+    expect(tempoAtendimento({ status: 'cadastro_concluido', assumido_em: ini, concluido_em: fim, cancelado_em: null }, t0 + 9e9)).toEqual({ tipo: 'finalizado', ms: 3723000 });
+  });
+  it('legado sem início confiável: indisponível (nunca o horário do envio)', () => {
+    expect(tempoAtendimento({ status: 'em_atendimento', assumido_em: null, concluido_em: null, cancelado_em: null }, t0)).toEqual({ tipo: 'indisponivel' });
+    expect(tempoAtendimento({ status: 'documentacao_disponivel', assumido_em: ini, concluido_em: null, cancelado_em: null }, t0)).toEqual({ tipo: 'indisponivel' });
+  });
+  it('HH:MM:SS com horas totais', () => {
+    expect(fmtHMS(0)).toBe('00:00:00');
+    expect(fmtHMS(443000)).toBe('00:07:23');
+    expect(fmtHMS((27 * 3600 + 5 * 60 + 9) * 1000)).toBe('27:05:09');
+  });
+  it('fila única sem Estadia e três filtros combinados', () => {
+    const lista = solicitacoesAcompanhamento([
+      sol({ id: 'a', tipo: 'cadastro', placa: 'EFU2G04', solicitante_id: 'u1', retrato: { filial_id: 'f1' } as never }),
+      sol({ id: 'b', tipo: 'emissao', placa: 'RTP7A21', solicitante_id: 'u2', retrato: { filial_id: 'f2' } as never }),
+      sol({ id: 'c', tipo: 'lote_emissao', placa: 'QWE3D89', placas_reboque: ['ABC1234'], solicitante_id: 'u1', retrato: { filial_id: 'f2' } as never }),
+      sol({ id: 'd', tipo: 'estadia', placa: 'EFU2G04', solicitante_id: 'u1' }),
+    ]);
+    expect(lista.map((s) => s.id).sort()).toEqual(['a', 'b', 'c']);
+    expect(filtrarAcompanhamento(lista, { placa: 'efu-2g 04', filialId: '', enviadoPor: '' }).map((s) => s.id)).toEqual(['a']);
+    expect(filtrarAcompanhamento(lista, { placa: 'abc1234', filialId: '', enviadoPor: '' }).map((s) => s.id)).toEqual(['c']);
+    expect(filtrarAcompanhamento(lista, { placa: '', filialId: 'f2', enviadoPor: '' }).map((s) => s.id).sort()).toEqual(['b', 'c']);
+    expect(filtrarAcompanhamento(lista, { placa: '', filialId: 'f2', enviadoPor: 'u1' }).map((s) => s.id)).toEqual(['c']);
+    expect(filtrarAcompanhamento(lista, { placa: 'RTP', filialId: 'f2', enviadoPor: 'u1' })).toEqual([]);
   });
 });

@@ -2,7 +2,8 @@
 
 export type Papel = 'administrador' | 'gestor' | 'supervisor' | 'embarcador' | 'apoio' | 'operacao' | 'comercial' | 'consulta';
 export type StatusUsuario = 'pendente' | 'ativo' | 'bloqueado';
-export type StatusLiberacao = 'liberado' | 'suspenso' | 'nao_informado';
+/** Estados de negócio: Liberado, Suspenso e Encerrado (encerrado = situacao 'arquivado' com encerrado_em). */
+export type StatusLiberacao = 'liberado' | 'suspenso';
 export type Situacao = 'ativo' | 'arquivado';
 export type UnidadeFrete = 'nao_confirmada' | 'rs_tonelada' | 'rs_viagem' | 'rs_m3' | 'outra';
 export type UnidadeCadencia = 'veiculos_dia' | 'toneladas_dia';
@@ -10,7 +11,7 @@ export type TipoLocal = 'coleta' | 'entrega' | 'ambos';
 
 export type Permissao =
   | 'embarques.ver' | 'embarques.criar' | 'embarques.editar_cadastro' | 'embarques.liberar'
-  | 'embarques.editar_cadencia' | 'embarques.editar_cadencia_proprio' | 'embarques.editar_capacidade' | 'embarques.editar_lote' | 'embarques.arquivar' | 'embarques.encerrar'
+  | 'embarques.editar_cadencia' | 'embarques.editar_cadencia_proprio' | 'embarques.editar_capacidade' | 'embarques.editar_lote' | 'embarques.arquivar' | 'embarques.encerrar' | 'embarques.reativar_encerrado'
   | 'carteira.editar' | 'posicoes.pagina' | 'posicoes.abrir' | 'posicoes.editar_contadores'
   | 'posicoes.editar_obs_operacional' | 'posicoes.editar_obs_cliente'
   | 'financeiro.ver' | 'financeiro.editar' | 'historico.ver'
@@ -72,8 +73,17 @@ export interface Embarque {
   criado_por?: string | null;
   /** Quando foi suspenso (o banco encerra sozinho após 7 dias sem reativação). */
   suspenso_em?: string | null;
-  /** Encerrado: arquivado de vez, sem reativação. */
+  /** Encerrado: situacao 'arquivado' com encerrado_em. Pode voltar a Liberado com embarques.reativar_encerrado (motivo e histórico). */
   encerrado_em?: string | null; encerrado_por_nome?: string | null; encerrado_motivo?: string | null;
+}
+
+/** Frete da vitrine (Lista de Fretes de todos os centros de custo): só o que a lista e a divulgação usam.
+ *  Sem cliente, carteira, frete empresa, margem ou observações. `no_escopo`: a pessoa pode abrir Detalhes e agir. */
+export interface ItemVitrine {
+  id: string; codigo: number; filial_id: string; centro_custo_id: string | null; produto_id: string | null;
+  origem_cidade: string; origem_uf: string | null; local_coleta_id: string | null;
+  destino_cidade: string; destino_uf: string | null; local_entrega_id: string | null;
+  frete_motorista: number | null; unidade_frete: UnidadeFrete | null; atualizado_em: string; no_escopo: boolean;
 }
 
 export interface Financeiro {

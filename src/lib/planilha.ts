@@ -100,7 +100,7 @@ export interface LinhaImportacao {
   destino_uf: string | null;
   entrega: string | null;
   produto: string | null;
-  status: 'liberado' | 'suspenso' | 'nao_informado';
+  status: 'liberado' | 'suspenso';
   cadencia_valor: number | null;
   frete_empresa: number | null;
   frete_motorista: number | null;
@@ -185,7 +185,7 @@ export async function analisarListaFretes(aba: Aba, linhaCabecalho: number, mapa
     if (ufOri === undefined) avisos.push(`UF de origem inválida: "${textoCelula(get('origem_uf'))}"`);
 
     const status = parseStatus(textoCelula(get('status')));
-    if (status === undefined) avisos.push(`Status não reconhecido: "${textoCelula(get('status'))}" (ficará Não informado)`);
+    if (status === undefined) avisos.push(`Status não reconhecido: "${textoCelula(get('status'))}" (ficará Liberado)`);
 
     const numero_ = (campo: CampoDestino, rot: string) => {
       const c = get(campo);
@@ -252,7 +252,7 @@ export async function analisarListaFretes(aba: Aba, linhaCabecalho: number, mapa
       chave: await chaveImportacao(parcial, oc),
       carteira: txt('carteira'),
       ...parcial,
-      status: status ?? 'nao_informado',
+      status: status ?? 'liberado',
       cadencia_valor: cadencia !== null && cadencia > 0 ? cadencia : null,
       frete_empresa: freteEmp,
       frete_motorista: freteMot,

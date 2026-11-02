@@ -1,17 +1,14 @@
 import { type ReactNode, useEffect, useRef, useState, useMemo } from 'react';
-import { FilaApoioDashboard } from '../components/analise/FilasOperacao';
-import { MinhasSolicitacoes } from '../components/doc/MinhasSolicitacoes';
-import { InfoPendencias } from '../components/analise/InfoPendencias';
-import { Layout } from '../components/Layout';
-import { AbasAnalise } from './analise/AbasAnalise';
-import { Alerta, Carregando, EstadoVazio, Icone, Segmentado } from '../components/ui';
-import { mensagemErro } from '../data/api';
-import { linhasDaData, useApp, useIndices } from '../data/store';
-import { nome } from '../lib/cadastros';
-import { type Indicadores, type TipoPeriodo, diasDoIntervalo, indicadores, faixaBarra, indicadoresPorGrupo, intervaloPeriodo, pendenciasFinanceiras } from '../lib/dashboard';
-import { FILTROS_VAZIOS, aplicarFiltros } from '../lib/filtros';
-import { fmtDataCurta, fmtNum, fmtPct, fmtReais, fmtT, hojeSP } from '../lib/formato';
-import type { LinhaFrete } from '../types';
+import { InfoPendencias } from '../../components/analise/InfoPendencias';
+import { Layout } from '../../components/Layout';
+import { AcessoNegado, Alerta, Carregando, EstadoVazio, Icone, Segmentado } from '../../components/ui';
+import { mensagemErro } from '../../data/api';
+import { linhasDaData, useApp, useIndices } from '../../data/store';
+import { nome } from '../../lib/cadastros';
+import { type Indicadores, type TipoPeriodo, diasDoIntervalo, indicadores, faixaBarra, indicadoresPorGrupo, intervaloPeriodo, pendenciasFinanceiras } from '../../lib/dashboard';
+import { FILTROS_VAZIOS, aplicarFiltros } from '../../lib/filtros';
+import { fmtDataCurta, fmtNum, fmtPct, fmtReais, fmtT, hojeSP } from '../../lib/formato';
+import type { LinhaFrete } from '../../types';
 
 type Visao = 'geral' | 'filiais' | 'centros';
 
@@ -26,7 +23,9 @@ function mil(v: number | null | undefined): string {
   return fmtReais(v, 0);
 }
 
-export function Dashboard() {
+// Gestão → Painel de embarques (02/11/2026): os indicadores que ficavam no Dashboard Embarques, sem mudar cálculos,
+// bases, filtros de período, agrupamentos nem o Modo TV. Valores em R$ continuam só para quem tem financeiro.ver.
+export function PainelEmbarques() {
   const { estado, pode, garantirPeriodo } = useApp();
   const idx = useIndices();
   const fin = pode('financeiro.ver');
@@ -128,8 +127,6 @@ export function Dashboard() {
               </Alerta>
             )}
 
-            {pode('analise.fila') && <FilaApoioDashboard />}
-
             <Destaque r={r} tipo={tipo} fin={exibirRs} />
 
             <div className="dash-kpis">
@@ -217,17 +214,16 @@ export function Dashboard() {
       </div>
   );
 
+  if (!pode('embarques.ver')) return <Layout titulo="Painel de embarques"><AcessoNegado motivo="Seu usuário não tem acesso aos embarques (Administração → Permissões)." /></Layout>;
   if (tv) return <TvDashboard aoSair={() => setTv(false)}>{conteudo}</TvDashboard>;
   return (
-    <Layout titulo="Dashboard Embarques">
-      <AbasAnalise />
+    <Layout titulo="Painel de embarques">
       {conteudo}
-      {(pode('documentacao.solicitar') || pode('cadastro.solicitar')) && <div className="dash ms-dash"><MinhasSolicitacoes /></div>}
     </Layout>
   );
 }
 
-/** Modo TV do Dashboard Embarques: tela fixa, letras maiores, atualiza sozinho com o tempo real das posições. */
+/** Modo TV do Painel de embarques: tela fixa, letras maiores, atualiza sozinho com o tempo real das posições. */
 function TvDashboard({ children, aoSair }: { children: ReactNode; aoSair: () => void }) {
   const caixa = useRef<HTMLDivElement>(null);
   const [cheia, setCheia] = useState(false);
@@ -253,10 +249,10 @@ function TvDashboard({ children, aoSair }: { children: ReactNode; aoSair: () => 
   return (
     <div className="tv dash-tv" ref={caixa}>
       <header className="tv-cab">
-        <div><strong className="tv-titulo">Dashboard Embarques</strong><span className="tv-contexto">Posições do período · atualiza sozinho</span></div>
+        <div><strong className="tv-titulo">Painel de embarques</strong><span className="tv-contexto">Posições do período · atualiza sozinho</span></div>
         <div className="tv-acoes">
           <button className="btn" onClick={() => void telaCheia()}>{cheia ? 'Sair da tela inteira' : 'Tela inteira'}</button>
-          <button className="btn primario" onClick={aoSair}>Voltar ao dashboard</button>
+          <button className="btn primario" onClick={aoSair}>Voltar ao painel</button>
         </div>
       </header>
       {aviso && <Alerta tipo="aviso">{aviso}</Alerta>}

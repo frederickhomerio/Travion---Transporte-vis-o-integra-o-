@@ -1,28 +1,23 @@
-// Minhas Solicitações (Dashboard Embarques) e botão Baixar documentos (Lista de Fretes): emissões e cadastros enviados
-// pelo usuário logado. Os documentos emitidos só aparecem depois que o apoio libera a documentação.
+// Minhas solicitações (Dashboard Embarques) e botão Baixar documentos (Lista de Fretes). O quadro é uma fila única de
+// acompanhamento (Cadastro, Emissão e Lote e Emissão) das solicitações que o servidor deixa a pessoa ver (escopo), com
+// cronômetro do atendimento. Os documentos emitidos só aparecem depois que o apoio libera a documentação.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDoc } from '../../data/documentacao';
-import { useApp } from '../../data/store';
-import { ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, TIPO_DOC, docsDoEscopo, docsParaBaixar, fmtPlaca, minhasSolicitacoes, rotaDoc, tempoDoc } from '../../lib/documentacao';
+import { useApp, useIndices } from '../../data/store';
+import { nome } from '../../lib/cadastros';
+import {
+  CATEGORIA, CATEGORIAS_SAIDA, TIPO_DOC, type TempoAtendimento, docsDoEscopo, docsParaBaixar, filialDaSolicitacao, filtrarAcompanhamento, fmtHMS, fmtPlaca,
+  rotaDoc, solicitacoesAcompanhamento, tempoAtendimento,
+} from '../../lib/documentacao';
 import { mensagemErro } from '../../data/api';
 import type { SolicitacaoDoc } from '../../types';
-import { Icone } from '../ui';
-import { JanelaAnexos, StatusDocPill, TipoNumero, useAgora, useArquivo } from './Comum';
+import { Icone, Modal } from '../ui';
+import { JanelaAnexos, StatusDocPill, useAgora, useArquivo } from './Comum';
 
-type Recorte = 'todas' | 'abertas' | 'disponiveis';
-const ROTULO_RECORTE: Record<Recorte, string> = { todas: 'Todas', abertas: 'Em aberto', disponiveis: 'Documentação disponível' };
-const LIMITE = 10;
+const LIMITE = 15;
 
 const clienteLote = (s: SolicitacaoDoc) => (s.tipo === 'cadastro' ? 'Cadastro no ERP' : s.retrato.lote_numero ? `Lote ${s.retrato.lote_numero}` : 'Lote a gerar');
-
-function useMinhas() {
-  const { estado: app } = useApp();
-  const { estado } = useDoc();
-  const eu = app.sessao?.perfil.id ?? '';
-  const lista = useMemo(() => minhasSolicitacoes(Object.values(estado.solicitacoes), eu), [estado.solicitacoes, eu]);
-  return { lista, carregado: estado.carregado, ativo: estado.ativo };
-}
 
 /** Documentos emitidos de uma emissão liberada: Ver, Baixar e Baixar todos. */
 function DocsEmitidos({ s }: { s: SolicitacaoDoc }) {
@@ -56,51 +51,134 @@ function DocsEmitidos({ s }: { s: SolicitacaoDoc }) {
   );
 }
 
-/** Quadro do Dashboard Embarques: fila das minhas solicitações de emissão e cadastro. */
+/** Relógio que corre a cada segundo, alinhado ao horário do servidor (os tempos vêm de horários gravados pelo servidor;
+ *  recarregar, navegar ou fechar o navegador não zera nada). */
+function useRelogioServidor() {
+  const { api } = useApp();
+  const [desvio, setDesvio] = useState(0);
+  const agora = useAgora(1000);
+  useEffect(() => {
+    let vivo = true;
+    const pedido = Date.now();
+    api.agoraServidor().then((iso) => { if (vivo) setDesvio(Date.parse(iso) - (pedido + Date.now()) / 2); }).catch(() => undefined);
+    return () => { vivo = false; };
+  }, [api]);
+  return agora + desvio;
+}
+
+function TempoCelula({ t, compacto = true }: { t: TempoAtendimento; compacto?: boolean }) {
+  if (t.tipo === 'aguardando') return <span className="ms-tempo aguardando">{compacto ? 'Aguardando início' : 'Aguardando início do atendimento'}</span>;
+  if (t.tipo === 'indisponivel') return <span className="ms-tempo suave">Tempo indisponível</span>;
+  if (t.tipo === 'cancelada') return <span className="ms-tempo suave">—</span>;
+  return (
+    <span className={`ms-tempo ${t.tipo}`} title={t.tipo === 'correndo' ? 'Em atendimento: conta desde que o apoio assumiu' : 'Tempo total, do Assumir até a finalização'}>
+      <span className="mono">{fmtHMS(t.ms)}</span>{t.tipo === 'finalizado' && <span className="ms-tempo-fim"> total</span>}
+    </span>
+  );
+}
+
+/** Acompanhar: só o status atual e o tempo de atendimento. */
+function Acompanhar({ s, agora, aoFechar }: { s: SolicitacaoDoc; agora: number; aoFechar: () => void }) {
+  const t = tempoAtendimento(s, agora);
+  return (
+    <Modal titulo={`${TIPO_DOC[s.tipo]} nº ${s.numero}`} aoFechar={aoFechar} rodape={<button className="btn primario" onClick={aoFechar}>Fechar</button>}>
+      <div className="ms-acomp">
+        <div><span className="ms-acomp-rot">Status atual</span><StatusDocPill status={s.status} /></div>
+        <div><span className="ms-acomp-rot">Tempo de atendimento</span>
+          <span className="ms-acomp-tempo"><TempoCelula t={t} compacto={false} /></span>
+          <span className="pequeno suave">{t.tipo === 'correndo' ? 'Contando desde que o apoio assumiu.' : t.tipo === 'finalizado' ? 'Do Assumir até a finalização.' : ''}</span>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Quadro do Dashboard Embarques: fila única de acompanhamento (Cadastro, Emissão e Lote e Emissão) das solicitações
+ *  visíveis no escopo, com três filtros: placa, filial e responsável pelo envio. Não assume nada (isso é no Apoio). */
 export function MinhasSolicitacoes() {
-  const { lista, carregado, ativo } = useMinhas();
-  const agora = useAgora(15000);
-  const [recorte, setRecorte] = useState<Recorte>('todas');
+  const { estado: app } = useApp();
+  const { estado } = useDoc();
+  const idx = useIndices();
+  const eu = app.sessao?.perfil.id ?? '';
+  const lista = useMemo(() => solicitacoesAcompanhamento(Object.values(estado.solicitacoes)), [estado.solicitacoes]);
+  const agora = useRelogioServidor();
+  const [placa, setPlaca] = useState('');
+  const [filialId, setFilialId] = useState('');
+  // Começa nas solicitações da própria pessoa (quando ela tem alguma); "Todos" mostra as demais do escopo autorizado.
+  const [enviadoPor, setEnviadoPor] = useState<string | null>(null);
+  const porPadrao = lista.some((s) => s.solicitante_id === eu) ? eu : '';
+  const quem = enviadoPor ?? porPadrao;
   const [todas, setTodas] = useState(false);
   const [aberta, setAberta] = useState<string | null>(null);
-  if (!ativo) return null;
-  const filtradas = lista.filter((s) => recorte === 'todas' || (recorte === 'abertas' ? ABERTOS.includes(s.status) : docsParaBaixar(s)));
+  const [acompanhar, setAcompanhar] = useState<string | null>(null);
+  const filiais = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of lista) { const id = filialDaSolicitacao(s); if (id && !m.has(id)) m.set(id, s.retrato?.filial ?? nome(idx.filial, id)); }
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
+  }, [lista, idx]);
+  const remetentes = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of lista) if (!m.has(s.solicitante_id)) m.set(s.solicitante_id, s.solicitante_nome);
+    if (eu && !m.has(eu)) m.set(eu, app.sessao?.perfil.nome || 'Eu');
+    return [...m.entries()].sort((a, b) => (a[0] === eu ? -1 : b[0] === eu ? 1 : a[1].localeCompare(b[1], 'pt-BR')));
+  }, [lista, eu, app.sessao]);
+  if (!estado.ativo) return null;
+  const filtradas = filtrarAcompanhamento(lista, { placa, filialId, enviadoPor: quem });
   const vis = todas ? filtradas : filtradas.slice(0, LIMITE);
-  const contar = (r: Recorte) => lista.filter((s) => r === 'todas' || (r === 'abertas' ? ABERTOS.includes(s.status) : docsParaBaixar(s))).length;
+  const sAcomp = acompanhar ? estado.solicitacoes[acompanhar] : null;
+  const filtrando = !!(placa || filialId || quem);
   return (
-    <section className="cartao dash-sec ms" aria-label="Minhas Solicitações">
+    <section className="cartao dash-sec ms" aria-label="Minhas solicitações">
       <div className="dash-sec-topo">
-        <h3>Minhas Solicitações</h3>
-        <select className="entrada ms-recorte" value={recorte} onChange={(e) => { setRecorte(e.target.value as Recorte); setTodas(false); }} aria-label="Quais solicitações">
-          {(Object.keys(ROTULO_RECORTE) as Recorte[]).map((r) => <option key={r} value={r}>{ROTULO_RECORTE[r]} ({contar(r)})</option>)}
-        </select>
+        <h3>Minhas solicitações</h3>
+        <span className="suave pequeno">Cadastro, Emissão e Lote e Emissão · {filtradas.length} de {lista.length}</span>
       </div>
-      {!carregado ? <p className="suave">Carregando…</p> : !filtradas.length ? (
-        <p className="suave">{lista.length ? 'Nenhuma solicitação neste recorte.' : 'As emissões e os cadastros que você enviar aparecem aqui.'}</p>
+      <div className="ms-filtros">
+        <label className="campo"><span>Placa</span>
+          <input className="entrada" type="search" value={placa} onChange={(e) => setPlaca(e.target.value)} placeholder="Ex.: EFU-2G04" aria-label="Filtrar por placa" />
+        </label>
+        <label className="campo"><span>Filial</span>
+          <select className="entrada" value={filialId} onChange={(e) => setFilialId(e.target.value)}>
+            <option value="">Todas as filiais</option>
+            {filiais.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
+          </select>
+        </label>
+        <label className="campo"><span>Responsável pelo envio</span>
+          <select className="entrada" value={quem} onChange={(e) => setEnviadoPor(e.target.value)}>
+            <option value="">Todos do meu escopo</option>
+            {remetentes.map(([id, n]) => <option key={id} value={id}>{id === eu ? `${n} (eu)` : n}</option>)}
+          </select>
+        </label>
+      </div>
+      {!estado.carregado ? <p className="suave">Carregando…</p> : !filtradas.length ? (
+        <p className="suave">{lista.length && filtrando ? 'Nenhuma solicitação com estes filtros.' : 'As emissões e os cadastros enviados aparecem aqui.'}</p>
       ) : (
-        <div className="ao-tabela-wrap">
-          <table className="ao-tabela ms-tabela">
-            <thead><tr><th>Solicitação</th><th>Cliente e lote</th><th>Placa e rota</th><th>Tempo</th><th>Status</th><th><span className="sr">Documentos</span></th></tr></thead>
+        <div className="ms-tabela-wrap">
+          <table className="ms-acomp-tabela">
+            <thead><tr><th>Solicitação</th><th>Placa</th><th>Filial</th><th>Enviado por</th><th>Tempo de atendimento</th><th>Status</th><th>Apoio responsável</th><th><span className="sr">Ação</span></th></tr></thead>
             <tbody>
               {vis.map((s) => {
-                const t = tempoDoc(s, agora);
                 const exp = aberta === s.id;
+                const fil = filialDaSolicitacao(s);
                 return [
                   <tr key={s.id} className={exp ? 'ms-aberta' : ''}>
-                    <td data-rot="Solicitação"><TipoNumero s={s} /></td>
-                    <td data-rot="Cliente e lote"><span className="ao-l1">{s.retrato.cliente}</span><span className="ao-l2">{clienteLote(s)}</span></td>
-                    <td data-rot="Placa e rota"><span className="ao-l1">{fmtPlaca(s.placa)}</span><span className="ao-l2">{s.tipo === 'cadastro' ? 'Cadastro de motorista e veículo' : rotaDoc(s)}</span></td>
-                    <td data-rot="Tempo"><span className="ao-l2">{t.rotulo}</span><span className="ao-l1">{t.texto}</span></td>
-                    <td data-rot="Status"><StatusDocPill status={s.status} /></td>
-                    <td className="ao-acao">
+                    <td><span className="ms-tipo">{TIPO_DOC[s.tipo]}</span><span className="ms-num"> · nº {s.numero}</span></td>
+                    <td className="mono">{fmtPlaca(s.placa)}</td>
+                    <td>{s.retrato?.filial ?? (fil ? nome(idx.filial, fil) : '—')}</td>
+                    <td>{s.solicitante_nome}</td>
+                    <td><TempoCelula t={tempoAtendimento(s, agora)} /></td>
+                    <td><StatusDocPill status={s.status} /></td>
+                    <td>{s.responsavel_nome ?? <span className="suave">Ainda não assumido</span>}</td>
+                    <td className="ms-acoes">
+                      <button className="btn peq" onClick={() => setAcompanhar(s.id)}>Acompanhar</button>
                       {docsParaBaixar(s) && (
                         <button className={`btn peq ${exp ? 'secundario' : 'primario'}`} aria-expanded={exp} onClick={() => setAberta(exp ? null : s.id)}>
-                          <Icone nome="baixar" tam={16} />{exp ? 'Fechar' : 'Baixar documentos'}
+                          <Icone nome="baixar" tam={16} />{exp ? 'Fechar' : 'Documentos'}
                         </button>
                       )}
                     </td>
                   </tr>,
-                  exp && <tr key={`${s.id}-docs`} className="ms-linha-docs"><td colSpan={6}><DocsEmitidos s={s} /></td></tr>,
+                  exp && <tr key={`${s.id}-docs`} className="ms-linha-docs"><td colSpan={8}><DocsEmitidos s={s} /></td></tr>,
                 ];
               })}
             </tbody>
@@ -108,6 +186,7 @@ export function MinhasSolicitacoes() {
         </div>
       )}
       {filtradas.length > LIMITE && <button className="btn" style={{ marginTop: 12 }} onClick={() => setTodas((x) => !x)}>{todas ? 'Mostrar menos' : `Mostrar todas (${filtradas.length})`}</button>}
+      {sAcomp && <Acompanhar s={sAcomp} agora={agora} aoFechar={() => setAcompanhar(null)} />}
     </section>
   );
 }
