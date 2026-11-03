@@ -113,6 +113,8 @@ function Resumo({ e, idx }: { e: Embarque; idx: Indices }) {
           <dt>Meta diária</dt><dd>{e.cadencia_valor ? `${fmtNum(e.cadencia_valor, 1)} ${ROTULO_CADENCIA[e.cadencia_unidade]}` : 'Sem meta: preencha a meta diária do embarque'}</dd>
           <dt>Toneladas médias por veículo</dt><dd>{fmtT(e.toneladas_por_veiculo)}</dd>
           <dt>Lote no ERP</dt><dd><LoteDoEmbarque embarqueId={e.id} /></dd>
+          <dt>PC</dt><dd>{e.pc || '—'}</dd>
+          <dt>Tabela</dt><dd>{e.tabela || '—'}</dd>
           <dt>Situação</dt><dd>{e.encerrado_em ? 'Encerrado' : e.situacao === 'ativo' ? 'Ativo' : 'Arquivado'}</dd>
           {e.observacao_interna && <><dt>Observação interna</dt><dd>{e.observacao_interna}</dd></>}
           <dt>Última alteração do cadastro</dt><dd>{fmtDataHora(e.atualizado_em)}{e.atualizado_por_nome ? ` · ${e.atualizado_por_nome}` : ''}</dd>
@@ -200,6 +202,8 @@ function Cadastro({ e, idx, travarRota = false }: { e: Embarque; idx: Indices; t
       opcoes: [{ valor: 'veiculos_dia', rotulo: 'Veículos por dia' }, { valor: 'toneladas_dia', rotulo: 'Toneladas por dia' }] },
     { campo: 'toneladas_por_veiculo', rotulo: 'Toneladas médias por veículo', tipo: 'numero', pode: pode('embarques.editar_capacidade'),
       ajuda: 'Vale para hoje em diante. Posições de datas anteriores mantêm a capacidade usada na época.' },
+    { campo: 'pc', rotulo: 'PC', tipo: 'texto', pode: pode('embarques.editar_cadastro') },
+    { campo: 'tabela', rotulo: 'Tabela', tipo: 'texto', pode: pode('embarques.editar_cadastro') },
     { campo: 'comercial_id', rotulo: 'Carteira (comercial)', tipo: 'select', pode: pode('carteira.editar'), vazio: 'Sem carteira',
       opcoes: c.comerciais.map((x) => ({ valor: x.id, rotulo: x.nome })), ajuda: 'Alteração restrita e registrada no histórico.' },
     { campo: 'filial_id', rotulo: 'Filial (centro de custo)', tipo: 'select', pode: pode('embarques.editar_cadastro'), opcoes: c.filiais.map((x) => ({ valor: x.id, rotulo: x.nome })) },
@@ -279,7 +283,7 @@ function FinanceiroAba({ embarqueId, existe }: { embarqueId: string; existe: boo
 const ROTULO_CAMPO_HIST: Record<string, string> = {
   porta: 'Porta', transito: 'Trânsito', carregados: 'Carregados', obs_operacional: 'Observação operacional', obs_cliente: 'Observação para o cliente',
   abertura: 'Abertura da posição', importacao: 'Importação', criacao: 'Criação', status_liberacao: 'Status de liberação', data_liberacao: 'Data de liberação',
-  cadencia_valor: 'Cadência', cadencia_unidade: 'Unidade da cadência', toneladas_por_veiculo: 'Toneladas por veículo', comercial_id: 'Carteira',
+  cadencia_valor: 'Cadência', cadencia_unidade: 'Unidade da cadência', toneladas_por_veiculo: 'Toneladas por veículo', pc: 'PC', tabela: 'Tabela', comercial_id: 'Carteira',
   filial_id: 'Filial', cliente_id: 'Cliente', produto_id: 'Produto', local_coleta_id: 'Local de coleta', local_entrega_id: 'Local de entrega',
   origem_cidade: 'Cidade de origem', origem_uf: 'UF de origem', destino_cidade: 'Cidade de destino', destino_uf: 'UF de destino',
   observacao_interna: 'Observação interna', situacao: 'Situação', frete_empresa: 'Frete empresa', frete_motorista: 'Frete motorista',

@@ -7,7 +7,7 @@ import { criarDocSupabase } from './docSupabase';
 
 const COLUNAS_EMBARQUE =
   'id,codigo,cliente_id,comercial_id,filial_id,produto_id,origem_cidade,origem_uf,local_coleta_id,destino_cidade,destino_uf,' +
-  'local_entrega_id,status_liberacao,data_liberacao,cadencia_valor,cadencia_unidade,toneladas_por_veiculo,observacao_interna,' +
+  'local_entrega_id,status_liberacao,data_liberacao,cadencia_valor,cadencia_unidade,toneladas_por_veiculo,observacao_interna,pc,tabela,' +
   'situacao,is_demo,chave_importacao,versao,atualizado_em,atualizado_por_nome,suspenso_em,encerrado_em,encerrado_por_nome,encerrado_motivo';
 
 const COLUNAS_CLIENTE =

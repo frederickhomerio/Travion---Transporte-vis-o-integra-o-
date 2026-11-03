@@ -1497,3 +1497,12 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .ms-acomp-tempo { font-size: 1.6rem; font-family: var(--fonte-titulo); }
 .ms-acomp-tempo .ms-tempo.correndo .mono, .ms-acomp-tempo .ms-tempo.finalizado .mono { font-size: 1.6rem; }
 @media (max-width: 520px) { .ms-acomp { grid-template-columns: 1fr; } }
+
+/* Lista de Fretes: coluna Lote-PC-Tabela (03/11) — lote do ERP, PC e tabela um abaixo do outro. */
+.tabela-fretes th.td-lpt, .tabela-fretes td.td-lpt { white-space: nowrap; }
+.lpt { display: flex; flex-direction: column; gap: 1px; }
+.lpt .lote-erp { margin-top: 0; }
+.lpt-compacto { margin-top: 3px; }
+.linha-lpt { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 14px; }
+.linha-lpt-ajuda { grid-column: 1 / -1; display: block; margin: 4px 0 0; font-size: 0.8rem; color: var(--texto-suave); }
+@media (max-width: 560px) { .linha-lpt { grid-template-columns: 1fr; } }

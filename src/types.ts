@@ -67,6 +67,8 @@ export interface Embarque {
   status_liberacao: StatusLiberacao; data_liberacao: string | null;
   cadencia_valor: number | null; cadencia_unidade: UnidadeCadencia;
   toneladas_por_veiculo: number; observacao_interna: string | null; situacao: Situacao;
+  /** PC e tabela do ERP (texto livre, até 60 caracteres). Aparecem na coluna Lote-PC-Tabela da Lista de Fretes. */
+  pc?: string | null; tabela?: string | null;
   is_demo: boolean; chave_importacao: string | null; versao: number;
   atualizado_em: string; atualizado_por_nome: string | null;
   /** Quem cadastrou (pode alterar a meta com a permissão "dos embarques que criei"). */

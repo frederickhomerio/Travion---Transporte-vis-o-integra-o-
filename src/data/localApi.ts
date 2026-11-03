@@ -25,7 +25,7 @@ interface DadosPrevia {
   centros?: Record<string, string>;
 }
 const DADOS_PREVIA = (globalThis as { TRAVION_DADOS_PREVIA?: DadosPrevia }).TRAVION_DADOS_PREVIA ?? null;
-const CHAVE = DADOS_PREVIA ? `travion-previa-v7-${DADOS_PREVIA.id}` : 'travion-previa-v7';
+const CHAVE = DADOS_PREVIA ? `travion-previa-v8-${DADOS_PREVIA.id}` : 'travion-previa-v8';
 const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
@@ -214,6 +214,7 @@ function semear(): Banco {
       produto_id: produtos[l[2]].id, origem_cidade: l[3], origem_uf: 'GO', local_coleta_id: locais[l[4]].id,
       destino_cidade: l[5], destino_uf: l[6], local_entrega_id: locais[l[7]].id, status_liberacao: l[8], data_liberacao: null,
       cadencia_valor: l[9], cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: 40, observacao_interna: i === 6 ? 'Carregamento das 7h às 17h. Levar lona e EPI.' : null,
+      pc: i % 2 === 0 ? String(45800 + i * 7) : null, tabela: i % 3 !== 1 ? `TAB-2026-${String(10 + (i % 3)).padStart(2, '0')}` : null,
       situacao: 'ativo', is_demo: true, chave_importacao: null, versao: 1, atualizado_em: agora(), atualizado_por_nome: 'Demonstração',
       suspenso_em: l[8] === 'suspenso' ? new Date(Date.now() - [1, 5, 6][suspensos++ % 3] * 86400e3 - 3600e3).toISOString() : null,
     });
@@ -553,6 +554,7 @@ export function criarLocalApi(): Api {
     origem_uf: { perm: 'embarques.editar_cadastro', tipo: 'uf' }, local_coleta_id: { perm: 'embarques.editar_cadastro', tipo: 'uuid' },
     destino_cidade: { perm: 'embarques.editar_cadastro', tipo: 'texto_obrigatorio' }, destino_uf: { perm: 'embarques.editar_cadastro', tipo: 'uf' },
     local_entrega_id: { perm: 'embarques.editar_cadastro', tipo: 'uuid' }, observacao_interna: { perm: 'embarques.editar_cadastro', tipo: 'texto' },
+    pc: { perm: 'embarques.editar_cadastro', tipo: 'texto' }, tabela: { perm: 'embarques.editar_cadastro', tipo: 'texto' },
     status_liberacao: { perm: 'embarques.liberar', tipo: 'enum', valores: ['liberado', 'suspenso'] },
     data_liberacao: { perm: 'embarques.liberar', tipo: 'data' },
     cadencia_valor: { perm: 'embarques.editar_cadencia', tipo: 'positivo_obrigatorio' },
@@ -837,6 +839,9 @@ export function criarLocalApi(): Api {
       if (!tem('embarques.editar_cadencia') && !tem('embarques.editar_cadencia_proprio')) erro('Você não tem permissão para definir a meta diária do embarque.');
       const loteErp = typeof d.lote_erp === 'string' ? d.lote_erp.trim() : '';
       if (loteErp.length > 60) erro('O número do lote do ERP tem no máximo 60 caracteres.');
+      const pc = typeof d.pc === 'string' && d.pc.trim() ? d.pc.trim() : null;
+      const tabela = typeof d.tabela === 'string' && d.tabela.trim() ? d.tabela.trim() : null;
+      if ((pc?.length ?? 0) > 60 || (tabela?.length ?? 0) > 60) erro('PC e tabela têm no máximo 60 caracteres.');
       if (d.status_liberacao === 'suspenso' || d.data_liberacao) exigir('embarques.liberar');
       if (!noEscopo(d.filial_id as string, comercial)) erro('A filial ou carteira escolhida está fora do seu escopo.');
       db.seq++;
@@ -848,7 +853,7 @@ export function criarLocalApi(): Api {
         local_entrega_id: (d.local_entrega_id as string) ?? null, status_liberacao: d.status_liberacao === 'suspenso' ? 'suspenso' : 'liberado',
         data_liberacao: (d.data_liberacao as string) ?? null, cadencia_valor: (d.cadencia_valor as number) ?? null,
         cadencia_unidade: (d.cadencia_unidade as Embarque['cadencia_unidade']) ?? 'veiculos_dia', toneladas_por_veiculo: cap,
-        observacao_interna: (d.observacao_interna as string) ?? null, situacao: 'ativo', is_demo: demo, chave_importacao: null,
+        observacao_interna: (d.observacao_interna as string) ?? null, pc, tabela, situacao: 'ativo', is_demo: demo, chave_importacao: null,
         versao: 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario(), criado_por: perfil()?.id ?? null,
       };
       db.embarques.push(e);

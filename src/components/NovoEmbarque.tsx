@@ -19,8 +19,8 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
     cliente_id: '', comercial_id: '', filial_id: filiais.length === 1 ? filiais[0].id : '', produto_id: '',
     origem_cidade: '', origem_uf: '', local_coleta: '', destino_cidade: '', destino_uf: '', local_entrega: '',
     status_liberacao: 'liberado', data_liberacao: '', cadencia_valor: '', cadencia_unidade: estado.config.cadencia_unidade_padrao,
-    toneladas_por_veiculo: String(estado.config.capacidade_padrao_t), observacao_interna: '',
-    frete_empresa: '', frete_motorista: '', unidade_frete: 'rs_tonelada', abrir: pode('posicoes.abrir'), lote_erp: '',
+    observacao_interna: '',
+    frete_empresa: '', frete_motorista: '', unidade_frete: 'rs_tonelada', abrir: pode('posicoes.abrir'), lote_erp: '', pc: '', tabela: '',
   });
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -35,11 +35,10 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
       setErro('Preencha cliente, filial, cidade de origem e cidade de destino.');
       return;
     }
-    const cap = parseNumeroBR(d.toneladas_por_veiculo);
     const cad = parseNumeroBR(d.cadencia_valor);
-    if (!cap || cap <= 0) { setErro('Toneladas médias por veículo deve ser maior que zero.'); return; }
     if (!cad || cad <= 0) { setErro(`Informe a meta diária em ${d.cadencia_unidade === 'toneladas_dia' ? 'toneladas' : 'veículos'} por dia (número maior que zero).`); return; }
     if (d.lote_erp.trim().length > 60) { setErro('O número do lote do ERP tem no máximo 60 caracteres.'); return; }
+    if (d.pc.trim().length > 60 || d.tabela.trim().length > 60) { setErro('PC e tabela têm no máximo 60 caracteres.'); return; }
     const dados: Record<string, unknown> = {
       cliente_id: d.cliente_id, filial_id: d.filial_id, origem_cidade: d.origem_cidade.trim(), destino_cidade: d.destino_cidade.trim(),
       cadencia_unidade: d.cadencia_unidade,
@@ -53,7 +52,10 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
     if (d.data_liberacao) dados.data_liberacao = d.data_liberacao;
     dados.cadencia_valor = cad;
     if (d.lote_erp.trim()) dados.lote_erp = d.lote_erp.trim();
-    if (cap !== estado.config.capacidade_padrao_t) dados.toneladas_por_veiculo = cap;
+    if (d.pc.trim()) dados.pc = d.pc.trim();
+    if (d.tabela.trim()) dados.tabela = d.tabela.trim();
+    // Toneladas médias por veículo saiu do formulário (03/11): o embarque nasce com o padrão da configuração e
+    // continua ajustável no Detalhes por quem tem a permissão.
     if (d.observacao_interna.trim()) dados.observacao_interna = d.observacao_interna.trim();
     if (pode('carteira.editar') && d.comercial_id !== carteiraSugerida) dados.comercial_id = d.comercial_id || null;
     if (pode('financeiro.editar')) {
@@ -187,8 +189,12 @@ export function NovoEmbarque({ aoFechar }: { aoFechar: (id?: string) => void }) 
         {sel('cadencia_unidade', 'Meta diária em *', [{ id: 'veiculos_dia', nome: 'Veículos por dia' }, { id: 'toneladas_dia', nome: 'Toneladas por dia' }])}
         {txt('cadencia_valor', `Meta diária (${d.cadencia_unidade === 'toneladas_dia' ? 't/dia' : 'veículos/dia'}) *`, { inputMode: 'decimal', placeholder: d.cadencia_unidade === 'toneladas_dia' ? 'ex.: 120' : 'ex.: 3' },
           'Obrigatória. Base do executado × meta nas Posições e no Dashboard.')}
-        {txt('lote_erp', 'Nº do lote no ERP', { maxLength: 60, placeholder: 'ex.: 2026-004512' }, 'Se o lote já existe no ERP. Vazio: o apoio informa no atendimento de Lote e Emissão.')}
-        {txt('toneladas_por_veiculo', 'Toneladas médias por veículo', { inputMode: 'decimal', disabled: !pode('embarques.editar_capacidade') }, `Padrão: ${estado.config.capacidade_padrao_t} t.`)}
+        <div className="linha-lpt">
+          {txt('lote_erp', 'Nº do lote no ERP', { maxLength: 60, placeholder: 'ex.: 2026-004512' })}
+          {txt('pc', 'PC', { maxLength: 60, placeholder: 'ex.: 45871' })}
+          {txt('tabela', 'Tabela', { maxLength: 60, placeholder: 'ex.: TAB-2026-11' })}
+          <small className="linha-lpt-ajuda">Opcionais. Aparecem na coluna Lote-PC-Tabela da Lista de Fretes. Lote vazio: o apoio informa no atendimento de Lote e Emissão.</small>
+        </div>
         {pode('financeiro.editar') && txt('frete_empresa', 'Frete empresa', { inputMode: 'decimal', placeholder: 'ex.: 67,50' })}
         {pode('financeiro.editar') && txt('frete_motorista', 'Frete motorista', { inputMode: 'decimal' }, 'Informado manualmente (sem desconto automático).')}
         {pode('financeiro.editar') && sel('unidade_frete', 'Unidade do frete', [{ id: 'nao_confirmada', nome: 'Não confirmada' }, { id: 'rs_tonelada', nome: 'R$/t' }, { id: 'rs_viagem', nome: 'R$/viagem' }, { id: 'rs_m3', nome: 'R$/m³' }, { id: 'outra', nome: 'Outra' }])}

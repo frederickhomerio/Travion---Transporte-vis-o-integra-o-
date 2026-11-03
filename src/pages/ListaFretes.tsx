@@ -188,7 +188,7 @@ export function ListaFretes() {
           <div className="cartao tabela-fretes-wrap">
             <table className="tabela-fretes">
               <thead>
-                <tr><th>Origem</th><th>Destino</th><th>Produto</th>{verFrete && <><th className="n-frete">Frete motorista</th><th className="n-frete">Margem</th></>}<th className="td-acao"><span className="sr">Ações</span></th></tr>
+                <tr><th>Origem</th><th>Destino</th><th>Produto</th><th className="td-lpt">Lote-PC-Tabela</th>{verFrete && <><th className="n-frete">Frete motorista</th><th className="n-frete">Margem</th></>}<th className="td-acao"><span className="sr">Ações</span></th></tr>
               </thead>
               <tbody>
                 {grupos.map((g) => (
@@ -276,11 +276,20 @@ function PontoRota({ cidade, uf, local }: { cidade: string; uf: string | null; l
   );
 }
 
-/** Número do lote no ERP (base para conciliar com o ERP), quando já registrado. */
-function LoteErp({ embarqueId }: { embarqueId: string }) {
+/** Coluna Lote-PC-Tabela: lote do ERP (registrado no cadastro ou pelo apoio), PC e tabela, um abaixo do outro. */
+function LotePcTabela({ e, compacto }: { e: Embarque; compacto?: boolean }) {
   const { estado } = useDoc();
-  const l = estado.lotes[embarqueId];
-  return l ? <span className="lote-erp" title={`Registrado por ${l.registrado_por_nome}`}>Lote ERP {l.numero}</span> : null;
+  const l = estado.lotes[e.id];
+  const itens: [string, string, string | undefined][] = [];
+  if (l) itens.push(['Lote ERP', l.numero, `Registrado por ${l.registrado_por_nome}`]);
+  if (e.pc) itens.push(['PC', e.pc, undefined]);
+  if (e.tabela) itens.push(['Tabela', e.tabela, undefined]);
+  if (!itens.length) return compacto ? null : <span className="suave pequeno">—</span>;
+  return (
+    <span className={`lpt ${compacto ? 'lpt-compacto' : ''}`}>
+      {itens.map(([r, v, t]) => <span key={r} className="lote-erp" title={t}>{r} {v}</span>)}
+    </span>
+  );
 }
 
 function FreteMotorista({ fin }: { fin: Financeiro | null | undefined }) {
@@ -330,7 +339,7 @@ function GrupoTabela({ g, idx, verFrete, acoes }: {
   return (
     <>
       {g.titulo && (
-        <tr className="grupo-cab"><td colSpan={verFrete ? 6 : 4}>{g.titulo}<span className="totais">{subtituloGrupo(g.linhas)}</span></td></tr>
+        <tr className="grupo-cab"><td colSpan={verFrete ? 7 : 5}>{g.titulo}<span className="totais">{subtituloGrupo(g.linhas)}</span></td></tr>
       )}
       {g.linhas.map((l) => {
         const e = l.embarque;
@@ -338,7 +347,8 @@ function GrupoTabela({ g, idx, verFrete, acoes }: {
           <tr key={e.id}>
             <td><PontoRota cidade={e.origem_cidade} uf={e.origem_uf} local={e.local_coleta_id ? nome(idx.local, e.local_coleta_id) : null} /></td>
             <td><PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></td>
-            <td className="td-produto">{semDemo(nome(idx.produto, e.produto_id))}<LoteErp embarqueId={e.id} /><OutroCentro l={l} /></td>
+            <td className="td-produto">{semDemo(nome(idx.produto, e.produto_id))}<OutroCentro l={l} /></td>
+            <td className="td-lpt"><LotePcTabela e={e} /></td>
             {verFrete && <><td className="n-frete"><FreteMotorista fin={l.financeiro} /></td><td className="n-frete"><Margem fin={l.financeiro} /></td></>}
             <td className="td-acao"><BotoesAnuncio l={l} acoes={acoes} /></td>
           </tr>
@@ -360,7 +370,7 @@ function CartaoFrete({ l, idx, verFrete, acoes }: { l: LinhaVitrine; idx: Indice
           <PontoRota cidade={e.destino_cidade} uf={e.destino_uf} local={e.local_entrega_id ? nome(idx.local, e.local_entrega_id) : null} /></div>
       </div>
       <div className="rodape">
-        <span className="pequeno suave">{semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))}<LoteErp embarqueId={e.id} /><OutroCentro l={l} /></span>
+        <span className="pequeno suave">{semDemo(nome(idx.produto, e.produto_id, 'Produto a informar'))}<OutroCentro l={l} /><LotePcTabela e={e} compacto /></span>
         {verFrete && <span style={{ textAlign: 'right' }}><FreteMotorista fin={l.financeiro} /><br /><span className="pequeno">Margem <Margem fin={l.financeiro} /></span></span>}
       </div>
       <BotoesAnuncio l={l} acoes={acoes} />
