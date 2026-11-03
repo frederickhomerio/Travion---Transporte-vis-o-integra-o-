@@ -280,14 +280,17 @@ function PontoRota({ cidade, uf, local }: { cidade: string; uf: string | null; l
 function LotePcTabela({ e, compacto }: { e: Embarque; compacto?: boolean }) {
   const { estado } = useDoc();
   const l = estado.lotes[e.id];
-  const itens: [string, string, string | undefined][] = [];
-  if (l) itens.push(['Lote ERP', l.numero, `Registrado por ${l.registrado_por_nome}`]);
-  if (e.pc) itens.push(['PC', e.pc, undefined]);
-  if (e.tabela) itens.push(['Tabela', e.tabela, undefined]);
+  const primeiro = (n: string | null | undefined) => (n ?? '').trim().split(/\s+/)[0] || '';
+  const itens: [string, string, string | null | undefined][] = [];
+  if (l) itens.push(['Lote', l.numero, l.registrado_por_nome]);
+  if (e.pc) itens.push(['PC', e.pc, e.pc_por_nome]);
+  if (e.tabela) itens.push(['Tabela', e.tabela, e.tabela_por_nome]);
   if (!itens.length) return compacto ? null : <span className="suave pequeno">—</span>;
   return (
     <span className={`lpt ${compacto ? 'lpt-compacto' : ''}`}>
-      {itens.map(([r, v, t]) => <span key={r} className="lote-erp" title={t}>{r} {v}</span>)}
+      {itens.map(([r, v, quem]) => (
+        <span key={r} className="lote-erp" title={quem ? `Preenchido por ${quem}` : undefined}>{r} {v}{quem ? <span className="lpt-quem"> - {primeiro(quem)}</span> : null}</span>
+      ))}
     </span>
   );
 }

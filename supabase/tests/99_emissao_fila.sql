@@ -12,6 +12,8 @@ insert into embarques (id, cliente_id, filial_id, origem_cidade, destino_cidade)
   ('00000000-0000-0000-0000-00000000f3b1', '00000000-0000-0000-0000-00000000f3e1', '00000000-0000-0000-0000-00000000f3f1', 'MONTIVIDIU', 'QUIRINOPOLIS');
 update perfis set papel = 'embarcador', status = 'ativo' where id = '00000000-0000-0000-0000-00000000f3a1';
 update perfis set papel = 'apoio', status = 'ativo' where id = '00000000-0000-0000-0000-00000000f3a2';
+-- 03/11: correção de lote já informado exige a permissão de correção (aqui concedida para testar a propagação).
+insert into perfil_permissoes (perfil_id, chave, permitido) values ('00000000-0000-0000-0000-00000000f3a2', 'embarques.corrigir_lote_pc_tabela', true);
 insert into perfil_filiais (perfil_id, filial_id) values
   ('00000000-0000-0000-0000-00000000f3a1', '00000000-0000-0000-0000-00000000f3f1'),
   ('00000000-0000-0000-0000-00000000f3a2', '00000000-0000-0000-0000-00000000f3f1');

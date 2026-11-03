@@ -7,7 +7,7 @@ import { criarDocSupabase } from './docSupabase';
 
 const COLUNAS_EMBARQUE =
   'id,codigo,cliente_id,comercial_id,filial_id,produto_id,origem_cidade,origem_uf,local_coleta_id,destino_cidade,destino_uf,' +
-  'local_entrega_id,status_liberacao,data_liberacao,cadencia_valor,cadencia_unidade,toneladas_por_veiculo,observacao_interna,pc,tabela,' +
+  'local_entrega_id,status_liberacao,data_liberacao,cadencia_valor,cadencia_unidade,toneladas_por_veiculo,observacao_interna,pc,pc_por_nome,pc_em,tabela,tabela_por_nome,tabela_em,' +
   'situacao,is_demo,chave_importacao,versao,atualizado_em,atualizado_por_nome,suspenso_em,encerrado_em,encerrado_por_nome,encerrado_motivo';
 
 const COLUNAS_CLIENTE =
@@ -172,6 +172,8 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
     async vitrineFretes(demo) {
       return ok(await sb.rpc('lista_fretes_vitrine', { p_is_demo: demo })) ?? [];
     },
+    definirLotePcTabela: (id, campo, valor) =>
+      rpc('definir_lote_pc_tabela', { p_embarque_id: id, p_campo: campo, p_valor: valor }),
     reativarEncerrado: (id, motivo, versao) =>
       rpc('reativar_embarque_encerrado', { p_embarque_id: id, p_motivo: motivo, p_versao: versao }),
     async encerrarEmbarque(id, motivo) {

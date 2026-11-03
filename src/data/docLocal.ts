@@ -137,7 +137,11 @@ async function imagemDemo(linhas: string[]): Promise<Blob> {
 
 // ---------------------------------------------------------------------------
 /** Além da API, o lote do ERP informado na criação do embarque (a criação fica na API principal da prévia). */
-export type ApiDocLocal = ApiDoc & { registrarLoteInicial(embarqueId: string, numero: string, nome: string): void };
+export type ApiDocLocal = ApiDoc & {
+  registrarLoteInicial(embarqueId: string, numero: string, nome: string): void;
+  loteDe(embarqueId: string): string | null;
+  definirLote(embarqueId: string, numero: string, nome: string): void;
+};
 
 export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
   let db: BancoDoc = (() => {
@@ -559,6 +563,17 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       salvar();
       emitir({ tabela: 'lotes' });
     },
+    loteDe(embarqueId) { return db.lotes.find((l) => l.embarque_id === embarqueId)?.numero ?? null; },
+    definirLote(embarqueId, numero, nome) {
+      const l = db.lotes.find((x) => x.embarque_id === embarqueId);
+      if (!l) db.lotes.push({ id: uid(), embarque_id: embarqueId, numero, solicitacao_id: null, registrado_por_nome: nome, registrado_em: agora(), versao: 1, atualizado_em: agora() });
+      else {
+        Object.assign(l, { numero, registrado_por_nome: nome, registrado_em: agora(), versao: l.versao + 1, atualizado_em: agora() });
+        for (const f of db.solicitacoes) if (f.lote_id === l.id && f.retrato.lote_numero !== numero) tocar(f, { retrato: { ...f.retrato, lote_numero: numero } });
+      }
+      salvar();
+      emitir({ tabela: 'lotes' });
+    },
     async listar(desde) {
       await pronto;
       eu();
@@ -693,8 +708,10 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
           if (!l.solicitacao_id) l.solicitacao_id = s.id;
           if (l.numero === n && s.lote_id === l.id) return { status: 'sem_alteracao', registro: clone(s), lote: clone(l) };
           if (l.numero !== n) {
+            // 03/11: lote já informado só é corrigido com a permissão de correção.
+            if (!ctx.tem('embarques.corrigir_lote_pc_tabela')) erro(`O lote ${l.numero} já foi informado por ${l.registrado_por_nome}. Só quem tem a permissão "Corrigir Lote ERP, PC e Tabela" pode alterar. Para vincular, use o mesmo código.`);
             evento(s, 'evento', `Número do lote corrigido de ${l.numero} para ${n}`, 'lote');
-            Object.assign(l, { numero: n, versao: l.versao + 1, atualizado_em: agora() });
+            Object.assign(l, { numero: n, registrado_por_nome: eu().nome, registrado_em: agora(), versao: l.versao + 1, atualizado_em: agora() });
           } else evento(s, 'evento', `Vinculada ao lote ${l.numero}`, 'lote');
         }
       } else {

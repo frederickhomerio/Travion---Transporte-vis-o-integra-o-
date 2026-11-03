@@ -80,6 +80,8 @@ export interface DadosPagamentoEstadia { valor_pago: number; data_pagamento: str
 export type EventoDoc = { tabela: 'solicitacoes' | 'lotes' | 'notificacoes' | 'detalhe'; id?: string };
 
 /** Documentação / Apoio Operacional. Toda regra é conferida no servidor (migração 1610). */
+export type CampoLpt = 'lote_erp' | 'pc' | 'tabela';
+
 export interface ApiDoc {
   /** Solicitações e lotes visíveis. `desde`: só o que mudou a partir desse instante (ISO). */
   listar(desde: string | null): Promise<{ solicitacoes: SolicitacaoDoc[]; lotes: LoteErp[] }>;
@@ -162,6 +164,8 @@ export interface Api {
   /** Volta um encerrado para Liberado (mesmo ID, código e histórico). Exige embarques.reativar_encerrado, escopo, motivo
    *  (até 500 caracteres) e a versão que a tela mostrava: 'conflito' devolve o registro atual sem gravar. */
   reativarEncerrado(id: string, motivo: string, versao: number): Promise<{ status: 'ok' | 'conflito'; registro: Embarque }>;
+  /** Preenche (vazio) ou corrige (já preenchido, exige embarques.corrigir_lote_pc_tabela) Lote ERP, PC ou Tabela. */
+  definirLotePcTabela(embarqueId: string, campo: CampoLpt, valor: string): Promise<{ status: 'ok' | 'sem_alteracao'; registro: Embarque }>;
   atualizarFinanceiro(embarqueId: string, alteracoes: Partial<Financeiro>, base: Partial<Financeiro>, forcar?: boolean): Promise<ResultadoGravacao<Financeiro>>;
   criarEmbarque(dados: Record<string, unknown>, demo: boolean): Promise<Embarque>;
   /** Abre as posições que faltam na data. Toda posição nova nasce com porta, trânsito e carregados em 0. */

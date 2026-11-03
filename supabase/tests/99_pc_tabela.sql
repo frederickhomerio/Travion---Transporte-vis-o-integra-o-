@@ -36,18 +36,44 @@ do $$ declare r jsonb; v_id uuid; v_versao int; begin
   begin perform criar_embarque(jsonb_build_object('cliente_id', '00000000-0000-0000-0000-00000000b0e1', 'filial_id', '00000000-0000-0000-0000-00000000b0f1',
     'origem_cidade', 'A', 'destino_cidade', 'B', 'cadencia_valor', 2, 'pc', repeat('9', 61)), false);
     assert false, 'PC acima de 60 caracteres'; exception when sqlstate '22023' then null; end;
-  -- Edição com histórico.
-  select versao into v_versao from embarques where id = v_id;
-  r := atualizar_embarque(v_id, '{"pc":"45999","tabela":"TAB-12"}', jsonb_build_object('pc', '45871', 'tabela', 'TAB-11'), false);
-  assert r ->> 'status' = 'ok', 'edição ok: ' || (r ->> 'status');
-  assert (select pc from embarques where id = v_id) = '45999', 'PC alterado';
-  assert exists (select 1 from historico_alteracoes where embarque_id = v_id and campo = 'tabela'), 'histórico da tabela';
+  assert r -> 'registro' ->> 'pc_por_nome' is null, 'sem PC, sem autor';
 end $$;
 
--- Consulta não altera PC.
+do $$ declare v_id uuid := (select id from embarques where pc = '45871'); v_id2 uuid := (select id from embarques where destino_cidade = 'FORTALEZA'); r jsonb; begin
+  assert (select pc_por_nome from embarques where id = v_id) = 'Supervisor PC', 'autor do PC na criação';
+  assert exists (select 1 from historico_alteracoes where embarque_id = v_id and campo = 'pc'), 'histórico do PC na criação';
+  -- Campo vazio: quem cadastra embarques preenche.
+  r := definir_lote_pc_tabela(v_id2, 'pc', '5555');
+  assert r ->> 'status' = 'ok' and (select pc_por_nome from embarques where id = v_id2) = 'Supervisor PC', 'preenche PC vazio';
+  r := definir_lote_pc_tabela(v_id2, 'lote_erp', '1234');
+  assert (select registrado_por_nome from lotes_erp where embarque_id = v_id2) = 'Supervisor PC', 'preenche lote vazio';
+  -- Já preenchido: sem a permissão de correção, bloqueado (PC, tabela e lote).
+  begin perform definir_lote_pc_tabela(v_id, 'pc', '1'); assert false, 'PC preenchido não muda'; exception when sqlstate '42501' then null; end;
+  begin perform definir_lote_pc_tabela(v_id, 'lote_erp', '9999'); assert false, 'lote preenchido não muda'; exception when sqlstate '42501' then null; end;
+  -- Mesmo valor: sem alteração (não é correção).
+  assert definir_lote_pc_tabela(v_id, 'tabela', 'TAB-11') ->> 'status' = 'sem_alteracao', 'mesmo valor';
+  -- PC não passa mais pela edição genérica.
+  begin perform atualizar_embarque(v_id, '{"pc":"1"}', '{}', true); assert false, 'pc fora da edição genérica';
+  exception when others then null; end;
+  assert (select pc from embarques where id = v_id) = '45871', 'PC intacto';
+end $$;
+
+-- Com a permissão de correção: corrige e passa a mostrar quem corrigiu.
+reset role;
+insert into perfil_permissoes (perfil_id, chave, permitido) values ('00000000-0000-0000-0000-00000000b0a1', 'embarques.corrigir_lote_pc_tabela', true);
+set role authenticated;
+do $$ declare v_id uuid := (select id from embarques where pc = '45871'); begin
+  perform definir_lote_pc_tabela(v_id, 'pc', '45999');
+  perform definir_lote_pc_tabela(v_id, 'lote_erp', '4726');
+  assert (select pc from embarques where id = v_id) = '45999', 'PC corrigido';
+  assert (select numero from lotes_erp where embarque_id = v_id) = '4726', 'lote corrigido';
+  assert (select count(*) from historico_alteracoes where embarque_id = v_id and campo in ('pc', 'lote_erp') and valor_anterior is not null) = 2, 'histórico das correções';
+end $$;
+
+-- Consulta (sem permissão de cadastrar) não preenche nem corrige.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000b0a2', false);
 do $$ begin
-  perform atualizar_embarque((select id from embarques where pc = '45999'), '{"pc":"1"}', '{"pc":"45999"}', false);
+  perform definir_lote_pc_tabela((select id from embarques where destino_cidade = 'FORTALEZA'), 'tabela', 'X');
   assert false, 'consulta sem permissão';
 exception when sqlstate '42501' then null; end $$;
 reset role;

@@ -25,7 +25,7 @@ interface DadosPrevia {
   centros?: Record<string, string>;
 }
 const DADOS_PREVIA = (globalThis as { TRAVION_DADOS_PREVIA?: DadosPrevia }).TRAVION_DADOS_PREVIA ?? null;
-const CHAVE = DADOS_PREVIA ? `travion-previa-v8-${DADOS_PREVIA.id}` : 'travion-previa-v8';
+const CHAVE = DADOS_PREVIA ? `travion-previa-v9-${DADOS_PREVIA.id}` : 'travion-previa-v9';
 const CHAVE_SESSAO = 'travion-previa-sessao';
 
 export const CATALOGO: MatrizPermissoes['catalogo'] = [
@@ -36,6 +36,7 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['embarques.editar_cadencia', 'Embarques', 'Alterar a meta diária de qualquer embarque'],
   ['embarques.editar_cadencia_proprio', 'Embarques', 'Alterar a meta diária dos embarques que a própria pessoa criou'],
   ['embarques.editar_capacidade', 'Embarques', 'Alterar toneladas médias por veículo'],
+  ['embarques.corrigir_lote_pc_tabela', 'Embarques', 'Corrigir Lote ERP, PC e Tabela depois de preenchidos'],
   ['embarques.editar_lote', 'Embarques', 'Botão Editar lote no Detalhes da Lista de Fretes (os campos seguem as demais permissões)'],
   ['embarques.arquivar', 'Embarques', 'Arquivar ou reativar embarques'],
   ['embarques.encerrar', 'Embarques', 'Encerrar embarques preservando o histórico'],
@@ -94,7 +95,7 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
     'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'cadastro.ver', 'analise.operacional', 'estadia.ver', 'analise.fila'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
-    'embarques.editar_lote', 'embarques.editar_cadastro', 'embarques.editar_capacidade',
+    'embarques.editar_lote', 'embarques.editar_cadastro', 'embarques.editar_capacidade', 'embarques.corrigir_lote_pc_tabela',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
     'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar',
     'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila'],
@@ -214,7 +215,10 @@ function semear(): Banco {
       produto_id: produtos[l[2]].id, origem_cidade: l[3], origem_uf: 'GO', local_coleta_id: locais[l[4]].id,
       destino_cidade: l[5], destino_uf: l[6], local_entrega_id: locais[l[7]].id, status_liberacao: l[8], data_liberacao: null,
       cadencia_valor: l[9], cadencia_unidade: 'veiculos_dia', toneladas_por_veiculo: 40, observacao_interna: i === 6 ? 'Carregamento das 7h às 17h. Levar lona e EPI.' : null,
-      pc: i % 2 === 0 ? String(45800 + i * 7) : null, tabela: i % 3 !== 1 ? `TAB-2026-${String(10 + (i % 3)).padStart(2, '0')}` : null,
+      pc: i % 2 === 0 ? String(45800 + i * 7) : null, pc_por_nome: i % 2 === 0 ? ['Amanda Rocha', 'Carlos Lima'][i % 4 === 0 ? 0 : 1] : null,
+      pc_em: i % 2 === 0 ? agora() : null,
+      tabela: i % 3 !== 1 ? `TAB-2026-${String(10 + (i % 3)).padStart(2, '0')}` : null, tabela_por_nome: i % 3 !== 1 ? 'Amanda Rocha' : null,
+      tabela_em: i % 3 !== 1 ? agora() : null,
       situacao: 'ativo', is_demo: true, chave_importacao: null, versao: 1, atualizado_em: agora(), atualizado_por_nome: 'Demonstração',
       suspenso_em: l[8] === 'suspenso' ? new Date(Date.now() - [1, 5, 6][suspensos++ % 3] * 86400e3 - 3600e3).toISOString() : null,
     });
@@ -422,7 +426,7 @@ export function criarLocalApi(): Api {
   }
   if (!db.perfilCentros) { migrarCentros(db); gravarStorage(CHAVE, JSON.stringify(db)); }
   // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
-  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote'] as Permissao[]) {
+  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote', 'embarques.corrigir_lote_pc_tabela'] as Permissao[]) {
     if (db.papelPermissoes.some((x) => x.chave === nova)) continue;
     for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) if (ps.includes(nova)) db.papelPermissoes.push({ papel: papel as Papel, chave: nova });
     // Migração 2800: o Coordenador Comercial passa a editar o lote inteiro.
@@ -554,7 +558,6 @@ export function criarLocalApi(): Api {
     origem_uf: { perm: 'embarques.editar_cadastro', tipo: 'uf' }, local_coleta_id: { perm: 'embarques.editar_cadastro', tipo: 'uuid' },
     destino_cidade: { perm: 'embarques.editar_cadastro', tipo: 'texto_obrigatorio' }, destino_uf: { perm: 'embarques.editar_cadastro', tipo: 'uf' },
     local_entrega_id: { perm: 'embarques.editar_cadastro', tipo: 'uuid' }, observacao_interna: { perm: 'embarques.editar_cadastro', tipo: 'texto' },
-    pc: { perm: 'embarques.editar_cadastro', tipo: 'texto' }, tabela: { perm: 'embarques.editar_cadastro', tipo: 'texto' },
     status_liberacao: { perm: 'embarques.liberar', tipo: 'enum', valores: ['liberado', 'suspenso'] },
     data_liberacao: { perm: 'embarques.liberar', tipo: 'data' },
     cadencia_valor: { perm: 'embarques.editar_cadencia', tipo: 'positivo_obrigatorio' },
@@ -776,6 +779,30 @@ export function criarLocalApi(): Api {
       salvar();
       return clone(e);
     },
+    async definirLotePcTabela(id, campo, valor) {
+      if (!ativo()) erro('Acesso negado: usuário inativo ou sem cadastro.');
+      const v = valor.trim();
+      if (!v || v.length > 60) erro('Informe o valor (até 60 caracteres).');
+      const e = db.embarques.find((x) => x.id === id);
+      if (!e || !veEmbarque(e)) erro('Embarque não encontrado ou fora do seu escopo.');
+      if (e.encerrado_em) erro('Embarque encerrado: reative antes de alterar.');
+      const atual = campo === 'lote_erp' ? doc.loteDe(id) : (campo === 'pc' ? e.pc : e.tabela) ?? null;
+      if (atual === v) return { status: 'sem_alteracao', registro: clone(e) };
+      if (atual == null) {
+        if (!tem('embarques.criar') && !tem('embarques.editar_lote') && !tem('embarques.editar_cadastro')) erro('Você não tem permissão para preencher este campo.');
+      } else exigir('embarques.corrigir_lote_pc_tabela');
+      const nomeU = nomeUsuario() ?? 'Usuário';
+      if (campo === 'lote_erp') doc.definirLote(id, v, nomeU);
+      else {
+        if (campo === 'pc') Object.assign(e, { pc: v, pc_por_nome: nomeU, pc_em: agora() });
+        else Object.assign(e, { tabela: v, tabela_por_nome: nomeU, tabela_em: agora() });
+        Object.assign(e, { versao: e.versao + 1, atualizado_em: agora(), atualizado_por_nome: nomeU });
+        emitir({ tabela: 'embarques', tipo: 'UPDATE', registro: clone(e) });
+      }
+      registrar({ entidade: 'embarque', registro_id: e.id, embarque_id: e.id, cliente_id: e.cliente_id, campo, valor_anterior: atual, valor_novo: v });
+      salvar();
+      return { status: 'ok', registro: clone(e) };
+    },
     async reativarEncerrado(id, motivo, versao) {
       exigir('embarques.reativar_encerrado');
       const m = motivo.trim();
@@ -853,7 +880,9 @@ export function criarLocalApi(): Api {
         local_entrega_id: (d.local_entrega_id as string) ?? null, status_liberacao: d.status_liberacao === 'suspenso' ? 'suspenso' : 'liberado',
         data_liberacao: (d.data_liberacao as string) ?? null, cadencia_valor: (d.cadencia_valor as number) ?? null,
         cadencia_unidade: (d.cadencia_unidade as Embarque['cadencia_unidade']) ?? 'veiculos_dia', toneladas_por_veiculo: cap,
-        observacao_interna: (d.observacao_interna as string) ?? null, pc, tabela, situacao: 'ativo', is_demo: demo, chave_importacao: null,
+        observacao_interna: (d.observacao_interna as string) ?? null,
+        pc, pc_por_nome: pc ? nomeUsuario() : null, pc_em: pc ? agora() : null,
+        tabela, tabela_por_nome: tabela ? nomeUsuario() : null, tabela_em: tabela ? agora() : null, situacao: 'ativo', is_demo: demo, chave_importacao: null,
         versao: 1, atualizado_em: agora(), atualizado_por_nome: nomeUsuario(), criado_por: perfil()?.id ?? null,
       };
       db.embarques.push(e);
@@ -870,6 +899,9 @@ export function criarLocalApi(): Api {
         registrar({ entidade: 'embarque', registro_id: e.id, embarque_id: e.id, cliente_id: e.cliente_id, campo: 'lote_erp', valor_novo: loteErp });
         salvar();
       }
+      if (pc) registrar({ entidade: 'embarque', registro_id: e.id, embarque_id: e.id, cliente_id: e.cliente_id, campo: 'pc', valor_novo: pc });
+      if (tabela) registrar({ entidade: 'embarque', registro_id: e.id, embarque_id: e.id, cliente_id: e.cliente_id, campo: 'tabela', valor_novo: tabela });
+      if (pc || tabela) salvar();
       return clone(e);
     },
     async abrirPosicoes(data, ids) {

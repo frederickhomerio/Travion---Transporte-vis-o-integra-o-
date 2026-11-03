@@ -11,7 +11,7 @@ export type TipoLocal = 'coleta' | 'entrega' | 'ambos';
 
 export type Permissao =
   | 'embarques.ver' | 'embarques.criar' | 'embarques.editar_cadastro' | 'embarques.liberar'
-  | 'embarques.editar_cadencia' | 'embarques.editar_cadencia_proprio' | 'embarques.editar_capacidade' | 'embarques.editar_lote' | 'embarques.arquivar' | 'embarques.encerrar' | 'embarques.reativar_encerrado'
+  | 'embarques.editar_cadencia' | 'embarques.editar_cadencia_proprio' | 'embarques.editar_capacidade' | 'embarques.editar_lote' | 'embarques.corrigir_lote_pc_tabela' | 'embarques.arquivar' | 'embarques.encerrar' | 'embarques.reativar_encerrado'
   | 'carteira.editar' | 'posicoes.pagina' | 'posicoes.abrir' | 'posicoes.editar_contadores'
   | 'posicoes.editar_obs_operacional' | 'posicoes.editar_obs_cliente'
   | 'financeiro.ver' | 'financeiro.editar' | 'historico.ver'
@@ -68,7 +68,8 @@ export interface Embarque {
   cadencia_valor: number | null; cadencia_unidade: UnidadeCadencia;
   toneladas_por_veiculo: number; observacao_interna: string | null; situacao: Situacao;
   /** PC e tabela do ERP (texto livre, até 60 caracteres). Aparecem na coluna Lote-PC-Tabela da Lista de Fretes. */
-  pc?: string | null; tabela?: string | null;
+  pc?: string | null; pc_por_nome?: string | null; pc_em?: string | null;
+  tabela?: string | null; tabela_por_nome?: string | null; tabela_em?: string | null;
   is_demo: boolean; chave_importacao: string | null; versao: number;
   atualizado_em: string; atualizado_por_nome: string | null;
   /** Quem cadastrou (pode alterar a meta com a permissão "dos embarques que criei"). */

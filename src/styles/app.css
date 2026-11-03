@@ -1506,3 +1506,8 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 .linha-lpt { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 14px; }
 .linha-lpt-ajuda { grid-column: 1 / -1; display: block; margin: 4px 0 0; font-size: 0.8rem; color: var(--texto-suave); }
 @media (max-width: 560px) { .linha-lpt { grid-template-columns: 1fr; } }
+.lpt-quem { font-family: var(--fonte, inherit); font-weight: 600; color: var(--texto-suave); }
+.lpt-botao { margin-left: 8px; padding: 2px 10px; }
+.lpt-edicao { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lpt-edicao .entrada { width: 180px; padding: 4px 8px; }
+.lpt-edicao small { flex-basis: 100%; }

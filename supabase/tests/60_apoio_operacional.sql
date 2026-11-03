@@ -109,6 +109,14 @@ do $$ declare r jsonb; s uuid := (select v from t6 where k = 's1'); begin
     raise exception 'apoio anexou NF como emitido'; exception when sqlstate '22023' then null; end;
   r := anexar_documentos_doc(s, '[{"caminho":"envios/00000000-0000-0000-0000-0000000006a2/cte.pdf","nome":"cte.pdf","categoria":"cte"}]');
   assert r -> 'registro' ->> 'status' = 'em_atendimento', 'anexar não conclui';
+  -- 03/11: lote já informado só é corrigido com a permissão "Corrigir Lote ERP, PC e Tabela".
+  begin perform registrar_lote_doc(s, 'L-2026-78'); raise exception 'apoio corrigiu sem permissão';
+  exception when sqlstate '42501' then null; end;
+end $$;
+reset role;
+insert into perfil_permissoes (perfil_id, chave, permitido) values ('00000000-0000-0000-0000-0000000006a2', 'embarques.corrigir_lote_pc_tabela', true);
+set role authenticated;
+do $$ declare r jsonb; s uuid := (select v from t6 where k = 's1'); begin
   r := registrar_lote_doc(s, 'L-2026-78');
   assert exists (select 1 from doc_mensagens where solicitacao_id = s and texto like 'Número do lote corrigido de L-2026-77 para L-2026-78%'), 'correção auditada';
   -- Pendência vazia não; com texto notifica o solicitante

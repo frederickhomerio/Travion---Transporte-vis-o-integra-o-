@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { mensagemErro } from '../data/api';
+import { type CampoLpt as TipoCampoLpt, mensagemErro } from '../data/api';
 import { useDoc } from '../data/documentacao';
 import { useApp, useIndices } from '../data/store';
 import { type Indices, cidadeUF, codigoEmbarque, nome } from '../lib/cadastros';
@@ -11,7 +11,7 @@ import { Contador } from './Contador';
 import { DocumentacaoEmbarque } from './doc/DocumentacaoEmbarque';
 import { FormVersionado, type DefCampo } from './FormVersionado';
 import { BotaoNovoLocal } from './NovoLocal';
-import { Alerta, BadgeStatus, Carregando, Gaveta } from './ui';
+import { Alerta, BadgeStatus, Carregando, Gaveta, useAviso } from './ui';
 
 type Aba = 'resumo' | 'posicao' | 'documentacao' | 'cadastro' | 'financeiro' | 'historico' | 'origem';
 
@@ -83,6 +83,15 @@ export function EditarLote({ embarqueId, aoFechar }: { embarqueId: string; aoFec
   return (
     <Gaveta titulo={<>Editar lote · {codigoEmbarque(e.codigo)}</>}
       subtitulo={<>{cidadeUF(e.origem_cidade, e.origem_uf)} → {cidadeUF(e.destino_cidade, e.destino_uf)} · {nome(idx.cliente, e.cliente_id)}</>} aoFechar={aoFechar}>
+      <h3 className="pequeno" style={{ margin: '0 0 6px' }}>Lote ERP, PC e Tabela</h3>
+      <div className="cartao cartao-corpo" style={{ marginBottom: 14 }}>
+        <dl className="dl">
+          <dt>Lote ERP</dt><dd><CampoLpt e={e} campo="lote_erp" /></dd>
+          <dt>PC</dt><dd><CampoLpt e={e} campo="pc" /></dd>
+          <dt>Tabela</dt><dd><CampoLpt e={e} campo="tabela" /></dd>
+        </dl>
+        <small className="suave">Depois de preenchido, só altera quem tem a permissão "Corrigir Lote ERP, PC e Tabela".</small>
+      </div>
       <h3 className="pequeno" style={{ margin: '0 0 6px' }}>Dados do lote</h3>
       <Cadastro e={e} idx={idx} travarRota />
       {pode('financeiro.ver') && <>
@@ -112,9 +121,9 @@ function Resumo({ e, idx }: { e: Embarque; idx: Indices }) {
           <dt>Liberação</dt><dd><BadgeStatus status={e.status_liberacao} />{e.data_liberacao && <span className="suave"> desde {fmtData(e.data_liberacao)}</span>}</dd>
           <dt>Meta diária</dt><dd>{e.cadencia_valor ? `${fmtNum(e.cadencia_valor, 1)} ${ROTULO_CADENCIA[e.cadencia_unidade]}` : 'Sem meta: preencha a meta diária do embarque'}</dd>
           <dt>Toneladas médias por veículo</dt><dd>{fmtT(e.toneladas_por_veiculo)}</dd>
-          <dt>Lote no ERP</dt><dd><LoteDoEmbarque embarqueId={e.id} /></dd>
-          <dt>PC</dt><dd>{e.pc || '—'}</dd>
-          <dt>Tabela</dt><dd>{e.tabela || '—'}</dd>
+          <dt>Lote no ERP</dt><dd><CampoLpt e={e} campo="lote_erp" /></dd>
+          <dt>PC</dt><dd><CampoLpt e={e} campo="pc" /></dd>
+          <dt>Tabela</dt><dd><CampoLpt e={e} campo="tabela" /></dd>
           <dt>Situação</dt><dd>{e.encerrado_em ? 'Encerrado' : e.situacao === 'ativo' ? 'Ativo' : 'Arquivado'}</dd>
           {e.observacao_interna && <><dt>Observação interna</dt><dd>{e.observacao_interna}</dd></>}
           <dt>Última alteração do cadastro</dt><dd>{fmtDataHora(e.atualizado_em)}{e.atualizado_por_nome ? ` · ${e.atualizado_por_nome}` : ''}</dd>
@@ -202,8 +211,6 @@ function Cadastro({ e, idx, travarRota = false }: { e: Embarque; idx: Indices; t
       opcoes: [{ valor: 'veiculos_dia', rotulo: 'Veículos por dia' }, { valor: 'toneladas_dia', rotulo: 'Toneladas por dia' }] },
     { campo: 'toneladas_por_veiculo', rotulo: 'Toneladas médias por veículo', tipo: 'numero', pode: pode('embarques.editar_capacidade'),
       ajuda: 'Vale para hoje em diante. Posições de datas anteriores mantêm a capacidade usada na época.' },
-    { campo: 'pc', rotulo: 'PC', tipo: 'texto', pode: pode('embarques.editar_cadastro') },
-    { campo: 'tabela', rotulo: 'Tabela', tipo: 'texto', pode: pode('embarques.editar_cadastro') },
     { campo: 'comercial_id', rotulo: 'Carteira (comercial)', tipo: 'select', pode: pode('carteira.editar'), vazio: 'Sem carteira',
       opcoes: c.comerciais.map((x) => ({ valor: x.id, rotulo: x.nome })), ajuda: 'Alteração restrita e registrada no histórico.' },
     { campo: 'filial_id', rotulo: 'Filial (centro de custo)', tipo: 'select', pode: pode('embarques.editar_cadastro'), opcoes: c.filiais.map((x) => ({ valor: x.id, rotulo: x.nome })) },
@@ -283,7 +290,7 @@ function FinanceiroAba({ embarqueId, existe }: { embarqueId: string; existe: boo
 const ROTULO_CAMPO_HIST: Record<string, string> = {
   porta: 'Porta', transito: 'Trânsito', carregados: 'Carregados', obs_operacional: 'Observação operacional', obs_cliente: 'Observação para o cliente',
   abertura: 'Abertura da posição', importacao: 'Importação', criacao: 'Criação', status_liberacao: 'Status de liberação', data_liberacao: 'Data de liberação',
-  cadencia_valor: 'Cadência', cadencia_unidade: 'Unidade da cadência', toneladas_por_veiculo: 'Toneladas por veículo', pc: 'PC', tabela: 'Tabela', comercial_id: 'Carteira',
+  cadencia_valor: 'Cadência', cadencia_unidade: 'Unidade da cadência', toneladas_por_veiculo: 'Toneladas por veículo', pc: 'PC', tabela: 'Tabela', lote_erp: 'Lote ERP', comercial_id: 'Carteira',
   filial_id: 'Filial', cliente_id: 'Cliente', produto_id: 'Produto', local_coleta_id: 'Local de coleta', local_entrega_id: 'Local de entrega',
   origem_cidade: 'Cidade de origem', origem_uf: 'UF de origem', destino_cidade: 'Cidade de destino', destino_uf: 'UF de destino',
   observacao_interna: 'Observação interna', situacao: 'Situação', frete_empresa: 'Frete empresa', frete_motorista: 'Frete motorista',
@@ -356,8 +363,52 @@ function OrigemAba({ embarqueId }: { embarqueId: string }) {
 }
 
 /** Número do lote no ERP (informado na criação ou pelo apoio no atendimento de Lote e Emissão). */
-function LoteDoEmbarque({ embarqueId }: { embarqueId: string }) {
-  const { estado } = useDoc();
-  const l = estado.lotes[embarqueId];
-  return l ? <>{l.numero} <span className="suave pequeno">· {l.registrado_por_nome}, {fmtDataHora(l.registrado_em)}</span></> : <span className="suave">Ainda não registrado</span>;
+const ROTULO_LPT = { lote_erp: 'Lote ERP', pc: 'PC', tabela: 'Tabela' } as const;
+
+/** Lote ERP, PC ou Tabela (03/11): preenche quem cadastra embarques enquanto está vazio; depois de preenchido, só corrige
+ *  quem tem a permissão "Corrigir Lote ERP, PC e Tabela". Mostra quem preencheu e quando. */
+function CampoLpt({ e, campo }: { e: Embarque; campo: TipoCampoLpt }) {
+  const { api, pode, aplicarEmbarque } = useApp();
+  const { estado: doc, carregarEmbarque } = useDoc();
+  const avisar = useAviso();
+  const lote = doc.lotes[e.id];
+  const valor = campo === 'lote_erp' ? lote?.numero ?? null : campo === 'pc' ? e.pc ?? null : e.tabela ?? null;
+  const por = campo === 'lote_erp' ? lote?.registrado_por_nome : campo === 'pc' ? e.pc_por_nome : e.tabela_por_nome;
+  const em = campo === 'lote_erp' ? lote?.registrado_em : campo === 'pc' ? e.pc_em : e.tabela_em;
+  const podeAgir = !e.encerrado_em && (valor == null
+    ? pode('embarques.criar') || pode('embarques.editar_lote') || pode('embarques.editar_cadastro')
+    : pode('embarques.corrigir_lote_pc_tabela'));
+  const [editando, setEditando] = useState(false);
+  const [texto, setTexto] = useState('');
+  const [gravando, setGravando] = useState(false);
+  async function salvar() {
+    setGravando(true);
+    try {
+      const r = await api.definirLotePcTabela(e.id, campo, texto);
+      aplicarEmbarque(r.registro);
+      if (campo === 'lote_erp') await carregarEmbarque(e.id).catch(() => undefined);
+      avisar('ok', `${ROTULO_LPT[campo]} ${valor == null ? 'preenchido' : 'corrigido'}.`);
+      setEditando(false);
+    } catch (x) { avisar('erro', mensagemErro(x)); } finally { setGravando(false); }
+  }
+  if (editando) {
+    return (
+      <span className="lpt-edicao">
+        <input className="entrada" autoFocus maxLength={60} value={texto} onChange={(ev) => setTexto(ev.target.value)} aria-label={ROTULO_LPT[campo]} />
+        <button className="btn primario peq" disabled={gravando || !texto.trim()} onClick={() => void salvar()}>Salvar</button>
+        <button className="btn peq" disabled={gravando} onClick={() => setEditando(false)}>Cancelar</button>
+        {valor != null && <small className="suave">A correção fica no histórico e passa a mostrar o seu nome.</small>}
+      </span>
+    );
+  }
+  return (
+    <>
+      {valor ?? <span className="suave">{campo === 'lote_erp' ? 'Ainda não registrado' : 'Não preenchido'}</span>}
+      {valor && por && <span className="suave pequeno"> · {por}{em ? `, ${fmtDataHora(em)}` : ''}</span>}
+      {podeAgir && (
+        <button className="btn peq lpt-botao" onClick={() => { setTexto(valor ?? ''); setEditando(true); }}>{valor == null ? 'Preencher' : 'Corrigir'}</button>
+      )}
+      {valor != null && !podeAgir && !e.encerrado_em && <span className="suave pequeno lpt-trava" title="Só quem tem a permissão Corrigir Lote ERP, PC e Tabela pode alterar"> · 🔒</span>}
+    </>
+  );
 }
