@@ -34,7 +34,9 @@ function lerNfe(xml) {
     local_retirada: parte(bloco(xml, 'retirada')), local_entrega: parte(bloco(xml, 'entrega')),
     remetente: VAZIA, expedidor: VAZIA, recebedor: VAZIA, tomador: VAZIA, tomador_papel: '',
     municipio_inicio: { municipio: '', uf: '' }, municipio_fim: { municipio: '', uf: '' },
-    chaves_nfe_citadas: [], legibilidade: 10, observacao: ''
+    chaves_nfe_citadas: [], legibilidade: 10, observacao: '',
+    // Texto livre da nota (infCpl/infAdFisco): alguns modelos só informam coleta e entrega aqui.
+    dados_adicionais: [val(bloco(xml, 'infAdic'), 'infCpl'), val(bloco(xml, 'infAdic'), 'infAdFisco')].filter(Boolean).join(' | ').slice(0, 2000)
   };
 }
 function lerCte(xml) {
@@ -50,7 +52,7 @@ function lerCte(xml) {
     tomador: VAZIA, tomador_papel: '',
     municipio_inicio: { municipio: val(ide, 'xMunIni'), uf: val(ide, 'UFIni') },
     municipio_fim: { municipio: val(ide, 'xMunFim'), uf: val(ide, 'UFFim') },
-    chaves_nfe_citadas: todos(bloco(xml, 'infDoc'), 'chave'), legibilidade: 10, observacao: ''
+    chaves_nfe_citadas: todos(bloco(xml, 'infDoc'), 'chave'), dados_adicionais: '', legibilidade: 10, observacao: ''
   };
   const toma4 = bloco(xml, 'toma4');
   if (toma4) {

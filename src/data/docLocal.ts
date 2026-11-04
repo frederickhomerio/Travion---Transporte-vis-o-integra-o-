@@ -28,7 +28,7 @@ interface BancoDoc {
   seqEstadia?: number;
   conferencias?: ConferenciaEstadia[]; retornos?: RetornoEstadia[]; pagamentos?: PagamentoEstadia[];
   /** Conferência automática dos participantes NF × CT-e (migração 3600; na prévia, resultado simulado). */
-  auditorias?: ConferenciaParticipantes[];
+  auditorias?: ConferenciaParticipantes[]; auditoriasVersao?: number;
 }
 const FINAIS: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido', 'aprovada', 'aprovada_parcial', 'encerrado', 'cancelado'];
 const CONCLUSOES: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido', 'aprovada', 'aprovada_parcial', 'encerrado'];
@@ -156,19 +156,20 @@ function linhasDemo(s: SolicitacaoDoc, cte: string, cenario: CenarioConferencia)
     ok('nf_no_cte', 'NF citada no CT-e', 'NF-e 41231 · chave 5226…0412 31', 'Chave presente nos documentos originários'),
     ok('remetente', 'Remetente', rem),
     ok('destinatario', 'Destinatário', des),
-    ok('local_coleta', 'Local de coleta', `${r.coleta ?? 'Fazenda'} · ${orig}`, `Expedidor não informado · início ${orig}`),
+    { ...ok('local_coleta', 'Local de coleta', `Obs. da NF: "Retirada: ${r.coleta ?? 'Fazenda'}, ${orig}"`, `Expedidor: ${r.coleta ?? 'Fazenda'} · início ${orig}`),
+      observacao: 'Confere com o local de retirada escrito nas observações da NF.' },
     ok('local_entrega', 'Local de entrega', `${r.entrega ?? 'Armazém'} · ${dest}`, `Recebedor não informado · término ${dest}`),
     ok('pagador', 'Cliente pagador', `${cliente} (cliente do embarque) · 12.345.678/0001-90`, `Tomador: remetente · ${rem}`),
   ];
   if (cenario === 'divergente') {
     linhas[5] = { ...linhas[5], cte: 'Tomador: destinatário · TERMINAL GRANELEIRO DESTINO S/A · 33.444.555/0001-20', resultado: 'divergente',
-      observacao: 'O tomador do CT-e não é o cliente do embarque: confira quem paga o frete.' };
+      observacao: 'O tomador do CT-e é o destinatário (33.444.555/0001-20), mas o cliente do embarque é 12.345.678/0001-90. Confira quem paga o frete.' };
     linhas[4] = { ...linhas[4], cte: `Recebedor: ARMAZÉM PARCEIRO LTDA · 77.888.999/0001-10 · Uberlândia/MG`, resultado: 'divergente',
-      observacao: 'O município de entrega do CT-e é diferente do destino da nota.' };
+      observacao: `A NF entrega em ${dest}, mas o CT-e tem recebedor e término da prestação em Uberlândia/MG.` };
   }
   if (cenario === 'alerta') {
     linhas[1] = { ...linhas[1], cte: rem.replace('0001-90', '0004-33'), resultado: 'alerta',
-      observacao: 'Mesmo grupo (raiz do CNPJ), mas outra filial: confira se está certo.' };
+      observacao: 'Mesma empresa, mas o CT-e está com outra filial (CNPJ final 0004-33; na NF é 0001-90). Confira se está certo.' };
   }
   return linhas;
 }
@@ -589,8 +590,11 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
   };
   // Conferências fictícias: a emissão em atendimento recebe um CT-e com divergência, a liberada fica conferida.
   const semearAuditorias = async () => {
-    if (db.auditorias || typeof document === 'undefined') return;
+    // v2: faixa enxuta (04/11); refaz as conferências fictícias de quem já abriu a prévia antes.
+    if (db.auditoriasVersao === 2 || typeof document === 'undefined') return;
     db.auditorias = [];
+    db.mensagens = db.mensagens.filter((m) => m.referencia !== 'auditoria');
+    db.auditoriasVersao = 2;
     const doTipo = db.solicitacoes.filter((x) => x.tipo === 'lote_emissao' || x.tipo === 'emissao');
     const liberada = doTipo.find((x) => x.status === 'documentacao_disponivel' && db.anexos.some((a) => a.solicitacao_id === x.id && a.categoria === 'cte'));
     if (liberada) {
@@ -598,7 +602,9 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       conferirDemo(liberada, a, 'conferido', 0);
     }
     const aberta = doTipo.find((x) => x.status === 'em_atendimento' && x.lote_id);
-    if (aberta && !db.anexos.some((a) => a.solicitacao_id === aberta.id && a.categoria === 'cte')) {
+    const jaTem = aberta && db.anexos.find((a) => a.solicitacao_id === aberta.id && a.categoria === 'cte');
+    if (aberta && jaTem) conferirDemo(aberta, jaTem, 'divergente', 0);
+    else if (aberta) {
       const blob = pdfDemo('DACTE (demonstração) · CT-e 118377', [`Placa ${aberta.placa}`, 'Tomador: destinatário', 'Documento fictício.']);
       const dono = aberta.responsavel_id ?? 'perfil-2';
       const caminho = `envios/${dono}/${uid()}.pdf`;

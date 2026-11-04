@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { type ArquivoLocal, Copiar, Historico, LinhaInfo, SeletorArquivos, StatusDocPill, TipoNumero, enviarArquivos, useAgora } from '../components/doc/Comum';
 import { CancelarDoc } from '../components/doc/DocumentacaoEmbarque';
-import { ConferenciaParticipantes, avisoConferencia } from '../components/doc/ConferenciaParticipantes';
+import { FaixaConferencia, avisoConferencia } from '../components/doc/ConferenciaParticipantes';
 import { VisualizadorAnexo } from '../components/doc/VisualizadorAnexo';
 import { MesaAmpla } from '../components/doc/MesaAmpla';
 import { Layout } from '../components/Layout';
@@ -103,6 +103,7 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
       <div className="at-topo">
         <button className="btn sutil peq" onClick={() => nav('/apoio')}>← Fila de demandas</button>
         <span className="at-status-cel"><StatusDocPill status={s.status} /></span>
+        {!cad && detalhe?.conferencias && <FaixaConferencia conferencias={detalhe.conferencias} anexos={anexos} />}
         <span className="pequeno">{editavel ? 'Você é o responsável por este atendimento.' : s.responsavel_nome ? `Responsável: ${s.responsavel_nome} · somente consulta` : 'Ainda não assumida · somente consulta'}</span>
       </div>
       <div className={`at${ampliado ? ' at-ampliado' : ''}`} ref={caixa} style={{ ['--at-esq' as string]: `${divisao}%` }}>
@@ -179,7 +180,6 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
                 <span className="pequeno suave">Libera depois de informar o código do lote do ERP e vincular a solicitação.</span>
               </div>
             ))}
-            {!cad && detalhe?.conferencias && <ConferenciaParticipantes conferencias={detalhe.conferencias} anexos={anexos} />}
             {editavel && s.status === 'em_atendimento' && <PedirAjuste s={s} executar={executar} referencias={cad ? REFERENCIAS_CADASTRO : REFERENCIAS} />}
             {editavel && !retomar && !cad && <Concluir s={s} executar={executar} emitidos={saida.length} aviso={avisoConferencia(detalhe?.conferencias)} />}
             {editavel && !retomar && cad && <ConcluirCadastro s={s} executar={executar} />}

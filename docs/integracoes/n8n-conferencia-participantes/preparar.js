@@ -22,7 +22,7 @@ const SCHEMA = {
         required: ['tipo', 'chave_acesso', 'numero', 'serie', 'nf_tipo_operacao', 'modalidade_frete',
           'emitente', 'destinatario', 'local_retirada', 'local_entrega',
           'remetente', 'expedidor', 'recebedor', 'tomador', 'tomador_papel',
-          'municipio_inicio', 'municipio_fim', 'chaves_nfe_citadas', 'legibilidade', 'observacao'],
+          'municipio_inicio', 'municipio_fim', 'chaves_nfe_citadas', 'dados_adicionais', 'legibilidade', 'observacao'],
         properties: {
           tipo: { type: 'string', enum: ['nfe', 'cte', 'outro'] },
           chave_acesso: { type: 'string' }, numero: { type: 'string' }, serie: { type: 'string' },
@@ -33,6 +33,7 @@ const SCHEMA = {
           tomador_papel: { type: 'string', enum: ['remetente', 'expedidor', 'recebedor', 'destinatario', 'outros', ''] },
           municipio_inicio: CIDADE, municipio_fim: CIDADE,
           chaves_nfe_citadas: { type: 'array', items: { type: 'string' } },
+          dados_adicionais: { type: 'string' },
           legibilidade: { type: 'integer' },
           observacao: { type: 'string' }
         }
@@ -49,7 +50,11 @@ const PROMPT = [
   'NF-e: emitente = bloco do emitente no topo; destinatario = bloco DESTINATÁRIO/REMETENTE exatamente como impresso;',
   'nf_tipo_operacao = "entrada" se o campo de tipo indicar 0 (Entrada) e "saida" se indicar 1 (Saída);',
   'modalidade_frete = o código do campo MODALIDADE DO FRETE / FRETE POR CONTA (0, 1, 2, 3, 4 ou 9), só o número;',
-  'local_retirada e local_entrega só quando houver bloco "Informações do local de retirada/entrega" ou texto explícito em Dados Adicionais; senão deixe vazios.',
+  'local_retirada e local_entrega: use o bloco "Informações do local de retirada/entrega" quando existir. Muitos modelos de nota trazem esses locais só nas',
+  'INFORMAÇÕES COMPLEMENTARES / DADOS ADICIONAIS (ex.: "Local de retirada:", "Coleta em:", "Carregamento:", "Entrega em:", "Descarga:", fazenda, armazém, CNPJ, cidade):',
+  'nesse caso preencha local_retirada/local_entrega com o que estiver escrito lá. Se não houver nada, deixe vazios.',
+  'dados_adicionais (só NF-e): copie, literalmente, os trechos das Informações Complementares/Dados Adicionais que falam de local de coleta, retirada,',
+  'carregamento, entrega ou descarga (endereço, fazenda, armazém, CNPJ, município), no máximo 600 caracteres; vazio se não houver.',
   'CT-e: remetente, destinatario, expedidor, recebedor e tomador = blocos do DACTE com esses nomes (vazios se não existirem);',
   'tomador_papel = quem é o tomador do serviço (remetente, expedidor, recebedor, destinatario ou outros);',
   'municipio_inicio e municipio_fim = INÍCIO e TÉRMINO DA PRESTAÇÃO; chaves_nfe_citadas = chaves de NF-e em DOCUMENTOS ORIGINÁRIOS (44 dígitos).',

@@ -2,8 +2,8 @@
 // Regras (sempre por CNPJ/CPF e município; o nome só ajuda quando o documento não foi lido):
 //  Remetente      NF: emitente (saída) ou bloco destinatário/remetente (entrada)   x  CT-e: remetente
 //  Destinatário   NF: destinatário (saída) ou emitente (entrada)                    x  CT-e: destinatário
-//  Local coleta   NF: local de retirada, senão remetente                            x  CT-e: expedidor, senão remetente + início da prestação
-//  Local entrega  NF: local de entrega, senão destinatário                          x  CT-e: recebedor, senão destinatário + término da prestação
+//  Local coleta   NF: local de retirada (bloco ou observações), senão remetente x  CT-e: expedidor, senão remetente + início da prestação
+//  Local entrega  NF: local de entrega (bloco ou observações), senão destinatário x  CT-e: recebedor, senão destinatário + término da prestação
 //  Pagador        Travion: cliente do embarque                                      x  CT-e: tomador do serviço
 //  NF no CT-e     chave da NF                                                       x  chaves citadas no CT-e
 const bruto = $('Buscar dados da conferência').first().json;
@@ -51,9 +51,9 @@ function compararParte(nf, cte) {
   if (a && b) {
     if (a === b) return { resultado: 'ok', observacao: '' };
     if (a.length === 14 && b.length === 14 && a.slice(0, 8) === b.slice(0, 8)) {
-      return { resultado: 'alerta', observacao: 'Mesma empresa, filial (CNPJ) diferente' };
+      return { resultado: 'alerta', observacao: 'Mesma empresa, filial diferente: NF ' + a + ', CT-e ' + b };
     }
-    return { resultado: 'divergente', observacao: 'CNPJ/CPF diferente' };
+    return { resultado: 'divergente', observacao: 'CNPJ/CPF diferente: NF ' + a + ', CT-e ' + b };
   }
   if (parecido(nf.nome, cte.nome)) return { resultado: 'alerta', observacao: 'CNPJ/CPF não legível; o nome confere' };
   return { resultado: 'alerta', observacao: 'CNPJ/CPF não legível; conferir manualmente' };
@@ -72,7 +72,7 @@ function compararLocal(nfLocal, cteLocal, cteCidade, nomeCidade) {
     if (p.observacao) obs.push(p.observacao);
   }
   const c1 = compararCidade(nfLocal, cteLocal);
-  if (c1 === 'divergente') obs.push('Cidade diferente');
+  if (c1 === 'divergente') obs.push('Cidade diferente: NF ' + cidade(nfLocal) + ', CT-e ' + cidade(cteLocal));
   res = pior(res, c1);
   if (norm(cteCidade && cteCidade.municipio)) {
     const c2 = compararCidade(nfLocal, cteCidade);
@@ -81,6 +81,18 @@ function compararLocal(nfLocal, cteLocal, cteCidade, nomeCidade) {
   }
   if (res === 'nao_lido') obs.push('Cidade não lida em um dos documentos');
   return { resultado: res, observacao: obs.join('; ') };
+}
+
+// Alguns modelos de NF só trazem coleta/entrega nas observações (Dados Adicionais): se o local do CT-e
+// (CNPJ/CPF ou município) aparecer escrito lá, confere.
+function nasObservacoes(texto, cteLocal, cteCidade) {
+  const t = norm(texto), d = dig(texto);
+  if (!t) return '';
+  const doc = dig(cteLocal && cteLocal.cnpj_cpf);
+  if (doc.length >= 11 && d.includes(doc)) return 'CNPJ/CPF';
+  const mun = norm(cteLocal && cteLocal.municipio) || norm(cteCidade && cteCidade.municipio);
+  if (mun && (' ' + t + ' ').includes(' ' + mun + ' ')) return 'município';
+  return '';
 }
 
 // Documentos lidos
@@ -119,7 +131,7 @@ const leitura = {
     documentos: (l.documentos || []).length, tokens: l.tokens || null })),
   nfs: nfs.map(d => ({ chave: d.chave_acesso, chave_valida: d._chave_ok, numero: d.numero, tipo_operacao: d.nf_tipo_operacao,
     modalidade_frete: d.modalidade_frete, emitente: d.emitente, destinatario: d.destinatario,
-    local_retirada: d.local_retirada, local_entrega: d.local_entrega, legibilidade: d.legibilidade, arquivo: d._arquivo })),
+    local_retirada: d.local_retirada, local_entrega: d.local_entrega, dados_adicionais: d.dados_adicionais || '', legibilidade: d.legibilidade, arquivo: d._arquivo })),
   ctes: ctes.map(d => ({ chave: d.chave_acesso, chave_valida: d._chave_ok, numero: d.numero, remetente: d.remetente,
     destinatario: d.destinatario, expedidor: d.expedidor, recebedor: d.recebedor, tomador: d.tomador,
     tomador_papel: d.tomador_papel, inicio: d.municipio_inicio, fim: d.municipio_fim,
@@ -164,13 +176,19 @@ for (const cte of ctes) {
     const entregaNf = temParte(nf.local_entrega) ? nf.local_entrega : dest;
     const coletaCte = temParte(cte.expedidor) ? cte.expedidor : cte.remetente;
     const entregaCte = temParte(cte.recebedor) ? cte.recebedor : cte.destinatario;
+    const obsNf = String(nf.dados_adicionais || '');
+    const viaObs = (r, temBloco, cteLocal, cteCidade) => {
+      if (r.resultado === 'ok' || temBloco || !obsNf) return r;
+      const achou = nasObservacoes(obsNf, cteLocal, cteCidade);
+      return achou ? { resultado: 'ok', observacao: 'Confere com as observações da NF (' + achou + ')', _obs: true } : r;
+    };
     const itens = [
       ['remetente', 'Remetente', rem, cte.remetente, compararParte(rem, cte.remetente)],
       ['destinatario', 'Destinatário', dest, cte.destinatario, compararParte(dest, cte.destinatario)],
-      ['local_coleta', 'Local de coleta', coletaNf, coletaCte,
-        compararLocal(coletaNf, coletaCte, cte.municipio_inicio, 'Início da prestação')],
-      ['local_entrega', 'Local de entrega', entregaNf, entregaCte,
-        compararLocal(entregaNf, entregaCte, cte.municipio_fim, 'Término da prestação')]
+      ['local_coleta', 'Local de coleta', coletaNf, coletaCte, viaObs(
+        compararLocal(coletaNf, coletaCte, cte.municipio_inicio, 'Início da prestação'), temParte(nf.local_retirada), coletaCte, cte.municipio_inicio)],
+      ['local_entrega', 'Local de entrega', entregaNf, entregaCte, viaObs(
+        compararLocal(entregaNf, entregaCte, cte.municipio_fim, 'Término da prestação'), temParte(nf.local_entrega), entregaCte, cte.municipio_fim)]
     ];
     for (const it of itens) {
       const atual = porCampo[it[0]];
@@ -179,8 +197,11 @@ for (const cte of ctes) {
         : it[0] === 'local_entrega'
           ? [mostrar(it[3]), norm(cte.municipio_fim && cte.municipio_fim.municipio) ? 'Término: ' + cidade(cte.municipio_fim) : ''].filter(Boolean).join('\n')
           : mostrar(it[3]);
-      const textoNf = (it[0] === 'local_coleta' && temParte(nf.local_retirada) ? 'Local de retirada: ' : '')
-        + (it[0] === 'local_entrega' && temParte(nf.local_entrega) ? 'Local de entrega: ' : '') + mostrar(it[2]);
+      const local = it[0] === 'local_coleta' || it[0] === 'local_entrega';
+      const textoNf = it[4]._obs ? 'Obs. da NF: "' + obsNf.slice(0, 300) + '"'
+        : (it[0] === 'local_coleta' && temParte(nf.local_retirada) ? 'Local de retirada: ' : '')
+          + (it[0] === 'local_entrega' && temParte(nf.local_entrega) ? 'Local de entrega: ' : '') + mostrar(it[2])
+          + (local && !temParte(it[0] === 'local_coleta' ? nf.local_retirada : nf.local_entrega) && obsNf ? '\nObs. da NF: "' + obsNf.slice(0, 200) + '"' : '');
       if (!atual) {
         porCampo[it[0]] = { campo: it[0], rotulo: it[1], nf: textoNf, cte: textoCte, resultado: it[4].resultado, observacao: it[4].observacao };
       } else if (ORDEM[it[4].resultado] > ORDEM[atual.resultado]) {
