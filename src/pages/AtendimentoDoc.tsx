@@ -356,7 +356,11 @@ export function Retomar({ s, executar }: { s: SolicitacaoDoc; executar: Executar
 function Concluir({ s, executar, emitidos, aviso }: { s: SolicitacaoDoc; executar: Executar; emitidos: number; aviso: ReturnType<typeof avisoConferencia> }) {
   const { api } = useApp();
   const [conferi, setConferi] = useState(false);
+  const [motivo, setMotivo] = useState('');
   const [gravando, setGravando] = useState(false);
+  // Conferência automática fora do verde (divergência, atenção, lendo ou não conferido): libera só com motivo
+  // escrito, que fica no registro permanente (regra de 04/11/2026).
+  const pedeMotivo = !!aviso;
   const faltas = useMemo(() => [
     !emitidos && 'anexar ao menos um documento emitido',
     !s.lote_id && 'informar o código do lote do ERP e vincular',
@@ -366,12 +370,19 @@ function Concluir({ s, executar, emitidos, aviso }: { s: SolicitacaoDoc; executa
     <div className="cartao cartao-corpo at-bloco at-concluir">
       <strong>Liberar ao comercial</strong>
       {!faltas.length && aviso && <Alerta tipo={aviso.tipo}>{aviso.texto}</Alerta>}
+      {!faltas.length && pedeMotivo && (
+        <label className="campo">
+          <span>Motivo para liberar sem a conferência toda verde (obrigatório)</span>
+          <textarea rows={2} maxLength={1000} value={motivo} onChange={(e) => setMotivo(e.target.value)}
+            placeholder="Ex.: tomador confirmado com o cliente por e-mail; CT-e correto." />
+        </label>
+      )}
       {faltas.length ? <span className="pequeno suave">Antes, falta: {faltas.join('; ')}.</span> : (
         <label className="at-check"><input type="checkbox" checked={conferi} onChange={(e) => setConferi(e.target.checked)} /> Conferi os documentos emitidos e estão corretos.</label>
       )}
-      <div><button className="btn primario" disabled={!!faltas.length || !conferi || gravando} onClick={async () => {
+      <div><button className="btn primario" disabled={!!faltas.length || !conferi || gravando || (pedeMotivo && motivo.trim().length < 5)} onClick={async () => {
         setGravando(true);
-        await executar(() => api.doc.concluir(s.id), 'Documentação disponível ao comercial.');
+        await executar(() => api.doc.concluir(s.id, pedeMotivo ? motivo : undefined), 'Documentação disponível ao comercial.');
         setGravando(false);
       }}>{gravando ? 'Liberando…' : 'Marcar documentação disponível'}</button></div>
     </div>

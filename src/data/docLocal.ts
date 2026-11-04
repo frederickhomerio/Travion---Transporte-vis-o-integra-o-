@@ -957,7 +957,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       emitir({ tabela: 'detalhe', id: s.id });
       conferirDemo(s, a, 'conferido', 3000, c);
     },
-    async concluir(id) {
+    async concluir(id, motivo) {
       offline();
       const s = carregar(id);
       responsavel(s, ['em_atendimento']);
@@ -966,7 +966,12 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       if (!db.anexos.some((a) => a.solicitacao_id === s.id && SAIDA.includes(a.categoria))) erro('Anexe ao menos um documento emitido (CT-e, MDF-e ou outro) antes de liberar.');
       if (s.tipo === 'lote_emissao' && !s.lote_id) erro('Registre o número do lote gerado no ERP antes de liberar a documentação.');
       if (s.tipo === 'emissao' && !s.lote_id) erro('Esta emissão está na fila do lote em geração: registre o lote na solicitação de lote e emissão antes de liberar.');
+      const cs = (db.auditorias ?? []).filter((c) => c.solicitacao_id === s.id);
+      if (!(cs.length && cs.every((c) => c.status === 'conferido')) && !motivo?.trim()) {
+        erro('A conferência automática não está toda verde. Para liberar assim, escreva o motivo.');
+      }
       tocar(s, { status: 'documentacao_disponivel', concluido_em: agora(), concluido_por_nome: eu().nome });
+      if (motivo?.trim()) evento(s, 'evento', `Liberada com a conferência fora do verde. Motivo: ${motivo.trim().slice(0, 500)}`);
       evento(s, 'evento', `Documentação disponível, conferida e liberada por ${eu().nome}`);
       notificar(s.solicitante_id, 'documentacao_disponivel', 'Documentação disponível', `${rotulo(s)} · ${s.retrato.cliente ?? ''}`, s, 'embarque', `disponivel:${s.id}`);
       return fim(s);

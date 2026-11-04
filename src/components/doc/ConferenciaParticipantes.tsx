@@ -85,7 +85,9 @@ function Chip({ rotulo, tipo, titulo, texto, nf, cte }: { rotulo: string; tipo: 
 
 /** Aviso para o bloco "Liberar ao comercial": divergência ou conferência ainda rodando. */
 export function avisoConferencia(conferencias: Conferencia[] | undefined): { tipo: 'erro' | 'aviso'; texto: string } | null {
-  const cs = conferencias ?? [];
+  if (!conferencias) return null;
+  const cs = conferencias;
+  if (!cs.length) return { tipo: 'aviso', texto: 'O CT-e não passou pela conferência automática.' };
   if (cs.some((c) => c.status === 'divergente')) return { tipo: 'erro', texto: 'A conferência automática encontrou divergência entre a NF e o CT-e (quadros em vermelho no topo). Confira antes de liberar.' };
   if (cs.some((c) => c.status === 'processando')) return { tipo: 'aviso', texto: 'A conferência automática ainda está lendo os arquivos.' };
   if (cs.some((c) => c.status === 'alerta' || c.status === 'erro')) return { tipo: 'aviso', texto: 'A conferência automática deixou pontos de atenção (quadros em amarelo no topo). Confira antes de liberar.' };

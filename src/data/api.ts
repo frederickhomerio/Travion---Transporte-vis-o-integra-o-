@@ -108,7 +108,8 @@ export interface ApiDoc {
   anexarEmitidos(id: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   /** Pede de novo a conferência automática NF × CT-e (id da conferência). */
   reconferirParticipantes(id: string): Promise<void>;
-  concluir(id: string): Promise<ResultadoDoc>;
+  /** motivo: obrigatório quando a conferência NF × CT-e está em divergência (fica no registro permanente). */
+  concluir(id: string, motivo?: string): Promise<ResultadoDoc>;
   cancelar(id: string, motivo: string): Promise<ResultadoDoc>;
   /** Aba Cadastro (migração 1700). */
   criarCadastro(dados: DadosCadastroDoc, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;

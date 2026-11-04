@@ -110,7 +110,9 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
     responder: (id, texto, anexos) => rpc<ResultadoDoc>('responder_ajuste_doc', { p_id: id, p_texto: texto, p_anexos: anexos }),
     anexarEmitidos: (id, anexos) => rpc<ResultadoDoc>('anexar_documentos_doc', { p_id: id, p_anexos: anexos }),
     async reconferirParticipantes(id) { await rpc('reconferir_participantes', { p_id: id }); },
-    concluir: (id) => rpc<ResultadoDoc>('concluir_solicitacao_doc', { p_id: id }),
+    concluir: (id, motivo) => motivo?.trim()
+      ? rpc<ResultadoDoc>('concluir_solicitacao_doc_motivo', { p_id: id, p_motivo: motivo.trim() })
+      : rpc<ResultadoDoc>('concluir_solicitacao_doc', { p_id: id }),
     cancelar: (id, motivo) => rpc<ResultadoDoc>('cancelar_solicitacao_doc', { p_id: id, p_motivo: motivo }),
     criarCadastro: (dados, anexos) => rpc<ResultadoDoc>('criar_solicitacao_cadastro', { p_dados: dados, p_anexos: anexos }),
     concluirCadastro: (id, referencia, retorno) => rpc<ResultadoDoc>('concluir_cadastro_doc', { p_id: id, p_referencia: referencia, p_retorno: retorno }),
