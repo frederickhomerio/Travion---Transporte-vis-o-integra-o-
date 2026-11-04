@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { type ArquivoLocal, Copiar, Historico, LinhaInfo, SeletorArquivos, StatusDocPill, TipoNumero, enviarArquivos, useAgora } from '../components/doc/Comum';
 import { CancelarDoc } from '../components/doc/DocumentacaoEmbarque';
+import { ConferenciaParticipantes, avisoConferencia } from '../components/doc/ConferenciaParticipantes';
 import { VisualizadorAnexo } from '../components/doc/VisualizadorAnexo';
 import { MesaAmpla } from '../components/doc/MesaAmpla';
 import { Layout } from '../components/Layout';
@@ -178,8 +179,9 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
                 <span className="pequeno suave">Libera depois de informar o código do lote do ERP e vincular a solicitação.</span>
               </div>
             ))}
+            {!cad && detalhe?.conferencias && <ConferenciaParticipantes conferencias={detalhe.conferencias} anexos={anexos} />}
             {editavel && s.status === 'em_atendimento' && <PedirAjuste s={s} executar={executar} referencias={cad ? REFERENCIAS_CADASTRO : REFERENCIAS} />}
-            {editavel && !retomar && !cad && <Concluir s={s} executar={executar} emitidos={saida.length} />}
+            {editavel && !retomar && !cad && <Concluir s={s} executar={executar} emitidos={saida.length} aviso={avisoConferencia(detalhe?.conferencias)} />}
             {editavel && !retomar && cad && <ConcluirCadastro s={s} executar={executar} />}
             {saida.length > 0 && (
               <div className="cartao cartao-corpo at-bloco">
@@ -351,7 +353,7 @@ export function Retomar({ s, executar }: { s: SolicitacaoDoc; executar: Executar
   );
 }
 
-function Concluir({ s, executar, emitidos }: { s: SolicitacaoDoc; executar: Executar; emitidos: number }) {
+function Concluir({ s, executar, emitidos, aviso }: { s: SolicitacaoDoc; executar: Executar; emitidos: number; aviso: ReturnType<typeof avisoConferencia> }) {
   const { api } = useApp();
   const [conferi, setConferi] = useState(false);
   const [gravando, setGravando] = useState(false);
@@ -363,6 +365,7 @@ function Concluir({ s, executar, emitidos }: { s: SolicitacaoDoc; executar: Exec
   return (
     <div className="cartao cartao-corpo at-bloco at-concluir">
       <strong>Liberar ao comercial</strong>
+      {!faltas.length && aviso && <Alerta tipo={aviso.tipo}>{aviso.texto}</Alerta>}
       {faltas.length ? <span className="pequeno suave">Antes, falta: {faltas.join('; ')}.</span> : (
         <label className="at-check"><input type="checkbox" checked={conferi} onChange={(e) => setConferi(e.target.checked)} /> Conferi os documentos emitidos e estão corretos.</label>
       )}

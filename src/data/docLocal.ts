@@ -2,7 +2,7 @@
 // Metadados em localStorage (outras abas simulam outros usuários em tempo real) e arquivos em IndexedDB.
 
 import type {
-  AnexoDoc, CategoriaAnexo, ConferenciaEstadia, DuplicadaEstadia, Embarque, LoteErp, MensagemDoc, MotivoDevolucao, NotificacaoApp, PagamentoEstadia,
+  AnexoDoc, CategoriaAnexo, ConferenciaEstadia, ConferenciaParticipantes, LinhaConferencia, DuplicadaEstadia, Embarque, LoteErp, MensagemDoc, MotivoDevolucao, NotificacaoApp, PagamentoEstadia,
   Perfil, Permissao, RetornoEstadia, RetratoDoc, SolicitacaoDoc, StatusDoc,
 } from '../types';
 import type { ApiDoc, ArquivoDoc, EventoDoc, ResultadoDoc } from './api';
@@ -27,6 +27,8 @@ interface BancoDoc {
   /** Estadia (migração 2000): código EST-nnn, versões do cálculo, retornos do cliente e pagamentos informados. */
   seqEstadia?: number;
   conferencias?: ConferenciaEstadia[]; retornos?: RetornoEstadia[]; pagamentos?: PagamentoEstadia[];
+  /** Conferência automática dos participantes NF × CT-e (migração 3600; na prévia, resultado simulado). */
+  auditorias?: ConferenciaParticipantes[];
 }
 const FINAIS: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido', 'aprovada', 'aprovada_parcial', 'encerrado', 'cancelado'];
 const CONCLUSOES: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido', 'aprovada', 'aprovada_parcial', 'encerrado'];
@@ -137,6 +139,48 @@ async function imagemDemo(linhas: string[]): Promise<Blob> {
 
 // ---------------------------------------------------------------------------
 /** Além da API, o lote do ERP informado na criação do embarque (a criação fica na API principal da prévia). */
+// ---------------------------------------------------------------------------
+// Conferência de participantes NF × CT-e na prévia: o n8n é simulado com um resultado fictício.
+// ---------------------------------------------------------------------------
+type CenarioConferencia = 'conferido' | 'alerta' | 'divergente';
+function linhasDemo(s: SolicitacaoDoc, cte: string, cenario: CenarioConferencia): LinhaConferencia[] {
+  const r = s.retrato;
+  const cliente = (r.cliente ?? 'Cliente').toUpperCase();
+  const orig = `${r.origem_cidade}/${r.origem_uf ?? ''}`;
+  const dest = `${r.destino_cidade}/${r.destino_uf ?? ''}`;
+  const rem = `${cliente} · 12.345.678/0001-90 · ${orig}`;
+  const des = `TERMINAL GRANELEIRO DESTINO S/A · 33.444.555/0001-20 · ${dest}`;
+  const ok = (campo: LinhaConferencia['campo'], rotulo: string, nf: string, ct = nf): LinhaConferencia =>
+    ({ campo, rotulo, nf, cte: ct, resultado: 'ok', observacao: '', cte_numero: cte });
+  const linhas: LinhaConferencia[] = [
+    ok('nf_no_cte', 'NF citada no CT-e', 'NF-e 41231 · chave 5226…0412 31', 'Chave presente nos documentos originários'),
+    ok('remetente', 'Remetente', rem),
+    ok('destinatario', 'Destinatário', des),
+    ok('local_coleta', 'Local de coleta', `${r.coleta ?? 'Fazenda'} · ${orig}`, `Expedidor não informado · início ${orig}`),
+    ok('local_entrega', 'Local de entrega', `${r.entrega ?? 'Armazém'} · ${dest}`, `Recebedor não informado · término ${dest}`),
+    ok('pagador', 'Cliente pagador', `${cliente} (cliente do embarque) · 12.345.678/0001-90`, `Tomador: remetente · ${rem}`),
+  ];
+  if (cenario === 'divergente') {
+    linhas[5] = { ...linhas[5], cte: 'Tomador: destinatário · TERMINAL GRANELEIRO DESTINO S/A · 33.444.555/0001-20', resultado: 'divergente',
+      observacao: 'O tomador do CT-e não é o cliente do embarque: confira quem paga o frete.' };
+    linhas[4] = { ...linhas[4], cte: `Recebedor: ARMAZÉM PARCEIRO LTDA · 77.888.999/0001-10 · Uberlândia/MG`, resultado: 'divergente',
+      observacao: 'O município de entrega do CT-e é diferente do destino da nota.' };
+  }
+  if (cenario === 'alerta') {
+    linhas[1] = { ...linhas[1], cte: rem.replace('0001-90', '0004-33'), resultado: 'alerta',
+      observacao: 'Mesmo grupo (raiz do CNPJ), mas outra filial: confira se está certo.' };
+  }
+  return linhas;
+}
+function statusLinhas(l: LinhaConferencia[]): ConferenciaParticipantes['status'] {
+  return l.some((x) => x.resultado === 'divergente') ? 'divergente' : l.some((x) => x.resultado !== 'ok') ? 'alerta' : 'conferido';
+}
+export const TEXTO_CONFERENCIA: Record<CenarioConferencia, string> = {
+  conferido: 'Conferência automática: participantes da NF e do CT-e conferem.',
+  alerta: 'Conferência automática: participantes conferem, com pontos de atenção.',
+  divergente: 'Conferência automática: DIVERGÊNCIA entre a NF e o CT-e. Confira antes de liberar.',
+};
+
 export type ApiDocLocal = ApiDoc & {
   registrarLoteInicial(embarqueId: string, numero: string, nome: string): void;
   loteDe(embarqueId: string): string | null;
@@ -209,6 +253,27 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       autor_nome: autor?.nome ?? ctx.perfil()?.nome ?? 'Sistema', criado_em: agora() };
     db.mensagens.push(m);
     return m;
+  };
+  /** Simula o n8n: cria a conferência "processando" e grava o resultado alguns segundos depois. */
+  const conferirDemo = (s: SolicitacaoDoc, anexo: AnexoDoc, cenario: CenarioConferencia, atraso: number, existente?: ConferenciaParticipantes) => {
+    const lista = (db.auditorias ??= []);
+    const c: ConferenciaParticipantes = existente ?? { id: uid(), solicitacao_id: s.id, anexo_id: anexo.id, status: 'processando', origem: null, resultado: [],
+      mensagem: null, tentativas: 1, criado_em: agora(), atualizado_em: agora(), concluido_em: null };
+    if (!existente) lista.push(c);
+    const terminar = () => {
+      const alvo = (db.auditorias ?? []).find((x) => x.id === c.id);
+      if (!alvo) return;
+      const numero = anexo.nome.match(/\d{3,}/)?.[0] ?? '';
+      const linhas = linhasDemo(s, numero, cenario);
+      Object.assign(alvo, { status: statusLinhas(linhas), origem: /\.xml$/i.test(anexo.nome) ? 'xml' : 'pdf_imagem', resultado: linhas,
+        mensagem: TEXTO_CONFERENCIA[cenario], atualizado_em: agora(), concluido_em: agora() });
+      db.mensagens.push({ id: uid(), solicitacao_id: s.id, tipo: 'evento', texto: TEXTO_CONFERENCIA[cenario], referencia: 'auditoria',
+        autor_id: null, autor_nome: 'Conferência automática', criado_em: agora() });
+      salvar();
+      emitir({ tabela: 'detalhe', id: s.id });
+    };
+    if (atraso <= 0) terminar(); else setTimeout(terminar, atraso);
+    return c;
   };
   const notificar = (dest: string | null, tipo: NotificacaoApp['tipo'], titulo: string, texto: string, s: SolicitacaoDoc, destino: NotificacaoApp['destino'], chave: string) => {
     if (!dest || dest === ctx.perfil()?.id || db.notificacoes.some((n) => n.destinatario_id === dest && n.chave === chave)) return;
@@ -522,6 +587,32 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
     (db.eventos ??= []).push(...eventosDosRegistros(db, 'registro').filter((e) => novos.has(e.s)));
     salvar();
   };
+  // Conferências fictícias: a emissão em atendimento recebe um CT-e com divergência, a liberada fica conferida.
+  const semearAuditorias = async () => {
+    if (db.auditorias || typeof document === 'undefined') return;
+    db.auditorias = [];
+    const doTipo = db.solicitacoes.filter((x) => x.tipo === 'lote_emissao' || x.tipo === 'emissao');
+    const liberada = doTipo.find((x) => x.status === 'documentacao_disponivel' && db.anexos.some((a) => a.solicitacao_id === x.id && a.categoria === 'cte'));
+    if (liberada) {
+      const a = db.anexos.find((x) => x.solicitacao_id === liberada.id && x.categoria === 'cte')!;
+      conferirDemo(liberada, a, 'conferido', 0);
+    }
+    const aberta = doTipo.find((x) => x.status === 'em_atendimento' && x.lote_id);
+    if (aberta && !db.anexos.some((a) => a.solicitacao_id === aberta.id && a.categoria === 'cte')) {
+      const blob = pdfDemo('DACTE (demonstração) · CT-e 118377', [`Placa ${aberta.placa}`, 'Tomador: destinatário', 'Documento fictício.']);
+      const dono = aberta.responsavel_id ?? 'perfil-2';
+      const caminho = `envios/${dono}/${uid()}.pdf`;
+      try { await gravarArq(caminho, blob); } catch { /* sem arquivo, só a conferência */ }
+      db.objetos.push({ caminho, dono, tipo: blob.type, tamanho: blob.size });
+      const a: AnexoDoc = { id: uid(), solicitacao_id: aberta.id, categoria: 'cte', caminho, nome: 'CTe-118377.pdf', tipo_mime: blob.type, tamanho: blob.size,
+        mensagem_id: null, enviado_por_nome: aberta.responsavel_nome ?? 'Apoio Operacional (prévia)', enviado_em: agora() };
+      db.anexos.push(a);
+      db.mensagens.push({ id: uid(), solicitacao_id: aberta.id, tipo: 'evento', texto: '1 documento(s) emitido(s) anexado(s), em conferência', referencia: 'documentos',
+        autor_id: aberta.responsavel_id, autor_nome: a.enviado_por_nome, criado_em: agora() });
+      conferirDemo(aberta, a, 'divergente', 0);
+    }
+    salvar();
+  };
   // Prévia gravada antes do Painel Operacional: eventos refeitos a partir dos horários gravados (como a migração 1900).
   if (!db.eventos) db.eventos = eventosDosRegistros(db, 'historico');
   // Dados da prévia recriados (novos embarques): recomeça a documentação fictícia.
@@ -534,6 +625,8 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
   } else if (!db.solicitacoes.some((s) => s.tipo === 'estadia') && typeof document !== 'undefined') {
     pronto = semearEstadias().catch(() => undefined);
   }
+
+  pronto = pronto.then(semearAuditorias).catch(() => undefined);
 
   if (typeof window !== 'undefined') {
     window.addEventListener('storage', (ev) => {
@@ -594,6 +687,8 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
         mensagens: db.mensagens.filter((m) => m.solicitacao_id === id).sort((a, b) => a.criado_em.localeCompare(b.criado_em)),
         anexos: [...db.anexos.filter((a) => a.solicitacao_id === id),
           ...db.anexos.filter((a) => origem && a.solicitacao_id === origem && a.categoria === 'evidencia_frete')],
+        ...(s.tipo === 'lote_emissao' || s.tipo === 'emissao'
+          ? { conferencias: (db.auditorias ?? []).filter((c) => c.solicitacao_id === id).sort((a, b) => a.criado_em.localeCompare(b.criado_em)) } : {}),
         ...(s.tipo === 'estadia' ? { estadia: {
           conferencias: (db.conferencias ?? []).filter((c) => c.solicitacao_id === id).sort((a, b) => a.versao - b.versao),
           retornos: (db.retornos ?? []).filter((r) => r.solicitacao_id === id),
@@ -831,11 +926,30 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       if (s.tipo === 'cadastro') erro('Cadastro não recebe documentos emitidos: confirme a conclusão do cadastro.');
       if (s.tipo === 'estadia') erro('Estadia não recebe documentos emitidos: use a memória de cálculo e o retorno do cliente.');
       if ((s.tipo === 'lote_emissao' || s.tipo === 'emissao') && !s.lote_id) erro('Informe o código do lote do ERP e vincule a solicitação antes de anexar os documentos emitidos.');
+      const antes = new Set(db.anexos.map((a) => a.id));
       const n = vincular(s, anexos, SAIDA, null);
       if (!n) erro('Nenhum arquivo para anexar.');
       evento(s, 'evento', `${n} documento(s) emitido(s) anexado(s), em conferência`, 'documentos');
+      // Cada CT-e anexado dispara a conferência automática (na prévia: alterna conferido e alerta).
+      for (const a of db.anexos.filter((x) => !antes.has(x.id) && x.categoria === 'cte')) {
+        const qtd = (db.auditorias ?? []).filter((c) => c.solicitacao_id === s.id).length;
+        conferirDemo(s, a, qtd % 2 ? 'alerta' : 'conferido', 4000);
+      }
       tocar(s);
       return fim(s);
+    },
+    async reconferirParticipantes(id) {
+      offline();
+      exigir('apoio.atender');
+      const c = (db.auditorias ?? []).find((x) => x.id === id);
+      if (!c) erro('Conferência não encontrada.');
+      const s = carregar(c.solicitacao_id);
+      const a = db.anexos.find((x) => x.id === c.anexo_id);
+      if (!a) erro('CT-e da conferência não encontrado.');
+      Object.assign(c, { status: 'processando', mensagem: null, resultado: [], tentativas: c.tentativas + 1, atualizado_em: agora(), concluido_em: null });
+      salvar();
+      emitir({ tabela: 'detalhe', id: s.id });
+      conferirDemo(s, a, 'conferido', 3000, c);
     },
     async concluir(id) {
       offline();

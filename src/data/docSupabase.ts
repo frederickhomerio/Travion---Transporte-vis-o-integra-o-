@@ -1,7 +1,7 @@
 // Documentação / Apoio Operacional no Supabase: tabelas com RLS, funções da migração 1610 e bucket privado "documentacao".
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AnexoDoc, ConferenciaEstadia, LoteErp, MensagemDoc, NotificacaoApp, PagamentoEstadia, RetornoEstadia, SolicitacaoDoc } from '../types';
+import type { AnexoDoc, ConferenciaEstadia, ConferenciaParticipantes, LoteErp, MensagemDoc, NotificacaoApp, PagamentoEstadia, RetornoEstadia, SolicitacaoDoc } from '../types';
 import type { ApiDoc, ResultadoDoc } from './api';
 import { tipoCadastro } from '../lib/documentacao';
 import type { DadosPainel } from '../lib/painelOperacional';
@@ -71,6 +71,11 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
           : Promise.resolve({ data: [], error: null }),
       ]);
       const base = { mensagens: ok(m) as MensagemDoc[], anexos: [...(ok(a) as AnexoDoc[]), ...(ok(ev) as AnexoDoc[])] };
+      if (s.tipo === 'lote_emissao' || s.tipo === 'emissao') {
+        // Conferência automática dos participantes (NF × CT-e). Se a tabela ainda não existir, segue sem ela.
+        const c = await sb.from('auditoria_participantes').select('*').eq('solicitacao_id', id).order('criado_em');
+        return { ...base, conferencias: c.error ? [] : (c.data as ConferenciaParticipantes[]) };
+      }
       if (s.tipo !== 'estadia') return base;
       const [c, r, p] = await Promise.all([
         sb.from('estadia_conferencias').select('*').eq('solicitacao_id', id).order('versao'),
@@ -104,6 +109,7 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
     painel: (desde, ate, alteradosDesde) => rpc<DadosPainel>('painel_operacional', { p_desde: desde, p_ate: ate, p_alterados_desde: alteradosDesde }),
     responder: (id, texto, anexos) => rpc<ResultadoDoc>('responder_ajuste_doc', { p_id: id, p_texto: texto, p_anexos: anexos }),
     anexarEmitidos: (id, anexos) => rpc<ResultadoDoc>('anexar_documentos_doc', { p_id: id, p_anexos: anexos }),
+    async reconferirParticipantes(id) { await rpc('reconferir_participantes', { p_id: id }); },
     concluir: (id) => rpc<ResultadoDoc>('concluir_solicitacao_doc', { p_id: id }),
     cancelar: (id, motivo) => rpc<ResultadoDoc>('cancelar_solicitacao_doc', { p_id: id, p_motivo: motivo }),
     criarCadastro: (dados, anexos) => rpc<ResultadoDoc>('criar_solicitacao_cadastro', { p_dados: dados, p_anexos: anexos }),
@@ -132,6 +138,8 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
       canal.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'doc_mensagens' }, (p) =>
         aoEvento({ tabela: 'detalhe', id: (p.new as { solicitacao_id?: string })?.solicitacao_id }));
       canal.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'doc_anexos' }, (p) =>
+        aoEvento({ tabela: 'detalhe', id: (p.new as { solicitacao_id?: string })?.solicitacao_id }));
+      canal.on('postgres_changes', { event: '*', schema: 'public', table: 'auditoria_participantes' }, (p) =>
         aoEvento({ tabela: 'detalhe', id: (p.new as { solicitacao_id?: string })?.solicitacao_id }));
       canal.on('postgres_changes', { event: '*', schema: 'public', table: 'notificacoes' }, () => aoEvento({ tabela: 'notificacoes' }));
       canal.subscribe((status) => aoEstado(status === 'SUBSCRIBED'));

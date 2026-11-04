@@ -5,7 +5,7 @@
 import type { Cadastros } from '../lib/cadastros';
 import type { DadosPainel } from '../lib/painelOperacional';
 import type {
-  AnexoDoc, CategoriaAnexo, ConferenciaEstadia, DadosCadastroDoc, DadosEstadia, DuplicadaEstadia, PagamentoEstadia, ParametrosConferencia,
+  AnexoDoc, CategoriaAnexo, ConferenciaEstadia, ConferenciaParticipantes, DadosCadastroDoc, DadosEstadia, DuplicadaEstadia, PagamentoEstadia, ParametrosConferencia,
   ResultadoEstadia, RetornoEstadia, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
   Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, ItemVitrine, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
@@ -74,6 +74,8 @@ export interface DadosDetalheDoc {
   mensagens: MensagemDoc[]; anexos: AnexoDoc[];
   /** Só no tipo Estadia: versões do cálculo, retornos do cliente e pagamentos informados. */
   estadia?: { conferencias: ConferenciaEstadia[]; retornos: RetornoEstadia[]; pagamentos: PagamentoEstadia[] };
+  /** Lote e Emissão / Emissão: conferência automática NF × CT-e de cada CT-e anexado. */
+  conferencias?: ConferenciaParticipantes[];
 }
 export interface DadosRetornoEstadia { resultado: ResultadoEstadia; valor_aprovado: number | null; justificativa: string; data_retorno: string }
 export interface DadosPagamentoEstadia { valor_pago: number; data_pagamento: string; observacao: string | null }
@@ -104,6 +106,8 @@ export interface ApiDoc {
   filaApoio(): Promise<Pick<DadosPainel, 'agora' | 'solicitacoes' | 'eventos'>>;
   responder(id: string, texto: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   anexarEmitidos(id: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
+  /** Pede de novo a conferência automática NF × CT-e (id da conferência). */
+  reconferirParticipantes(id: string): Promise<void>;
   concluir(id: string): Promise<ResultadoDoc>;
   cancelar(id: string, motivo: string): Promise<ResultadoDoc>;
   /** Aba Cadastro (migração 1700). */

@@ -260,6 +260,18 @@ export interface AnexoDoc {
   mensagem_id: string | null; enviado_por_nome: string; enviado_em: string;
 }
 
+/** Conferência automática de participantes NF-e × CT-e (migração 3600, feita pelo n8n). */
+export type StatusConferencia = 'processando' | 'conferido' | 'alerta' | 'divergente' | 'erro';
+export type ResultadoLinhaConferencia = 'ok' | 'alerta' | 'divergente' | 'nao_lido';
+export interface LinhaConferencia {
+  campo: 'nf_no_cte' | 'remetente' | 'destinatario' | 'local_coleta' | 'local_entrega' | 'pagador';
+  rotulo: string; nf: string; cte: string; resultado: ResultadoLinhaConferencia; observacao: string; cte_numero?: string;
+}
+export interface ConferenciaParticipantes {
+  id: string; solicitacao_id: string; anexo_id: string; status: StatusConferencia; origem: 'pdf_imagem' | 'xml' | null;
+  resultado: LinhaConferencia[]; mensagem: string | null; tentativas: number; criado_em: string; atualizado_em: string; concluido_em: string | null;
+}
+
 export interface NotificacaoApp {
   id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada' | 'cadastro_concluido' | 'estadia_atualizada'; titulo: string; texto: string;
   solicitacao_id: string; embarque_id: string | null; destino: 'embarque' | 'apoio' | 'cadastro' | 'estadia'; criada_em: string; lida_em: string | null;
