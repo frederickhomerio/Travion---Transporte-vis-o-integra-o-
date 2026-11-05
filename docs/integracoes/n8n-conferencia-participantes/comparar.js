@@ -101,9 +101,18 @@ function compararParte(nf, cte) {
   if (parecido(nf.nome, cte.nome)) return { resultado: 'alerta', observacao: 'CNPJ/CPF não legível; o nome confere' };
   return { resultado: 'alerta', observacao: 'CNPJ/CPF não legível; conferir manualmente' };
 }
+// Município lido pela IA: tira "ÁREA/ZONA RURAL DE" e a UF grudada no fim ("MONTIVIDIUGO" com UF vazia).
+function chaveMun(p) {
+  let m = norm(p && p.municipio).replace(/^(AREA|ZONA) RURAL (DE |DO |DA )?/, '').replace(/ /g, '');
+  const uf = norm(p && p.uf);
+  if (!uf && /(GO|MT|MS|MG|SP|PR|BA|TO|DF)$/.test(m) && m.length > 6) return { m, uf, m2: m.slice(0, -2), uf2: m.slice(-2) };
+  return { m, uf, m2: m, uf2: uf };
+}
 function compararCidade(a, b) {
   if (!norm(a && a.municipio) || !norm(b && b.municipio)) return 'nao_lido';
-  const ok = norm(a.municipio) === norm(b.municipio) && (!norm(a.uf) || !norm(b.uf) || norm(a.uf) === norm(b.uf));
+  const x = chaveMun(a), y = chaveMun(b);
+  const ufOk = (u, v) => !u || !v || u === v;
+  const ok = (x.m === y.m && ufOk(x.uf, y.uf)) || (x.m2 === y.m2 && ufOk(x.uf2, y.uf2));
   return ok ? 'ok' : 'divergente';
 }
 function compararLocal(nfLocal, cteLocal, cteCidade, nomeCidade) {
@@ -331,8 +340,18 @@ for (const cte of ctes) {
       if (r2.resultado !== 'ok') return { r, parte: padrao };
       return { r: { resultado: 'ok', observacao: 'NF de entrada: ' + tipo + ' em ' + mostrar(alternativo).split(' · ')[0] }, parte: alternativo };
     };
-    const lc = local('coleta', coletaNf, dest, coletaCte, cte.municipio_inicio, 'Início da prestação', temParte(nf.local_retirada));
-    const le = local('entrega', entregaNf, rem, entregaCte, cte.municipio_fim, 'Término da prestação', temParte(nf.local_entrega));
+    // CT-e com expedidor/recebedor (armazém, silo, terminal) que a NF não cita: se a parte da NF (remetente/destinatário)
+    // confere no CT-e, é atenção para conferir o local, não divergência.
+    const terceiro = (x, tipo, temBloco, parteCte, cteTerceiro, cParte) => {
+      if (x.r.resultado !== 'divergente' || temBloco || !temParte(cteTerceiro) || cParte.resultado !== 'ok') return x;
+      return { parte: x.parte, r: { resultado: 'alerta', observacao: 'O CT-e tem ' + (tipo === 'coleta' ? 'expedidor' : 'recebedor') + ' ('
+        + mostrar(cteTerceiro).split(' · ')[0] + ') que a NF não cita como local de ' + (tipo === 'coleta' ? 'retirada' : 'entrega')
+        + ': conferir se a carga ' + (tipo === 'coleta' ? 'saiu' : 'foi entregue') + ' nesse local. ' + (x.r.observacao || '') } };
+    };
+    const lc = terceiro(local('coleta', coletaNf, dest, coletaCte, cte.municipio_inicio, 'Início da prestação', temParte(nf.local_retirada)),
+      'coleta', temParte(nf.local_retirada), cte.remetente, cte.expedidor, cRem);
+    const le = terceiro(local('entrega', entregaNf, rem, entregaCte, cte.municipio_fim, 'Término da prestação', temParte(nf.local_entrega)),
+      'entrega', temParte(nf.local_entrega), cte.destinatario, cte.recebedor, cDest);
     if (transito) {
       const nota = 'NF de trânsito (' + (norm(nf.natureza_operacao) ? nf.natureza_operacao : 'efeito de trânsito') + '): regra invertida';
       if (cRem.resultado === 'ok' && !cRem.observacao) cRem = { resultado: 'ok', observacao: nota + ', remetente = quadro destinatário/remetente' };
