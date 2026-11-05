@@ -25,7 +25,7 @@ Regra operacional do Frederick para NF de saída, ajustada pela pesquisa de conc
 | Destinatário | quadro destinatário/remetente | destinatário | NF de entrada: o emitente é o destinatário |
 | Local de coleta | retirada (bloco ou observações), senão emitente | expedidor, senão remetente + início da prestação | NF de entrada: coleta no produtor |
 | Local de entrega | entrega (bloco ou observações), senão destinatário | recebedor, senão destinatário + término | término diferente com destinatário certo = trecho até terminal/transbordo (amarelo) |
-| Cliente pagador | cliente do embarque no Travion | tomador | modalidade do frete (CIF/FOB) × CNPJ do tomador incoerente = amarelo |
+| Cliente pagador | campo Frete da NF: 0 = emitente paga; 1 = destinatário da NF paga | tomador (CNPJ) | 2 = terceiros, 3/4 = próprio, 9 = sem frete: amarelo (conferência manual) |
 
 Vermelho: CNPJ diferente com os dois dígitos verificadores válidos, CT-e citando outra NF, e CT-e com o mesmo
 CNPJ como remetente e destinatário (exceto quando a própria NF tem emitente = destinatário).

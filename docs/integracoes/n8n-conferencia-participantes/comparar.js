@@ -5,10 +5,9 @@
 //  (regra do Frederick, 05/11/2026, para NF de saída. NF de entrada: dest/rem da NF = remetente e emitente = destinatário;
 //   remetente = destinatário no CT-e é erro)
 //  Entrega com término diferente mas destinatário certo = atenção (trecho até terminal/transbordo)
-//  Modalidade do frete x tomador incoerente = atenção (não é rejeição da SEFAZ)
 //  Local coleta   NF: local de retirada (bloco ou observações), senão remetente x  CT-e: expedidor, senão remetente + início da prestação
 //  Local entrega  NF: local de entrega (bloco ou observações), senão destinatário x  CT-e: recebedor, senão destinatário + término da prestação
-//  Pagador        Travion: cliente do embarque                                      x  CT-e: tomador do serviço
+//  Pagador        campo Frete da NF: 0 = emitente paga, 1 = destinatário paga, 2 terceiros = amarelo  x  CT-e: tomador
 //  NF no CT-e     chave da NF                                                       x  chaves citadas no CT-e
 const bruto = $('Buscar dados da conferência').first().json;
 const dados = Array.isArray(bruto) ? bruto[0] : bruto;
@@ -184,8 +183,8 @@ function registrar(status, mensagem, resultado) {
 if (!ctes.length) return registrar('erro', 'Não consegui ler o CT-e anexado' + (errosLeitura.length ? ' (' + errosLeitura.join('; ') + ')' : ''));
 if (!nfs.length) return registrar('erro', 'Não consegui ler a NF da solicitação' + (errosLeitura.length ? ' (' + errosLeitura.join('; ') + ')' : ''));
 
-const MODALIDADE = { '0': 'CIF (por conta do remetente)', '1': 'FOB (por conta do destinatário)', '2': 'Por conta de terceiros',
-  '3': 'Próprio, por conta do remetente', '4': 'Próprio, por conta do destinatário', '9': 'Sem frete' };
+const MODALIDADE = { '0': 'Por conta do emitente/remetente (CIF)', '1': 'Por conta do destinatário (FOB)', '2': 'Por conta de terceiros',
+  '3': 'Transporte próprio do remetente', '4': 'Transporte próprio do destinatário', '9': 'Sem frete' };
 const linhasTodas = [];
 const resumoPorCte = [];
 for (const cte of ctes) {
@@ -312,37 +311,50 @@ for (const cte of ctes) {
   }
   for (const k of ['remetente', 'destinatario', 'local_coleta', 'local_entrega']) linhas.push(porCampo[k]);
 
-  // Cliente pagador: tomador do CT-e x cliente do embarque no Travion.
+  // Cliente pagador (regra do Frederick, 05/11/2026): sai do campo FRETE / MODALIDADE DO FRETE da NF.
+  //  0 = por conta do emitente/remetente -> o EMITENTE da NF paga
+  //  1 = por conta do destinatário       -> o DESTINATÁRIO da NF paga
+  //  2 = por conta de terceiros          -> amarelo, conferência manual
+  //  3/4 = transporte próprio, 9 = sem frete -> amarelo (não deveria haver CT-e de terceiro)
+  // O tomador do CT-e tem de ser essa empresa (CNPJ). O cliente do embarque no Travion aparece só como informação.
   const cli = dados.cliente || {};
   const cliente = { nome: cli.razao_social || cli.nome, cnpj_cpf: cli.documento, ie: '', municipio: cli.municipio, uf: cli.uf };
-  const tom = compararParte(cliente, cte.tomador);
-  const mods = Array.from(new Set(alvo.map(n => String(n.modalidade_frete || '').trim()).filter(Boolean)));
-  const notas = [];
-  if (tom.observacao && dig(cliente.cnpj_cpf)) notas.push(tom.observacao);
-  if (cte.tomador_papel) notas.push('Tomador no CT-e: ' + cte.tomador_papel);
-  if (mods.length) notas.push('Frete na NF: ' + mods.map(m => MODALIDADE[m] || m).join(', '));
-  // Modalidade x tomador: não é rejeição da SEFAZ, é coerência comercial (CIF paga o remetente, FOB o destinatário).
-  // Compara pelo CNPJ de quem deveria pagar: CIF = quem envia a carga, FOB = quem recebe. Na NF de entrada quem envia
-  // é o quadro destinatário/remetente (produtor) e quem recebe é o emitente.
-  let modAlerta = '';
+  const mods = Array.from(new Set(alvo.map(n => String(n.modalidade_frete || '').replace(/\D/g, '').slice(0, 1)).filter(Boolean)));
   const nf0 = alvo[0] || {};
-  if (mods.length === 1) {
-    // Só usa a orientação de entrada se o CT-e não seguir a NF diretamente (o tipo da NF às vezes é mal lido).
-    const ent = nf0.nf_tipo_operacao === 'entrada' && compararParte(nf0.destinatario, cte.destinatario).resultado !== 'ok';
-    const envia = ent ? nf0.destinatario : nf0.emitente, recebe = ent ? nf0.emitente : nf0.destinatario;
-    const esperado = mods[0] === '0' ? envia : (mods[0] === '1' ? recebe : null);
-    const dt = docNormal(cte.tomador && cte.tomador.cnpj_cpf), de = docNormal(esperado && esperado.cnpj_cpf);
-    if (esperado && dt && de && docValido(dt) && docValido(de) && dt !== de && dt.slice(0, 8) !== de.slice(0, 8)) {
-      modAlerta = 'NF é ' + (mods[0] === '0' ? 'CIF (frete de quem envia: ' : 'FOB (frete de quem recebe: ') + mostrar(esperado).split(' · ')[0]
-        + '), mas o tomador do CT-e é ' + mostrar(cte.tomador).split(' · ')[0];
+  const pag = { campo: 'pagador', rotulo: 'Cliente pagador', cte: mostrar(cte.tomador) };
+  const notas = [];
+  if (mods.length > 1) {
+    pag.nf = 'Frete nas NFs: ' + mods.map(m => MODALIDADE[m] || m).join(' / ');
+    pag.resultado = 'alerta';
+    notas.push('As NFs têm modalidades de frete diferentes: conferir manualmente');
+  } else if (!mods.length) {
+    // Campo não lido: confere com o cliente do embarque, como antes.
+    const tom = compararParte(cliente, cte.tomador);
+    pag.nf = 'Campo Frete da NF não lido · Cliente do embarque: ' + (mostrar(cliente) || 'sem CNPJ no cadastro');
+    pag.resultado = pior(dig(cliente.cnpj_cpf) ? tom.resultado : (parecido(cliente.nome, cte.tomador && cte.tomador.nome) ? 'ok' : 'alerta'), 'nao_lido');
+    notas.push('Não foi possível ler o campo Frete da NF: conferir quem paga');
+  } else {
+    const m = mods[0];
+    const esperado = m === '0' ? nf0.emitente : (m === '1' ? nf0.destinatario : null);
+    pag.nf = 'Frete na NF: ' + m + ' - ' + (MODALIDADE[m] || '') + (esperado ? '\nQuem paga: ' + mostrar(esperado) : '');
+    if (esperado) {
+      const r = compararParte(esperado, cte.tomador);
+      pag.resultado = r.resultado;
+      if (r.resultado === 'divergente') notas.push('Pela NF quem paga é ' + mostrar(esperado).split(' · ')[0] + ' (' + (m === '0' ? 'emitente' : 'destinatário')
+        + '), mas o tomador do CT-e é ' + mostrar(cte.tomador).split(' · ')[0]);
+      else if (r.observacao) notas.push(r.observacao);
+    } else {
+      pag.resultado = 'alerta';
+      notas.push(m === '2' ? 'Frete por conta de terceiros: conferência manual de quem paga'
+        : m === '9' ? 'NF diz "sem frete", mas há CT-e emitido: conferir'
+        : 'NF indica transporte próprio, mas há CT-e emitido: conferir');
     }
-    if (mods[0] === '9') modAlerta = 'NF diz "sem frete", mas há CT-e emitido';
   }
-  if (modAlerta) notas.unshift(modAlerta + ': confirmar quem paga');
-  linhas.push({ campo: 'pagador', rotulo: 'Cliente pagador', nf: 'Cliente do embarque: ' + (mostrar(cliente) || 'sem CNPJ no cadastro'),
-    cte: mostrar(cte.tomador), resultado: pior(dig(cliente.cnpj_cpf) ? tom.resultado
-      : (parecido(cliente.nome, cte.tomador && cte.tomador.nome) ? 'ok' : 'alerta'), modAlerta ? 'alerta' : 'ok'),
-    observacao: (dig(cliente.cnpj_cpf) ? '' : 'Cadastro do cliente sem CNPJ no Travion: conferido pelo nome. ') + notas.join('; ') });
+  if (cte.tomador_papel) notas.push('Tomador no CT-e: ' + cte.tomador_papel);
+  const dc = docNormal(cliente.cnpj_cpf), dtm = docNormal(cte.tomador && cte.tomador.cnpj_cpf);
+  if (dc && dtm && dc !== dtm) notas.push('Obs.: o tomador é diferente do cliente do embarque no Travion (' + (cliente.nome || dc) + ')');
+  pag.observacao = notas.join('; ');
+  linhas.push(pag);
 
   const prefixo = ctes.length > 1 ? 'CT-e ' + (cte.numero || '') + ' · ' : '';
   for (const l of linhas) linhasTodas.push(Object.assign({}, l, { rotulo: prefixo + l.rotulo, cte_numero: cte.numero || '' }));
