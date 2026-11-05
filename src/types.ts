@@ -17,7 +17,7 @@ export type Permissao =
   | 'financeiro.ver' | 'financeiro.editar' | 'historico.ver'
   | 'compartilhamento.preparar' | 'compartilhamento.links'
   | 'importacao.executar' | 'cadastros.gerenciar' | 'usuarios.gerenciar' | 'configuracoes.gerenciar'
-  | 'documentacao.ver' | 'documentacao.solicitar' | 'documentacao.cancelar' | 'apoio.pagina' | 'apoio.atender'
+  | 'documentacao.ver' | 'documentacao.solicitar' | 'documentacao.cancelar' | 'apoio.pagina' | 'apoio.atender' | 'apoio.reassumir'
   | 'cadastro.solicitar' | 'cadastro.ver' | 'permissoes.gerenciar' | 'analise.operacional' | 'analise.fila'
   | 'estadia.solicitar' | 'estadia.ver' | 'estadia.reabrir' | 'usuarios.inativar' | 'usuarios.excluir';
 

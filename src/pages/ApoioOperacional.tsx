@@ -88,6 +88,20 @@ export function ApoioOperacional() {
     } finally { setAssumindo(null); }
   };
 
+  // Correção recebida com outra pessoa (saiu para o almoço, acabou o expediente): reassume e abre o atendimento.
+  const reassumir = async (s: SolicitacaoDoc) => {
+    setAssumindo(s.id);
+    try {
+      const r = await api.doc.retomar(s.id);
+      aplicar(r);
+      nav(`/apoio/${s.id}`);
+    } catch (e) {
+      avisar('erro', `Não foi possível reassumir: ${mensagemErro(e)}`);
+      void sincronizar();
+    } finally { setAssumindo(null); }
+  };
+  const podeReassumir = pode('apoio.atender') && pode('apoio.reassumir');
+
   const desatualizada = estado.falhaSync || app.conexao === 'offline';
   return (
     <Layout titulo="Apoio Operacional">
@@ -144,13 +158,16 @@ export function ApoioOperacional() {
                       <td data-rot="Status"><StatusDocPill status={s.status} /></td>
                       <td data-rot="Responsável">{s.responsavel_nome ?? <span className="suave">—</span>}</td>
                       <td data-rot="Pendência">{s.status === 'aguardando_informacao' ? <span className="ao-pend">Resposta de {s.solicitante_nome}</span>
-                        : s.status === 'correcao_recebida' ? <span className="ao-pend">Correção recebida: retomar</span>
+                        : s.status === 'correcao_recebida' ? <span className="ao-pend">{meu ? 'Correção recebida: retomar' : `Correção recebida: aguardando ${s.responsavel_nome ?? 'o responsável'}`}</span>
                         : s.status === 'aguardando_cliente' || s.status === 'pago_pendencia' ? <span className="ao-pend cliente">Retorno do cliente</span> : <span className="suave">—</span>}</td>
                       <td className="ao-acao">
                         {!s.responsavel_id && s.status === 'enviado' && pode('apoio.atender') ? (
                           <button className="btn primario peq" disabled={!!assumindo} onClick={() => void assumir(s)}>{assumindo === s.id ? 'Assumindo…' : 'Assumir'}</button>
                         ) : meu && s.status === 'correcao_recebida' ? (
                           <button className="btn primario peq" onClick={() => nav(`/apoio/${s.id}`)}>Retomar atendimento</button>
+                        ) : !meu && s.status === 'correcao_recebida' && podeReassumir ? (
+                          <button className="btn primario peq" disabled={!!assumindo} title={`Está com ${s.responsavel_nome ?? '—'}. Ao reassumir, o chamado passa para você.`}
+                            onClick={() => void reassumir(s)}>{assumindo === s.id ? 'Reassumindo…' : 'Reassumir'}</button>
                         ) : meu && ['em_atendimento', 'aguardando_informacao', 'aguardando_cliente', 'pago_pendencia'].includes(s.status) ? (
                           <button className="btn secundario peq" onClick={() => nav(`/apoio/${s.id}`)}>Continuar atendimento</button>
                         ) : (

@@ -876,10 +876,24 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       offline();
       const s = carregar(id);
       if (s.status === 'em_atendimento' && s.responsavel_id === ctx.perfil()?.id) return { status: 'ok', registro: clone(s) };
-      responsavel(s, ['correcao_recebida']);
-      tocar(s, { status: 'em_atendimento' });
-      evento(s, 'evento', `Atendimento retomado por ${eu().nome}`);
-      return fim(s);
+      if (s.responsavel_id === ctx.perfil()?.id) {
+        responsavel(s, ['correcao_recebida']);
+        tocar(s, { status: 'em_atendimento' });
+        evento(s, 'evento', `Atendimento retomado por ${eu().nome}`);
+        return fim(s);
+      }
+      // Outra pessoa do apoio reassume o chamado devolvido e já corrigido (quem estava saiu, por exemplo).
+      exigir('apoio.atender');
+      exigir('apoio.reassumir');
+      if (s.status !== 'correcao_recebida') {
+        erro(s.status === 'em_atendimento' ? `Este chamado já foi retomado por ${s.responsavel_nome ?? 'outra pessoa'}.` : 'Só dá para reassumir um chamado com correção recebida.');
+      }
+      const antes = { id: s.responsavel_id, nome: s.responsavel_nome };
+      const p = eu();
+      tocar(s, { status: 'em_atendimento', responsavel_id: p.id, responsavel_nome: p.nome });
+      evento(s, 'evento', `Atendimento reassumido por ${p.nome}${antes.nome ? ` (estava com ${antes.nome})` : ''}`);
+      notificar(antes.id, 'resposta_enviada', `Chamado reassumido por ${p.nome}`, `${rotulo(s)}: a correção foi retomada por ${p.nome}.`, s, 'apoio', `reassumido:${s.id}:${s.versao}`);
+      return fim(s, { reassumido: true });
     }),
     async filaApoio() {
       await pronto;

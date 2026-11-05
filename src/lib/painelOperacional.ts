@@ -165,7 +165,7 @@ export function linhaDoTempo(s: SolPainel, evs: EventoPainel[], agora: number): 
       default: l.completo = false;
     }
     resp = e.responsavel_id;
-    if ((e.evento === 'assumido' || e.evento === 'transferido') && e.responsavel_id) l.assumiram.set(e.responsavel_id, e.responsavel_nome ?? '—');
+    if ((e.evento === 'assumido' || e.evento === 'transferido' || e.evento === 'retomado') && e.responsavel_id) l.assumiram.set(e.responsavel_id, e.responsavel_nome ?? '—');
   }
   // A etapa calculada precisa bater com a situação atual do chamado.
   const esperada: Etapa | 'fim' | null = NA_FILA.includes(s.status) ? 'fila' : s.status === 'em_atendimento' ? 'atendimento'

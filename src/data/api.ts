@@ -64,6 +64,8 @@ export interface ArquivoDoc { caminho: string; nome: string; categoria: Categori
 export interface ResultadoDoc {
   status: 'ok' | 'inicial_aberta' | 'ja_assumida' | 'indisponivel' | 'sem_alteracao' | 'cadastro_aberto' | 'possivel_duplicidade';
   registro: SolicitacaoDoc; lote?: LoteErp; repetido?: boolean;
+  /** Retomar: o chamado estava com outra pessoa e passou para quem clicou. */
+  reassumido?: boolean;
   /** Em 'possivel_duplicidade' (Estadia): o que parece repetido; nada foi gravado. */
   duplicadas?: DuplicadaEstadia[];
   conferencia?: ConferenciaEstadia;

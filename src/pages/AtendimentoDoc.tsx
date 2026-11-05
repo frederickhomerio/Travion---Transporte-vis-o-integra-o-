@@ -61,6 +61,8 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
   const editavel = pode('apoio.atender') && s.responsavel_id === eu && (s.status === 'em_atendimento' || s.status === 'aguardando_informacao' || s.status === 'correcao_recebida');
   // Correção recebida: as ações voltam depois de retomar o atendimento.
   const retomar = editavel && s.status === 'correcao_recebida';
+  // Quem estava com o chamado saiu: outra pessoa do apoio pode reassumir a correção recebida.
+  const reassumir = !editavel && s.status === 'correcao_recebida' && pode('apoio.atender') && pode('apoio.reassumir') && s.responsavel_id !== eu;
   const [divisao, setDivisao] = useState(() => { const n = Number(localStorage.getItem(CHAVE_DIVISAO)); return n >= 22 && n <= 60 ? n : 35; });
   const [ampliado, setAmpliado] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
@@ -169,7 +171,8 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
             )}
             {s.status === 'cancelado' && <Alerta tipo="aviso">Cancelada por {s.cancelado_por_nome}: {s.cancelado_motivo}</Alerta>}
 
-            {s.status === 'correcao_recebida' && !retomar && (
+            {reassumir && <Retomar s={s} executar={executar} outro />}
+            {s.status === 'correcao_recebida' && !retomar && !reassumir && (
               <Alerta tipo="info">Correção recebida de {s.solicitante_nome}. Aguardando {s.responsavel_nome ?? 'o responsável'} retomar o atendimento.</Alerta>
             )}
             {retomar && <Retomar s={s} executar={executar} />}
@@ -337,18 +340,22 @@ export function PedirAjuste({ s, executar, referencias }: { s: SolicitacaoDoc; e
   );
 }
 
-export function Retomar({ s, executar }: { s: SolicitacaoDoc; executar: Executar }) {
+export function Retomar({ s, executar, outro = false }: { s: SolicitacaoDoc; executar: Executar; outro?: boolean }) {
   const { api } = useApp();
   const [gravando, setGravando] = useState(false);
   return (
     <div className="cartao cartao-corpo at-bloco at-retomar">
       <strong>Correção recebida de {s.solicitante_nome}</strong>
-      <span className="pequeno suave">Confira a resposta no histórico e retome o atendimento para continuar. O tempo até retomar conta como espera na fila.</span>
+      {outro ? (
+        <span className="pequeno suave">O chamado está com <strong>{s.responsavel_nome ?? 'outra pessoa'}</strong>, que ainda não retomou. Se a pessoa saiu (almoço, fim do expediente), reassuma: o chamado passa para você, {s.responsavel_nome ?? 'quem estava com ele'} recebe um aviso e tudo fica registrado no histórico.</span>
+      ) : (
+        <span className="pequeno suave">Confira a resposta no histórico e retome o atendimento para continuar. O tempo até retomar conta como espera na fila.</span>
+      )}
       <div><button className="btn primario" disabled={gravando} onClick={async () => {
         setGravando(true);
-        await executar(() => api.doc.retomar(s.id), 'Atendimento retomado.');
+        await executar(() => api.doc.retomar(s.id), outro ? 'Atendimento reassumido: o chamado agora está com você.' : 'Atendimento retomado.');
         setGravando(false);
-      }}>{gravando ? 'Retomando…' : 'Retomar atendimento'}</button></div>
+      }}>{gravando ? (outro ? 'Reassumindo…' : 'Retomando…') : (outro ? 'Reassumir atendimento' : 'Retomar atendimento')}</button></div>
     </div>
   );
 }

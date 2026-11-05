@@ -124,8 +124,10 @@ export function MesaAmpla({ s }: { s: SolicitacaoDoc }) {
 function Calculo({ s, meu, executar, conferencias }: {
   s: SolicitacaoDoc; meu: boolean; executar: Executar; conferencias: NonNullable<ReturnType<typeof useDetalheDoc>['detalhe']>['estadia'] extends infer E ? E extends { conferencias: infer C } ? C : never : never;
 }) {
-  const { api } = useApp();
+  const { api, pode } = useApp();
   const editavel = meu && s.status === 'em_atendimento';
+  // Quem estava com a estadia saiu: outra pessoa do apoio pode reassumir a correção recebida.
+  const reassumir = !meu && s.status === 'correcao_recebida' && pode('apoio.atender') && pode('apoio.reassumir');
   const ultima = conferencias[conferencias.length - 1];
   const [tarifa, setTarifa] = useState(() => num(ultima?.tarifa ?? s.est_tarifa));
   const [peso, setPeso] = useState(() => num(ultima?.peso_t ?? s.est_peso_t));
@@ -232,9 +234,10 @@ function Calculo({ s, meu, executar, conferencias }: {
           {acao === 'cancelar' && <CancelarDoc s={s} aoFechar={() => setAcao(null)} />}
         </div>
       )}
-      {((meu && s.status === 'correcao_recebida') || s.status === 'aguardando_informacao') && (
+      {(s.status === 'correcao_recebida' || s.status === 'aguardando_informacao') && (meu || reassumir || s.status === 'aguardando_informacao') && (
         <div className="ma-edicao">
           {meu && s.status === 'correcao_recebida' && <Retomar s={s} executar={executar} />}
+          {reassumir && <Retomar s={s} executar={executar} outro />}
           {s.status === 'aguardando_informacao' && <Alerta tipo="aviso"><span><strong>Aguardando informação de {s.solicitante_nome}.</strong> A resposta volta a estadia para a sua fila; retome para continuar.</span></Alerta>}
         </div>
       )}
