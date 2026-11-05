@@ -8,6 +8,7 @@
 //  Local coleta   NF: local de retirada (bloco ou observações), senão remetente x  CT-e: expedidor, senão remetente + início da prestação
 //  Local entrega  NF: local de entrega (bloco ou observações), senão destinatário x  CT-e: recebedor, senão destinatário + término da prestação
 //  Pagador        campo Frete da NF: 0 = emitente paga, 1 = destinatário paga, 2 terceiros = amarelo  x  CT-e: tomador
+//  NF de trânsito (natureza OUTRAS ENTRADAS... ou NOTA FISCAL DE TRÂNSITO): inverte remetente/destinatário, coleta/entrega e pagador
 //  NF no CT-e     chave da NF                                                       x  chaves citadas no CT-e
 const bruto = $('Buscar dados da conferência').first().json;
 const dados = Array.isArray(bruto) ? bruto[0] : bruto;
@@ -71,6 +72,11 @@ function chaveValida(c) {
   return dv === Number(c[43]);
 }
 const docDaChave = c => dig(c).slice(6, 20);
+
+function ehTransito(nf) {
+  const nat = norm(nf && nf.natureza_operacao), obs = norm(nf && nf.dados_adicionais);
+  return /OUTRAS ENTRADAS/.test(nat) || /TRANSITO/.test(nat) || /(EFEITO DE|NOTA FISCAL DE|NF DE) TRANSITO/.test(obs);
+}
 
 const ORDEM = { ok: 0, nao_lido: 1, alerta: 2, divergente: 3 };
 const pior = (a, b) => (ORDEM[b] > ORDEM[a] ? b : a);
@@ -167,7 +173,7 @@ const ctes = docs.filter(d => d.tipo === 'cte' && d._papel === 'cte');
 const leitura = {
   arquivos: leituras.map(l => ({ papel: l.papel, nome: l.nome, origem: l.origem, erro: l.erro || '',
     documentos: (l.documentos || []).length, tokens: l.tokens || null })),
-  nfs: nfs.map(d => ({ chave: d.chave_acesso, chave_valida: d._chave_ok, numero: d.numero, tipo_operacao: d.nf_tipo_operacao,
+  nfs: nfs.map(d => ({ chave: d.chave_acesso, chave_valida: d._chave_ok, numero: d.numero, tipo_operacao: d.nf_tipo_operacao, natureza: d.natureza_operacao || '',
     modalidade_frete: d.modalidade_frete, emitente: d.emitente, destinatario: d.destinatario,
     local_retirada: d.local_retirada, local_entrega: d.local_entrega, dados_adicionais: d.dados_adicionais || '', legibilidade: d.legibilidade, arquivo: d._arquivo })),
   ctes: ctes.map(d => ({ chave: d.chave_acesso, chave_valida: d._chave_ok, numero: d.numero, remetente: d.remetente,
@@ -220,8 +226,12 @@ for (const cte of ctes) {
   const linhas = [linhaChave];
   const porCampo = {};
   for (const nf of alvo) {
-    const rem = nf.emitente;
-    const dest = nf.destinatario;
+    // NF de trânsito (regra do Frederick, 05/11/2026): natureza "OUTRAS ENTRADAS DE MERCADORIAS OU SERVIÇOS NÃO
+    // ESPECIFICADAS" ou "NOTA FISCAL DE TRÂNSITO" -> o cliente (emitente) manda buscar a carga no fornecedor.
+    // Inverte: quadro destinatário/remetente = remetente e coleta; emitente = destinatário e entrega.
+    const transito = ehTransito(nf);
+    const rem = transito ? nf.destinatario : nf.emitente;
+    const dest = transito ? nf.emitente : nf.destinatario;
     const coletaNf = temParte(nf.local_retirada) ? nf.local_retirada : rem;
     const entregaNf = temParte(nf.local_entrega) ? nf.local_entrega : dest;
     const coletaCte = temParte(cte.expedidor) ? cte.expedidor : cte.remetente;
@@ -235,7 +245,7 @@ for (const cte of ctes) {
     let cRem = compararParte(rem, cte.remetente), cDest = compararParte(dest, cte.destinatario);
     // NF de entrada (tpNF=0, ex.: usina emitindo nota do produtor): o quadro destinatário/remetente da NF é o REMETENTE
     // (quem promove a saída da carga) e o emitente é o destinatário. Em NF de saída, a ordem invertida é atenção.
-    if (cRem.resultado === 'divergente' || cDest.resultado === 'divergente') {
+    if (!transito && (cRem.resultado === 'divergente' || cDest.resultado === 'divergente')) {
       const iRem = compararParte(dest, cte.remetente), iDest = compararParte(rem, cte.destinatario);
       if (iRem.resultado === 'ok' && iDest.resultado === 'ok') {
         if (nf.nf_tipo_operacao === 'entrada') {
@@ -248,10 +258,10 @@ for (const cte of ctes) {
       }
     }
     // NF de entrada com só um dos lados lido na ordem da entrada.
-    if (nf.nf_tipo_operacao === 'entrada' && cDest.resultado === 'divergente' && compararParte(rem, cte.destinatario).resultado === 'ok') {
+    if (!transito && nf.nf_tipo_operacao === 'entrada' && cDest.resultado === 'divergente' && compararParte(rem, cte.destinatario).resultado === 'ok') {
       cDest = { resultado: 'ok', observacao: 'NF de entrada: destinatário = emitente da NF' };
     }
-    if (nf.nf_tipo_operacao === 'entrada' && cRem.resultado === 'divergente' && compararParte(dest, cte.remetente).resultado === 'ok') {
+    if (!transito && nf.nf_tipo_operacao === 'entrada' && cRem.resultado === 'divergente' && compararParte(dest, cte.remetente).resultado === 'ok') {
       cRem = { resultado: 'ok', observacao: 'NF de entrada: remetente = quadro destinatário/remetente da NF (produtor/fornecedor)' };
     }
     // Remetente e destinatário do CT-e com o mesmo CNPJ/CPF: a carga não "sai" de ninguém. A lei define remetente como
@@ -261,9 +271,9 @@ for (const cte of ctes) {
     const nfMesmaParte = docNormal(rem && rem.cnpj_cpf) && docNormal(rem && rem.cnpj_cpf) === docNormal(dest && dest.cnpj_cpf);
     if (docRemCte && !nfMesmaParte && docRemCte === docNormal(cte.destinatario && cte.destinatario.cnpj_cpf)) {
       const txt = 'O CT-e tem o mesmo CNPJ/CPF como remetente e destinatário (' + mostrar(cte.remetente).split(' · ')[0] + '). '
-        + (nf.nf_tipo_operacao === 'entrada' ? 'Na NF de entrada o remetente deve ser o produtor/fornecedor (quadro destinatário/remetente da NF).' : 'O remetente deve ser o emitente da NF.');
-      if (cRem.resultado !== 'divergente') cRem = { resultado: 'divergente', observacao: txt };
-      if (nf.nf_tipo_operacao === 'entrada' && compararParte(rem, cte.destinatario).resultado === 'ok') cDest = { resultado: 'ok', observacao: 'NF de entrada: destinatário = emitente da NF' };
+        + (transito || nf.nf_tipo_operacao === 'entrada' ? 'Na NF de trânsito/entrada o remetente deve ser o fornecedor do quadro destinatário/remetente da NF (' + mostrar(transito ? rem : dest).split(' · ')[0] + ').' : 'O remetente deve ser o emitente da NF.');
+      cRem = { resultado: 'divergente', observacao: txt };
+      if (!transito && nf.nf_tipo_operacao === 'entrada' && compararParte(rem, cte.destinatario).resultado === 'ok') cDest = { resultado: 'ok', observacao: 'NF de entrada: destinatário = emitente da NF' };
     }
     // Trecho intermediário (transbordo, terminal, armazém): término do CT-e diferente do destino da NF é atenção, não erro,
     // quando o destinatário confere e não há CNPJ de recebedor contrariando.
@@ -274,7 +284,7 @@ for (const cte of ctes) {
     };
     // NF de entrada sem bloco de retirada/entrega: a carga sai de quem está no quadro destinatário/remetente
     // (produtor) e chega ao emitente. Se a regra padrão não fechar, tenta essa leitura.
-    const entrada = nf.nf_tipo_operacao === 'entrada';
+    const entrada = !transito && nf.nf_tipo_operacao === 'entrada';
     const local = (tipo, padrao, alternativo, cteLocal, cteCidade, nomeCidade, temBloco) => {
       const r = viaObs(compararLocal(padrao, cteLocal, cteCidade, nomeCidade), temBloco, cteLocal, cteCidade);
       if (r.resultado === 'ok' || temBloco || !entrada || !temParte(alternativo)) return { r, parte: padrao };
@@ -284,6 +294,11 @@ for (const cte of ctes) {
     };
     const lc = local('coleta', coletaNf, dest, coletaCte, cte.municipio_inicio, 'Início da prestação', temParte(nf.local_retirada));
     const le = local('entrega', entregaNf, rem, entregaCte, cte.municipio_fim, 'Término da prestação', temParte(nf.local_entrega));
+    if (transito) {
+      const nota = 'NF de trânsito (' + (norm(nf.natureza_operacao) ? nf.natureza_operacao : 'efeito de trânsito') + '): regra invertida';
+      if (cRem.resultado === 'ok' && !cRem.observacao) cRem = { resultado: 'ok', observacao: nota + ', remetente = quadro destinatário/remetente' };
+      if (cDest.resultado === 'ok' && !cDest.observacao) cDest = { resultado: 'ok', observacao: nota + ', destinatário = emitente' };
+    }
     const itens = [
       ['remetente', 'Remetente', rem, cte.remetente, cRem],
       ['destinatario', 'Destinatário', dest, cte.destinatario, cDest],
@@ -335,12 +350,16 @@ for (const cte of ctes) {
     notas.push('Não foi possível ler o campo Frete da NF: conferir quem paga');
   } else {
     const m = mods[0];
-    const esperado = m === '0' ? nf0.emitente : (m === '1' ? nf0.destinatario : null);
+    // Na NF de trânsito a regra inverte: remetente da carga = quadro destinatário/remetente; destinatário = emitente.
+    const tr = ehTransito(nf0);
+    const remCarga = tr ? nf0.destinatario : nf0.emitente, destCarga = tr ? nf0.emitente : nf0.destinatario;
+    const esperado = m === '0' ? remCarga : (m === '1' ? destCarga : null);
     pag.nf = 'Frete na NF: ' + m + ' - ' + (MODALIDADE[m] || '') + (esperado ? '\nQuem paga: ' + mostrar(esperado) : '');
     if (esperado) {
       const r = compararParte(esperado, cte.tomador);
       pag.resultado = r.resultado;
-      if (r.resultado === 'divergente') notas.push('Pela NF quem paga é ' + mostrar(esperado).split(' · ')[0] + ' (' + (m === '0' ? 'emitente' : 'destinatário')
+      if (tr) notas.push('NF de trânsito: ' + (m === '0' ? 'remetente da carga = quadro destinatário/remetente' : 'destinatário da carga = emitente'));
+      if (r.resultado === 'divergente') notas.push('Pela NF quem paga é ' + mostrar(esperado).split(' · ')[0] + ' (' + (m === '0' ? (tr ? 'remetente da carga' : 'emitente') : (tr ? 'emitente, destinatário da carga' : 'destinatário'))
         + '), mas o tomador do CT-e é ' + mostrar(cte.tomador).split(' · ')[0]);
       else if (r.observacao) notas.push(r.observacao);
     } else {
