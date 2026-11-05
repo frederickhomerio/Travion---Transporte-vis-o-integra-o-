@@ -113,6 +113,10 @@ export interface QuadroCliente {
 /** Status e atualização de cada linha, só para a mesa comercial (nunca entram no quadro do cliente). */
 export interface InfoMesa { status: StatusLiberacao; confirmado_em: string | null; confirmado_por: string | null; desatualizada: boolean }
 
+/** Frete que pode aparecer na Posição do Cliente: ativo e Liberado (nunca suspenso, encerrado ou arquivado). */
+export const ativoParaCliente = (l: LinhaFrete): boolean =>
+  l.embarque.situacao === 'ativo' && l.embarque.status_liberacao === 'liberado' && !l.embarque.encerrado_em;
+
 /** Recorte do quadro: um cliente, a data, todas as filiais autorizadas ou uma. Só embarques com posição na data. */
 export function recorteCliente(linhas: LinhaFrete[], clienteId: string, filialId: string, idx: Indices): LinhaFrete[] {
   const n = (id: string | null) => nome(idx.local, id, '');

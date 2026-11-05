@@ -150,3 +150,14 @@ describe('verde dos centros de custo (só ao salvar)', async () => {
     expect(atualizadaNaHora({ confirmado_em: '2026-11-05T10:00:00Z' }, agora)).toBe(false);
   });
 });
+
+describe('Posição do Cliente: só fretes ativos', async () => {
+  const { ativoParaCliente } = await import('./posicoes');
+  const l = (e: Partial<Embarque>) => ({ embarque: { situacao: 'ativo', status_liberacao: 'liberado', encerrado_em: null, ...e } } as unknown as LinhaFrete);
+  it('liberado aparece; suspenso, encerrado e arquivado nunca', () => {
+    expect(ativoParaCliente(l({}))).toBe(true);
+    expect(ativoParaCliente(l({ status_liberacao: 'suspenso' }))).toBe(false);
+    expect(ativoParaCliente(l({ situacao: 'arquivado', encerrado_em: '2026-11-04T10:00:00Z' }))).toBe(false);
+    expect(ativoParaCliente(l({ situacao: 'arquivado' }))).toBe(false);
+  });
+});

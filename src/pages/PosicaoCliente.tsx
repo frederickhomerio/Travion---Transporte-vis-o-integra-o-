@@ -11,7 +11,7 @@ import { mensagemErro } from '../data/api';
 import { useApp, useIndices, useLinhas } from '../data/store';
 import { nome } from '../lib/cadastros';
 import { fmtData, fmtDataAsHora, fmtHora, fmtPct, hojeSP } from '../lib/formato';
-import { infoMesa, type LinhaRelatorio, montarQuadro, type QuadroCliente, recorteCliente, relatorioFiliais } from '../lib/posicoes';
+import { ativoParaCliente, infoMesa, type LinhaRelatorio, montarQuadro, type QuadroCliente, recorteCliente, relatorioFiliais } from '../lib/posicoes';
 
 const SEM_CARTEIRA = '__sem';
 /** Limites seguros de canvas nos navegadores (lado e área). */
@@ -60,7 +60,8 @@ export function PosicaoCliente() {
   useEffect(() => () => { if (resultado) URL.revokeObjectURL(resultado.url); }, [resultado]);
 
   // Filtros em cascata, só com o que o servidor liberou para este usuário.
-  const base = useMemo(() => linhas.filter((l) => l.embarque.situacao === 'ativo' || l.posicao), [linhas]);
+  // Só fretes ativos (Liberados): suspensos e encerrados nunca aparecem na Posição do Cliente (pedido de 05/11/2026).
+  const base = useMemo(() => linhas.filter(ativoParaCliente), [linhas]);
   const daCarteira = useMemo(() => base.filter((l) => !carteira || (l.embarque.comercial_id ?? SEM_CARTEIRA) === carteira), [base, carteira]);
   const opCarteiras = useMemo(() => {
     const m = new Map<string, string>();
@@ -170,7 +171,6 @@ export function PosicaoCliente() {
     a.remove();
   }
 
-  const suspensos = recorte.filter((l) => l.embarque.status_liberacao === 'suspenso').length;
   const semPosicao = clienteId ? base.filter((l) => l.embarque.cliente_id === clienteId && naFilial(l.embarque.filial_id) && !l.posicao && l.embarque.situacao === 'ativo').length : 0;
 
   return (
@@ -222,7 +222,6 @@ export function PosicaoCliente() {
         ) : (
           <>
             {estado.demo && <Alerta tipo="aviso">Dados demonstrativos (fictícios). Não envie este quadro a clientes.</Alerta>}
-            {visao === 'mesa' && suspensos > 0 && <Alerta tipo="aviso">{suspensos} embarque(s) suspenso(s) no recorte. O status não aparece para o cliente; revise antes de enviar.</Alerta>}
             {visao === 'mesa' && semPosicao > 0 && <Alerta tipo="info">{semPosicao} embarque(s) deste cliente sem posição aberta em {fmtData(data)} não entram no quadro.</Alerta>}
             {visao === 'mesa' && (!quadro.logoCliente || !quadro.logoEmpresa) && (
               <Alerta tipo="info">
