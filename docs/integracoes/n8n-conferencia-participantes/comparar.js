@@ -126,6 +126,41 @@ function compararLocal(nfLocal, cteLocal, cteCidade, nomeCidade) {
   return { resultado: res, observacao: obs.join('; ') };
 }
 
+// Regra do Frederick (05/11/2026): quando coleta/entrega não confere, procurar nas observações da NF um trecho
+// rotulado como local de retirada/coleta/carregamento (ou entrega/descarga) e conferir o município do CT-e nele.
+// Vale mesmo quando a NF tem o bloco de retirada/entrega (ex.: bloco diz Montividiu, obs diz "LOCAL DE RETIRADA ... IVOLANDIA GO").
+const ROTULOS = {
+  coleta: /\b(LOCAL (DE )?(RETIRADA|COLETA|CARREGAMENTO|EMBARQUE|CARGA)|RETIRADA|COLETA|CARREGAMENTO|EMBARQUE|RETIRAR EM|CARREGAR EM)\b/g,
+  entrega: /\b(LOCAL (DE )?(ENTREGA|DESCARGA|DESCARREGAMENTO|DESEMBARQUE|DESTINO)|ENTREGA|DESCARGA|DESCARREGAMENTO|DESEMBARQUE|ENTREGAR EM)\b/g
+};
+function trechosRotulados(texto, tipo) {
+  const t = norm(texto), out = [];
+  if (!t) return out;
+  const re = new RegExp(ROTULOS[tipo].source, 'g');
+  let m;
+  const oposto = new RegExp(ROTULOS[tipo === 'coleta' ? 'entrega' : 'coleta'].source);
+  while ((m = re.exec(t))) {
+    let tr = t.slice(m.index, m.index + 220);
+    // Corta no rótulo do outro local (ex.: "LOCAL DE RETIRADA ... LOCAL DE ENTREGA ..."), salvo "COLETA E ENTREGA" colados.
+    const resto = tr.slice(25), k = resto.search(oposto);
+    if (k >= 0) tr = tr.slice(0, 25 + k);
+    out.push(tr);
+  }
+  return out;
+}
+function nasObservacoesRotulado(texto, tipo, cteLocal, cteCidade) {
+  const mun = norm(cteCidade && cteCidade.municipio) || norm(cteLocal && cteLocal.municipio);
+  if (!mun) return '';
+  const uf = norm(cteCidade && cteCidade.uf) || norm(cteLocal && cteLocal.uf);
+  for (const tr of trechosRotulados(texto, tipo)) {
+    if ((' ' + tr + ' ').includes(' ' + mun + ' ')) {
+      const rot = tr.split(' ').slice(0, 3).join(' ');
+      return (rot.startsWith('LOCAL') ? rot : tr.split(' ')[0]).toLowerCase() + ' em ' + mun + (uf ? '/' + uf : '');
+    }
+  }
+  return '';
+}
+
 // Alguns modelos de NF só trazem coleta/entrega nas observações (Dados Adicionais): se o local do CT-e
 // (CNPJ/CPF ou município) aparecer escrito lá, confere.
 function nasObservacoes(texto, cteLocal, cteCidade) {
@@ -237,8 +272,12 @@ for (const cte of ctes) {
     const coletaCte = temParte(cte.expedidor) ? cte.expedidor : cte.remetente;
     const entregaCte = temParte(cte.recebedor) ? cte.recebedor : cte.destinatario;
     const obsNf = String(nf.dados_adicionais || '');
-    const viaObs = (r, temBloco, cteLocal, cteCidade) => {
-      if (r.resultado === 'ok' || temBloco || !obsNf) return r;
+    const viaObs = (r, temBloco, cteLocal, cteCidade, tipo) => {
+      if (r.resultado === 'ok' || !obsNf) return r;
+      // 1º: trecho rotulado (local de retirada/coleta/entrega...) nas observações, mesmo com bloco na NF.
+      const rot = nasObservacoesRotulado(obsNf, tipo, cteLocal, cteCidade);
+      if (rot) return { resultado: 'ok', observacao: 'Confere com as observações da NF (' + rot + ')' + (temBloco ? '; o bloco de ' + (tipo === 'coleta' ? 'retirada' : 'entrega') + ' da NF indica outro local' : ''), _obs: true };
+      if (temBloco) return r;
       const achou = nasObservacoes(obsNf, cteLocal, cteCidade);
       return achou ? { resultado: 'ok', observacao: 'Confere com as observações da NF (' + achou + ')', _obs: true } : r;
     };
@@ -286,7 +325,7 @@ for (const cte of ctes) {
     // (produtor) e chega ao emitente. Se a regra padrão não fechar, tenta essa leitura.
     const entrada = !transito && nf.nf_tipo_operacao === 'entrada';
     const local = (tipo, padrao, alternativo, cteLocal, cteCidade, nomeCidade, temBloco) => {
-      const r = viaObs(compararLocal(padrao, cteLocal, cteCidade, nomeCidade), temBloco, cteLocal, cteCidade);
+      const r = viaObs(compararLocal(padrao, cteLocal, cteCidade, nomeCidade), temBloco, cteLocal, cteCidade, tipo);
       if (r.resultado === 'ok' || temBloco || !entrada || !temParte(alternativo)) return { r, parte: padrao };
       const r2 = compararLocal(alternativo, cteLocal, cteCidade, nomeCidade);
       if (r2.resultado !== 'ok') return { r, parte: padrao };

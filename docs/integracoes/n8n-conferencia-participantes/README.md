@@ -32,6 +32,11 @@ Regra operacional do Frederick para NF de saída, ajustada pela pesquisa de conc
 da NF é o destinatário (e a entrega); o quadro destinatário/remetente é o remetente (e a coleta). É a mercadoria que o
 cliente manda buscar no local de coleta. O pagador segue o campo Frete com as partes invertidas (1 = emitente paga).
 
+**Observações da NF para coleta e entrega (regra do Frederick, 05/11/2026):** quando coleta ou entrega não conferem,
+a conferência procura nas observações um trecho com "local de retirada", "local de coleta", "carregamento",
+"local de entrega", "descarga" e semelhantes, e confere o município do CT-e nesse trecho. Vale mesmo quando a NF tem o
+bloco de retirada/entrega (ex.: bloco em Montividiu, observação "LOCAL DE RETIRADA ... IVOLANDIA GO" = verde).
+
 Vermelho: CNPJ diferente com os dois dígitos verificadores válidos, CT-e citando outra NF, e CT-e com o mesmo
 CNPJ como remetente e destinatário (exceto quando a própria NF tem emitente = destinatário).
 CNPJ/CPF e chave com dígito verificador inválido são tratados como leitura ruim (amarelo ou conferência por aproximação).

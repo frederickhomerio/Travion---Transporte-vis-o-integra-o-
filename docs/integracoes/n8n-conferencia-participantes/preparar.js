@@ -55,7 +55,7 @@ const PROMPT = [
   'local_retirada e local_entrega: use o bloco "Informações do local de retirada/entrega" quando existir. Muitos modelos de nota trazem esses locais só nas',
   'INFORMAÇÕES COMPLEMENTARES / DADOS ADICIONAIS (ex.: "Local de retirada:", "Coleta em:", "Carregamento:", "Entrega em:", "Descarga:", fazenda, armazém, CNPJ, cidade):',
   'nesse caso preencha local_retirada/local_entrega com o que estiver escrito lá. Se não houver nada, deixe vazios.',
-  'dados_adicionais (só NF-e): copie, literalmente, os trechos das Informações Complementares/Dados Adicionais que falam de local de coleta, retirada,',
+  'dados_adicionais (só NF-e): MESMO QUANDO houver o bloco de retirada/entrega, copie, literalmente, os trechos das Informações Complementares/Dados Adicionais que falam de local de coleta, retirada,',
   'carregamento, entrega ou descarga (endereço, fazenda, armazém, CNPJ, município) ou que digam que a nota é "para efeito de trânsito", no máximo 600 caracteres; vazio se não houver.',
   'CT-e: remetente, destinatario, expedidor, recebedor e tomador = blocos do DACTE com esses nomes, identificados pelo RÓTULO do quadro e não pela posição na página (expedidor e recebedor muitas vezes não existem: deixe vazios);',
   'tomador_papel = quem é o tomador do serviço (remetente, expedidor, recebedor, destinatario ou outros);',
