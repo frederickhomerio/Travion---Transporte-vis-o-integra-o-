@@ -14,3 +14,19 @@ lê (PDF/imagem pela OpenAI; XML direto, pronto para a integração com o ERP) �
 - `comparar.js`: compara remetente, destinatário, local de coleta, local de entrega e cliente pagador.
 
 Nenhuma chave fica aqui: URL e token do webhook ficam no Vault do Supabase; credenciais, no n8n.
+
+## Regras de comparação (05/11/2026)
+
+Regra operacional do Frederick para NF de saída, ajustada pela pesquisa de conciliação NF-e × CT-e:
+
+| Campo | NF | CT-e | Exceções (amarelo ou verde, não vermelho) |
+|---|---|---|---|
+| Remetente | emitente | remetente | NF de entrada (tpNF=0): o quadro destinatário/remetente é o remetente |
+| Destinatário | quadro destinatário/remetente | destinatário | NF de entrada: o emitente é o destinatário |
+| Local de coleta | retirada (bloco ou observações), senão emitente | expedidor, senão remetente + início da prestação | NF de entrada: coleta no produtor |
+| Local de entrega | entrega (bloco ou observações), senão destinatário | recebedor, senão destinatário + término | término diferente com destinatário certo = trecho até terminal/transbordo (amarelo) |
+| Cliente pagador | cliente do embarque no Travion | tomador | modalidade do frete (CIF/FOB) × CNPJ do tomador incoerente = amarelo |
+
+Vermelho: CNPJ diferente com os dois dígitos verificadores válidos, CT-e citando outra NF, e CT-e com o mesmo
+CNPJ como remetente e destinatário (exceto quando a própria NF tem emitente = destinatário).
+CNPJ/CPF e chave com dígito verificador inválido são tratados como leitura ruim (amarelo ou conferência por aproximação).
