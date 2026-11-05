@@ -138,3 +138,15 @@ describe('relatório por filial', () => {
     expect(r[0]).toMatchObject({ total: 1, atualizados: 0, pendentes: 1, nuncaConfirmadas: 1, cobertura: 0, ultima: null });
   });
 });
+
+describe('verde dos centros de custo (só ao salvar)', async () => {
+  const { atualizadaNaHora } = await import('../components/AtualizacaoCentros');
+  const agora = Date.parse('2026-11-05T13:00:00Z');
+  it('nunca confirmada não fica verde, mesmo aberta agora', () => {
+    expect(atualizadaNaHora({ confirmado_em: null }, agora)).toBe(false);
+  });
+  it('salva há 30 min fica verde; há 3 h não', () => {
+    expect(atualizadaNaHora({ confirmado_em: '2026-11-05T12:30:00Z' }, agora)).toBe(true);
+    expect(atualizadaNaHora({ confirmado_em: '2026-11-05T10:00:00Z' }, agora)).toBe(false);
+  });
+});

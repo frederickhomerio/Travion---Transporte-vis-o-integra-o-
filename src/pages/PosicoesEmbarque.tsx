@@ -212,7 +212,7 @@ function MiniBlocos({ lista, atualId, idx, pendentes, aoEscolher }: {
           <span><i className="faixa-verde" />Acima de 80%</span><span><i className="sem-meta" />Sem meta</span>
         </div>
         <div className="legenda">
-          <span><i className="borda-recente" />Borda verde: atualizada nas últimas 2 h</span><span><i className="borda-atrasada" />Borda vermelha: mais de 2 h sem atualizar</span>
+          <span><i className="borda-recente" />Borda verde: salva nas últimas 2 h</span><span><i className="borda-atrasada" />Borda vermelha: não salva nas últimas 2 h</span>
         </div>
       </div>
       <div className="pe-minis-grade">

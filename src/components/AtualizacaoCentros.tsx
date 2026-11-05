@@ -1,5 +1,7 @@
 // Quadros por centro de custo ao lado da data (Posição do Cliente): verde quando todas as posições do centro
 // foram atualizadas nas últimas 2 horas, vermelho quando falta alguma (pedido de 29/10/2026; janela de 1 h passou a 2 h).
+// Só conta como atualizada a posição SALVA (confirmação): abrir as posições do dia, importar ou mexer só na
+// observação mudam atualizado_em, mas não confirmam (pedido de 05/11/2026: "nunca confirmada" não pode ficar verde).
 
 import { useMemo } from 'react';
 import { nome, type Indices } from '../lib/cadastros';
@@ -10,11 +12,11 @@ import { useAgora } from './doc/Comum';
 /** Janela de atualização que define a cor (verde/vermelho). */
 export const JANELA_ATUALIZACAO = 2 * 3600_000;
 
-/** Última atualização da posição (contadores ou confirmação), em ms; 0 quando nunca foi atualizada. */
-export function ultimaAtualizacao(p: NonNullable<LinhaFrete['posicao']>): number {
-  return Math.max(Date.parse(p.atualizado_em ?? '') || 0, Date.parse(p.confirmado_em ?? '') || 0);
+/** Último salvamento da posição (confirmação), em ms; 0 quando nunca foi confirmada. */
+export function ultimaAtualizacao(p: Pick<NonNullable<LinhaFrete['posicao']>, 'confirmado_em'>): number {
+  return Date.parse(p.confirmado_em ?? '') || 0;
 }
-export const atualizadaNaHora = (p: NonNullable<LinhaFrete['posicao']>, agora: number) => {
+export const atualizadaNaHora = (p: Pick<NonNullable<LinhaFrete['posicao']>, 'confirmado_em'>, agora: number) => {
   const t = ultimaAtualizacao(p);
   return t > 0 && agora - t <= JANELA_ATUALIZACAO;
 };
@@ -42,9 +44,9 @@ export function AtualizacaoCentros({ linhas, idx }: { linhas: LinhaFrete[]; idx:
         const tudo = c.ok === c.total;
         return (
           <div key={c.cc} role="listitem" className={`ac-centro ${tudo ? 'ok' : 'falta'}`}
-            title={tudo ? 'Todas as posições atualizadas nas últimas 2 horas' : `${c.total - c.ok} posição(ões) sem atualização nas últimas 2 horas`}>
+            title={tudo ? 'Todas as posições salvas nas últimas 2 horas' : `${c.total - c.ok} posição(ões) não salva(s) nas últimas 2 horas`}>
             <strong>{c.nome}</strong>
-            <span>{c.ok}/{c.total} nas últimas 2 h</span>
+            <span>{c.ok}/{c.total} salvas nas últimas 2 h</span>
           </div>
         );
       })}
