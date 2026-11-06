@@ -6,7 +6,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 import { useApp } from '../data/store';
 import { hojeSP, somarDias } from '../lib/formato';
 import type { Permissao } from '../types';
-import { codigoOcorrencia, ETAPAS_TRANSITO, valoresConfirmados, type ValoresEmissao, etapaAnterior, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, proximaEtapa } from './regras';
+import { avisoConferencia, codigoOcorrencia, ETAPAS_TRANSITO, valoresConfirmados, type ValoresEmissao, etapaAnterior, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, proximaEtapa } from './regras';
 import {
   ROTULO_CHECAGEM, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_PARADA, VALORES_ZERO,
   type CargaOcorrencia, type ChecagemInd, type ClienteInd, type OcorrenciaInd, type ParadaInd, type SituacaoParada, type TipoOcorrencia, type ValoresInd, type ViagemInd,
@@ -305,6 +305,20 @@ export function useInd() {
             fim_em: s === 'concluida' || s === 'recusada' ? h : y.fim_em,
           })),
         }), p.local);
+      },
+
+      /** Veículo chegou ao cliente para descarregar: a próxima entrega pendente vira "Chegou" e a carga vai para Veículos Marcados. */
+      marcadoDescarga(id: string) {
+        exigir('ind.avancar');
+        const v = viagem(id);
+        if (!['documentada', 'transito', 'entregas'].includes(v.etapa)) falha('A carga não está em trânsito.');
+        if (v.etapa === 'documentada') { const f = avisoConferencia(v, 'seguir para a descarga'); if (f.length) falha(f[0] + '.'); }
+        const p = v.paradas.filter((x) => x.tipo === 'entrega' && x.situacao === 'pendente').sort((x, y) => x.ordem - y.ordem)[0] ?? falha('Não há entrega pendente.');
+        const h = agora();
+        mudar(id, `Marcado na descarga: Entrega ${p.ordem}${v.etapa !== 'entregas' ? ` (${ROTULO_ETAPA[v.etapa]} → ${ROTULO_ETAPA.entregas})` : ''}`, (x) => ({
+          etapa: 'entregas',
+          paradas: x.paradas.map((y) => (y.id !== p.id ? y : { ...y, situacao: 'chegou' as const, chegada_em: h })),
+        }), `${p.local} (${p.cidade}/${p.uf})`);
       },
 
       informarPo(id: string, po: string) {

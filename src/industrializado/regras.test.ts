@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, combinadoAtual, pendenciasValores, valoresConfirmados, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
+import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, combinadoAtual, linkWhatsApp, pendenciasValores, valoresConfirmados, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
 import { VALORES_ZERO, type ClienteInd, type OcorrenciaInd, type ViagemInd } from './tipos';
 
 const base: ViagemInd = {
@@ -171,5 +171,14 @@ describe('valores conferidos na Emissão', () => {
     const m = calcularMargem({ ...base, valores });
     expect(m.receita).toBe(10500);
     expect(m.despesa).toBe(8300);
+  });
+});
+
+describe('WhatsApp do motorista', () => {
+  it('monta o link com DDI 55 e a mensagem', () => {
+    expect(linkWhatsApp('(62) 9 9101-4001', 'Olá')).toBe('https://wa.me/5562991014001?text=Ol%C3%A1');
+    expect(linkWhatsApp('+55 62 99101-4001', 'x')).toBe('https://wa.me/5562991014001?text=x');
+    expect(linkWhatsApp(null, 'x')).toBeNull();
+    expect(linkWhatsApp('1234', 'x')).toBeNull();
   });
 });

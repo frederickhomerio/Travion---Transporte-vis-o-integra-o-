@@ -14,7 +14,7 @@ import {
 import { restaurarPrevia, useInd } from './dados';
 
 import {
-  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, combinadoTransito, valoresConfirmados, type ValoresEmissao, META_MARGEM_PCT, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
+  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, combinadoTransito, linkWhatsApp, valoresConfirmados, type ValoresEmissao, META_MARGEM_PCT, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
   PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, retiradasDoDia, type NivelAlerta, type QuadrosPainel,
 } from './regras';
 import {
@@ -116,7 +116,7 @@ export function PainelInd() {
                   return (
                     <div key={n} className={`ind-faixa ${n}`}>
                       <h3><span className={`ind-chip ${n}`}>{ROTULO_COR[atual.k === 'transito' ? 'transito' : 'contratado'][n]}</span> <span className="suave pequeno">{vs.length}</span></h3>
-                      <TabelaQuadro k={atual.k} vs={vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={(v) => exec(() => acoes.registrarMarcou(v.id), marcouMsg(v))} carregado={(v) => exec(() => acoes.veiculoCarregado(v.id), `Pedido ${pedidoCarga(v)} carregado: foi para Aguardando Emissão.`)} checar={(v, item, m) => exec(() => acoes.marcarChecagem(v.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} pode={pode} />
+                      <TabelaQuadro k={atual.k} vs={vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={(v) => exec(() => acoes.registrarMarcou(v.id), marcouMsg(v))} carregado={(v) => exec(() => acoes.veiculoCarregado(v.id), `Pedido ${pedidoCarga(v)} carregado: foi para Aguardando Emissão.`)} descarga={(v) => exec(() => acoes.marcadoDescarga(v.id), `Pedido ${pedidoCarga(v)} marcado na descarga: foi para Veículos Marcados.`)} checar={(v, item, m) => exec(() => acoes.marcarChecagem(v.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} pode={pode} />
                     </div>
                   );
                 })
@@ -145,9 +145,22 @@ const ROTULO_COR: Record<'contratado' | 'transito', Partial<Record<NivelAlerta, 
   transito: { atraso: 'Descarga hoje', aviso: 'Descarga amanhã', ok: 'Descarga D+2 ou mais', neutro: 'Sem data de descarga' },
 };
 
-function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, checar, carregado = () => undefined, pode }: {
+/** Mensagem pronta para o motorista, conforme o quadro. */
+function mensagemMotorista(k: ChaveQuadro, v: ViagemInd): string {
+  const nome = v.motorista?.split(' ')[0] ?? '';
+  const pedido = `pedido ${pedidoCarga(v)}`;
+  if (k === 'transito' || k === 'marcados') {
+    const p = v.paradas.filter((x) => x.tipo === 'entrega' && x.situacao !== 'concluida' && x.situacao !== 'recusada').sort((x, y) => x.ordem - y.ordem)[0];
+    const dest = p ? ` para ${p.local} (${p.cidade}/${p.uf})${p.agendado_para ? `, descarga agendada ${fmtDataHora(p.agendado_para)}` : ''}` : '';
+    return `Olá, ${nome}! Aqui é da Transpanorama (Industrializado), sobre o ${pedido}${dest}. Pode nos enviar sua localização e a previsão de chegada?`;
+  }
+  const c = v.combinado;
+  return `Olá, ${nome}! Aqui é da Transpanorama (Industrializado), sobre o ${pedido}${c ? `. Combinado: ${c.o_que.toLowerCase()} às ${fmtDataHora(c.para)}` : ''}. Pode confirmar?`;
+}
+
+function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, checar, carregado = () => undefined, descarga = () => undefined, pode }: {
   k: ChaveQuadro; vs: ViagemInd[]; clientePorId: Record<string, ClienteInd>; ocorrencias: OcorrenciaInd[];
-  abrir: (id: string) => void; acao: (t: 'combinado' | 'ocorrencia' | 'emissao', v: ViagemInd) => void; marcou: (v: ViagemInd) => void; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void; carregado?: (v: ViagemInd) => void; pode: (p: Permissao) => boolean;
+  abrir: (id: string) => void; acao: (t: 'combinado' | 'ocorrencia' | 'emissao', v: ViagemInd) => void; marcou: (v: ViagemInd) => void; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void; carregado?: (v: ViagemInd) => void; descarga?: (v: ViagemInd) => void; pode: (p: Permissao) => boolean;
 }) {
   const cab: Record<ChaveQuadro, string[]> = {
     disponiveis: ['Pedido / veículo', 'Cliente', 'Rota', 'Retirada prevista', 'Lançada'],
@@ -165,7 +178,11 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
       <tbody>{vs.map((v) => {
         const cli = clientePorId[v.cliente_id];
         const via = <td><button className="btn sutil peq" onClick={() => abrir(v.id)}><strong>{v.pedido ?? 'Sem pedido'}</strong></button><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td>;
-        const mot = <td>{v.motorista ?? '—'}<div className="suave pequeno">{[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ')}</div></td>;
+        const zap = linkWhatsApp(v.motorista_telefone, mensagemMotorista(k, v));
+        const mot = <td>{v.motorista ?? '—'}<div className="suave pequeno">{[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ')}</div>
+          {v.motorista_telefone && <div className="suave pequeno">{v.motorista_telefone}</div>}
+          {zap ? <a className="ind-zap" href={zap} target="_blank" rel="noopener noreferrer" title="Abrir conversa no WhatsApp com a mensagem pronta">WhatsApp</a>
+            : <span className="ind-falta pequeno">sem telefone</span>}</td>;
         if (k === 'disponiveis') return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td><td><Rota v={v} /></td><td>{v.coleta_prevista ? fmtData(v.coleta_prevista) : '—'}</td><td className="pequeno">{fmtDataHora(v.criado_em)}</td>
             <td>{pode('ind.lancar') && <button className="btn primario peq" onClick={() => abrir(v.id)}>Vincular placa</button>}</td></tr>
@@ -188,9 +205,10 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
           <tr key={v.id}>{via}<td>{cli?.nome}</td>{mot}<td>{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}{p?.protocolo && <div className="suave pequeno">protocolo {p.protocolo}</div>}</td>
             <td>{a.quando ? fmtDataHora(a.quando) : '—'}</td><td><ChipNivel nivel={a.nivel}>{a.texto}</ChipNivel></td>
             <td>{combinadoTransito(v) ? <><ChipCombinado v={v} /><div className="suave pequeno">{fmtDataHora(v.combinado!.para)}</div></> : <span className="suave pequeno">sem combinado</span>}</td>
-            <td style={{ whiteSpace: 'nowrap' }}>{pode('ind.avancar') && <>
-              {combinadoTransito(v) && !v.combinado!.marcou_em && <button className="btn primario peq" onClick={() => marcou(v)}>Marcou</button>}
-              <button className="btn peq" style={{ marginLeft: 4 }} onClick={() => acao('combinado', v)}>{combinadoTransito(v) ? 'Alterar' : 'Combinado'}</button></>}</td></tr>
+            <td>{pode('ind.avancar') && <div className="ind-acoes">
+              <button className="btn primario peq" disabled={!p} title={p ? `Chegou em ${p.local}` : 'Sem entrega pendente'} onClick={() => descarga(v)}>Marcado na descarga</button>
+              {combinadoTransito(v) && !v.combinado!.marcou_em && <button className="btn peq" onClick={() => marcou(v)}>Marcou combinado</button>}
+              <button className="btn peq" onClick={() => acao('combinado', v)}>{combinadoTransito(v) ? 'Alterar combinado' : 'Combinado'}</button></div>}</td></tr>
         ); }
         if (k === 'marcados') { const p = v.paradas.find((x) => x.tipo === 'entrega' && (x.situacao === 'chegou' || x.situacao === 'em_operacao')); return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td><td>{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}<div className="suave pequeno">{p?.situacao === 'em_operacao' ? 'Descarregando' : 'Aguardando descarga'}</div></td>

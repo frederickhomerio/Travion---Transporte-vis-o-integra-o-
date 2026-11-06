@@ -278,3 +278,12 @@ export function combinadoTransito<T extends Pick<ViagemInd, 'combinado'>>(v: T):
 export function combinadoAtual<T extends Pick<ViagemInd, 'combinado' | 'etapa'>>(v: T): T['combinado'] {
   return ['lancada', 'contratado', 'coleta_agendada', 'carregando'].includes(v.etapa) ? v.combinado : combinadoTransito(v);
 }
+
+/** Link de conversa no WhatsApp (wa.me) com o telefone do motorista; null se não houver telefone válido. */
+export function linkWhatsApp(telefone: string | null, texto: string): string | null {
+  let d = (telefone ?? '').replace(/\D/g, '');
+  if (d.startsWith('0')) d = d.replace(/^0+/, '');
+  if (d.length === 10 || d.length === 11) d = `55${d}`;
+  if (d.length < 12 || d.length > 13) return null;
+  return `https://wa.me/${d}?text=${encodeURIComponent(texto)}`;
+}
