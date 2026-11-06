@@ -83,6 +83,8 @@ export interface ViagemInd {
   entregue_em: string | null;
   canhoto_digital_em: string | null; canhoto_fisico_em: string | null; comprovante_ok_em: string | null;
   reversa_de: string | null;
+  /** Tirada do quadro Finalizados com Ocorrência (as ocorrências seguem em Ocorrências). */
+  painel_finalizado_em?: string | null; painel_finalizado_por?: string | null;
   /** Valores do CT-e e do contrato conferidos na Emissão. */
   valores_conferidos_em?: string | null; valores_conferidos_por?: string | null;
   observacao: string | null;

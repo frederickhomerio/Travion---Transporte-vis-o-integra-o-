@@ -182,3 +182,11 @@ describe('WhatsApp do motorista', () => {
     expect(linkWhatsApp('1234', 'x')).toBeNull();
   });
 });
+
+describe('Finalizado no Painel', () => {
+  it('sai de Finalizados com Ocorrência; nova ocorrência depois traz de volta', () => {
+    const v = { ...base, id: 'f', etapa: 'entregue' as const, painel_finalizado_em: '2026-11-06T12:00:00Z' };
+    expect(quadrosPainel([v], [oc({ viagem_id: 'f', situacao: 'aberta', aberta_em: '2026-11-06T10:00:00Z' })]).comOcorrencia).toHaveLength(0);
+    expect(quadrosPainel([v], [oc({ viagem_id: 'f', situacao: 'aberta', aberta_em: '2026-11-06T13:00:00Z' })]).comOcorrencia).toHaveLength(1);
+  });
+});

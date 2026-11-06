@@ -321,6 +321,26 @@ export function useInd() {
         }), `${p.local} (${p.cidade}/${p.uf})`);
       },
 
+      /** Fim da descarga no cliente: a entrega atual é concluída. Sem outra entrega pendente, a carga fica Entregue; senão volta para o trânsito. */
+      finalizarDescarga(id: string, comOcorrencia: boolean): 'entregue' | 'proxima' {
+        exigir('ind.avancar');
+        const v = viagem(id);
+        const p = v.paradas.find((x) => x.tipo === 'entrega' && (x.situacao === 'chegou' || x.situacao === 'em_operacao')) ?? falha('Nenhum veículo marcado na descarga.');
+        const restam = v.paradas.some((x) => x.tipo === 'entrega' && x.id !== p.id && x.situacao !== 'concluida' && x.situacao !== 'recusada');
+        const h = agora();
+        mudar(id, `Finalizado ${comOcorrencia ? 'com' : 'sem'} ocorrência: Entrega ${p.ordem}${restam ? '' : ` (${ROTULO_ETAPA[v.etapa]} → ${ROTULO_ETAPA.entregue})`}`, (x) => ({
+          ...(restam ? {} : { etapa: 'entregue' as const, entregue_em: h }),
+          paradas: x.paradas.map((y) => (y.id !== p.id ? y : { ...y, situacao: 'concluida' as const, inicio_em: y.inicio_em ?? h, fim_em: h })),
+        }), `${p.local} (${p.cidade}/${p.uf})`);
+        return restam ? 'proxima' : 'entregue';
+      },
+
+      /** Tira a carga do quadro Finalizados com Ocorrência; as ocorrências seguem em Ocorrências (aprovação e pagamento). */
+      finalizarNoPainel(id: string) {
+        exigir('ind.ocorrencias');
+        mudar(id, 'Finalizado no Painel (sai de Finalizados com Ocorrência)', () => ({ painel_finalizado_em: agora(), painel_finalizado_por: usuario }));
+      },
+
       informarPo(id: string, po: string) {
         exigir('ind.lancar');
         if (!po.trim()) falha('Informe o PO.');

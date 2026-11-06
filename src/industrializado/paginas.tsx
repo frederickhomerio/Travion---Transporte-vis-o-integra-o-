@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
-import { AcessoNegado, Alerta, EstadoVazio, Modal, Segmentado } from '../components/ui';
+import { AcessoNegado, Alerta, EstadoVazio, Modal, Segmentado, useAviso } from '../components/ui';
 import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
 import { normalizar } from '../lib/texto';
 import type { Permissao } from '../types';
@@ -46,6 +46,10 @@ const ativa = (v: ViagemInd) => v.etapa !== 'encerrada' && v.etapa !== 'cancelad
 export function PainelInd() {
   const { viagens, ocorrencias, clientePorId, metas, acoes, pode } = useInd();
   const exec = useExecutar();
+  const avisar = useAviso();
+  const avisarFim = (v: ViagemInd, r: string, oc: boolean) => avisar('ok', r === 'proxima'
+    ? `Pedido ${pedidoCarga(v)}: entrega concluída${oc ? ' com ocorrência' : ''}. Segue para a próxima entrega (Veículos em Trânsito).`
+    : `Pedido ${pedidoCarga(v)} entregue${oc ? ': foi para Finalizados com Ocorrência' : ' sem ocorrência: saiu do Painel'}.`);
   const [params, setParams] = useSearchParams();
   const [sel, setSel] = useState<ChaveQuadro | null>((params.get('quadro') as ChaveQuadro | null) ?? null);
   const [aberta, setAberta] = useState<string | null>(params.get('v'));
@@ -59,7 +63,7 @@ export function PainelInd() {
     const f = faltaConferencia(v);
     return f.length ? `Marcação registrada. Atenção: falta ${f.map((c) => ROTULO_CHECAGEM[c]).join(', ')}.` : 'Marcação registrada.';
   };
-  const [modal, setModal] = useState<{ tipo: 'combinado' | 'ocorrencia' | 'emissao'; v: ViagemInd } | null>(null);
+  const [modal, setModal] = useState<{ tipo: AcaoQuadro; v: ViagemInd } | null>(null);
   const q = quadrosPainel(viagens, ocorrencias);
   const cont = (vs: ViagemInd[], f: (v: ViagemInd) => NivelAlerta) => {
     const c: Partial<Record<NivelAlerta, number>> = {};
@@ -134,6 +138,28 @@ export function PainelInd() {
       {modal?.tipo === 'combinado' && <ModalCombinado v={modal.v} aoFechar={() => setModal(null)} />}
       {modal?.tipo === 'ocorrencia' && <ModalOcorrencia v={modal.v} aoFechar={() => setModal(null)} />}
       {modal?.tipo === 'emissao' && <ModalEmissao v={modal.v} aoFechar={() => setModal(null)} />}
+      {modal?.tipo === 'finalizar' && (
+        <Modal titulo={`Finalizar descarga · Pedido ${pedidoCarga(modal.v)}`} aoFechar={() => setModal(null)} rodape={<button className="btn" onClick={() => setModal(null)}>Voltar</button>}>
+          <p style={{ marginTop: 0 }}>Como terminou a descarga em <strong>{modal.v.paradas.find((x) => x.tipo === 'entrega' && (x.situacao === 'chegou' || x.situacao === 'em_operacao'))?.local ?? 'cliente'}</strong>?</p>
+          <div className="ind-escolha">
+            <button className="btn ind-escolha-ok" onClick={() => { const v = modal.v; let r: string = ''; if (exec(() => { r = acoes.finalizarDescarga(v.id, false); }, '')) { avisarFim(v, r, false); setModal(null); } }}>
+              <strong>Finalizado sem ocorrência</strong><span>Entrega concluída. Se não houver outra entrega, a carga sai do Painel; se houver, volta para Em Trânsito.</span></button>
+            <button className="btn ind-escolha-oc" onClick={() => setModal({ tipo: 'finalizarOc', v: modal.v })}>
+              <strong>Finalizado com ocorrência</strong><span>Abre a ocorrência (ID para cliente e motorista) e a carga vai para Finalizados com Ocorrência.</span></button>
+          </div>
+        </Modal>
+      )}
+      {modal?.tipo === 'finalizarOc' && <ModalOcorrencia v={modal.v} cargaPadrao="descarregado" titulo={`Finalizado com ocorrência · Pedido ${pedidoCarga(modal.v)}`} aoFechar={() => setModal(null)}
+        aoCriar={() => { const v = modal.v; let r = ''; if (exec(() => { r = acoes.finalizarDescarga(v.id, true); })) avisarFim(v, r, true); }} />}
+      {modal?.tipo === 'tirarPainel' && (
+        <Modal titulo={`Finalizar · Pedido ${pedidoCarga(modal.v)}`} aoFechar={() => setModal(null)} rodape={<>
+          <button className="btn" onClick={() => setModal(null)}>Voltar</button>
+          <button className="btn primario" onClick={() => exec(() => acoes.finalizarNoPainel(modal.v.id), `Pedido ${pedidoCarga(modal.v)} finalizado: saiu do Painel.`) && setModal(null)}>Finalizado</button>
+        </>}>
+          <p style={{ marginTop: 0 }}>A carga sai do Painel. As ocorrências continuam na tela <strong>Ocorrências</strong> para aprovação e pagamento ao motorista, e o pós-entrega (canhoto e comprovante) segue normal.</p>
+          <p className="suave pequeno">Se uma nova ocorrência for aberta nesta carga, ela volta para o quadro.</p>
+        </Modal>
+      )}
       {aberta && <DetalhesViagem id={aberta} aoFechar={() => setAberta(null)} />}
     </Pagina>
   );
@@ -159,9 +185,11 @@ function mensagemMotorista(k: ChaveQuadro, v: ViagemInd, cliente?: string): stri
   return `Olá, ${nome}! Aqui é da Transpanorama (Industrializado), sobre o ${pedido}. Combinado: Já marcou o carregamento${local}${c ? `, combinado às ${fmtDataHora(c.para)}` : ''}. Pode confirmar?`;
 }
 
+type AcaoQuadro = 'combinado' | 'ocorrencia' | 'emissao' | 'finalizar' | 'finalizarOc' | 'tirarPainel';
+
 function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, checar, carregado = () => undefined, descarga = () => undefined, pode }: {
   k: ChaveQuadro; vs: ViagemInd[]; clientePorId: Record<string, ClienteInd>; ocorrencias: OcorrenciaInd[];
-  abrir: (id: string) => void; acao: (t: 'combinado' | 'ocorrencia' | 'emissao', v: ViagemInd) => void; marcou: (v: ViagemInd) => void; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void; carregado?: (v: ViagemInd) => void; descarga?: (v: ViagemInd) => void; pode: (p: Permissao) => boolean;
+  abrir: (id: string) => void; acao: (t: AcaoQuadro, v: ViagemInd) => void; marcou: (v: ViagemInd) => void; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void; carregado?: (v: ViagemInd) => void; descarga?: (v: ViagemInd) => void; pode: (p: Permissao) => boolean;
 }) {
   const cab: Record<ChaveQuadro, string[]> = {
     disponiveis: ['Pedido / veículo', 'Cliente', 'Rota', 'Retirada prevista', 'Lançada'],
@@ -209,17 +237,23 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
             <td>{pode('ind.avancar') && <div className="ind-acoes">
               <button className="btn primario peq" disabled={!p} title={p ? `Chegou em ${p.local}` : 'Sem entrega pendente'} onClick={() => descarga(v)}>Marcado na descarga</button>
               {combinadoTransito(v) && !v.combinado!.marcou_em && <button className="btn peq" onClick={() => marcou(v)}>Marcou combinado</button>}
-              <button className="btn peq" onClick={() => acao('combinado', v)}>{combinadoTransito(v) ? 'Alterar combinado' : 'Combinado'}</button></div>}</td></tr>
+              <button className="btn peq" onClick={() => acao('combinado', v)}>{combinadoTransito(v) ? 'Alterar combinado' : 'Combinado'}</button>
+              {pode('ind.ocorrencias') && <button className="btn secundario peq" onClick={() => acao('ocorrencia', v)}>Ocorrência</button>}</div>}</td></tr>
         ); }
         if (k === 'marcados') { const p = v.paradas.find((x) => x.tipo === 'entrega' && (x.situacao === 'chegou' || x.situacao === 'em_operacao')); return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td><td>{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}<div className="suave pequeno">{p?.situacao === 'em_operacao' ? 'Descarregando' : 'Aguardando descarga'}</div></td>
             <td>{p?.chegada_em ? fmtDataHora(p.chegada_em) : '—'}</td><td>{tempo(min(p?.chegada_em ?? null))}</td>
-            <td>{pode('ind.ocorrencias') && <button className="btn secundario peq" onClick={() => acao('ocorrencia', v)}>Ocorrência</button>}</td></tr>
+            <td><div className="ind-acoes">
+              {pode('ind.avancar') && <button className="btn primario peq" onClick={() => acao('finalizar', v)}>Finalizado</button>}
+              {pode('ind.ocorrencias') && <button className="btn secundario peq" onClick={() => acao('ocorrencia', v)}>Ocorrência</button>}</div></td></tr>
         ); }
         const pend = ocorrencias.filter((o) => o.viagem_id === v.id && (o.situacao === 'aberta' || o.situacao === 'aprovada'));
         return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td><td><ChipEtapa etapa={v.etapa} /></td>
-            <td>{pend.map((o) => <div key={o.id}><span className="mono">{o.codigo}</span> {ROTULO_OCORRENCIA[o.tipo]} · {ROTULO_SIT_OCORRENCIA[o.situacao]} <ChipNivel nivel={o.carga === 'carregado' ? 'aviso' : 'ok'}>{o.carga === 'carregado' ? 'Carregado' : 'Descarregado'}</ChipNivel></div>)}</td><td /></tr>
+            <td>{pend.map((o) => <div key={o.id}><span className="mono">{o.codigo}</span> {ROTULO_OCORRENCIA[o.tipo]} · {ROTULO_SIT_OCORRENCIA[o.situacao]} <ChipNivel nivel={o.carga === 'carregado' ? 'aviso' : 'ok'}>{o.carga === 'carregado' ? 'Carregado' : 'Descarregado'}</ChipNivel></div>)}</td>
+            <td>{pode('ind.ocorrencias') && <div className="ind-acoes">
+              <button className="btn primario peq" onClick={() => acao('tirarPainel', v)}>Finalizado</button>
+              <button className="btn secundario peq" onClick={() => acao('ocorrencia', v)}>Ocorrência</button></div>}</td></tr>
         );
       })}</tbody>
     </table>

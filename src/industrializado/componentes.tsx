@@ -142,14 +142,14 @@ export function ModalCombinado({ v, aoFechar }: { v: ViagemInd; aoFechar: () => 
 // ---------------------------------------------------------------------------
 // Ocorrência
 // ---------------------------------------------------------------------------
-export function ModalOcorrencia({ v, aoFechar }: { v: ViagemInd; aoFechar: () => void }) {
+export function ModalOcorrencia({ v, aoFechar, aoCriar, cargaPadrao, titulo }: { v: ViagemInd; aoFechar: () => void; aoCriar?: (o: OcorrenciaInd) => void; cargaPadrao?: CargaOcorrencia; titulo?: string }) {
   const { acoes, pode } = useInd();
   const exec = useExecutar();
   const entregas = v.paradas.filter((p) => p.tipo === 'entrega');
   const atual = entregas.find((p) => p.situacao === 'em_operacao' || p.situacao === 'chegou') ?? entregas.find((p) => p.situacao === 'pendente') ?? entregas[0];
   const [d, setD] = useState({
     parada_id: (atual?.id ?? null) as string | null, tipo: 'diaria' as TipoOcorrencia,
-    carga: (atual && (atual.situacao === 'concluida') ? 'descarregado' : 'carregado') as CargaOcorrencia,
+    carga: (cargaPadrao ?? (atual && (atual.situacao === 'concluida') ? 'descarregado' : 'carregado')) as CargaOcorrencia,
     avaria: false, descricao: '', valor_motorista: 0, valor_cliente: 0,
   });
   const [criada, setCriada] = useState<OcorrenciaInd | null>(null);
@@ -162,9 +162,9 @@ export function ModalOcorrencia({ v, aoFechar }: { v: ViagemInd; aoFechar: () =>
     );
   }
   return (
-    <Modal titulo={`Abrir ocorrência · Pedido ${pedidoCarga(v)}`} aoFechar={aoFechar} rodape={<>
+    <Modal titulo={titulo ?? `Abrir ocorrência · Pedido ${pedidoCarga(v)}`} aoFechar={aoFechar} rodape={<>
       <button className="btn" onClick={aoFechar}>Voltar</button>
-      <button className="btn primario" onClick={() => exec(() => setCriada(acoes.abrirOcorrencia({ viagem_id: v.id, ...d })))}>Abrir ocorrência</button>
+      <button className="btn primario" onClick={() => exec(() => { const o = acoes.abrirOcorrencia({ viagem_id: v.id, ...d }); setCriada(o); aoCriar?.(o); })}>{aoCriar ? 'Abrir ocorrência e finalizar' : 'Abrir ocorrência'}</button>
     </>}>
       <div className="grade-campos">
         <label className="campo"><span>Tipo</span>

@@ -90,7 +90,9 @@ export interface QuadrosPainel {
 /** Uma viagem fica em um só quadro. Finalizadas sem ocorrência pendente saem do painel. */
 export function quadrosPainel(viagens: ViagemInd[], ocorrencias: OcorrenciaInd[]): QuadrosPainel {
   const q: QuadrosPainel = { disponiveis: [], contratados: [], emissao: [], transito: [], marcados: [], comOcorrencia: [] };
-  const pendente = new Set(ocorrencias.filter((o) => o.situacao === 'aberta' || o.situacao === 'aprovada').map((o) => o.viagem_id));
+  const finalizado = new Map(viagens.map((v) => [v.id, v.painel_finalizado_em ?? '']));
+  // Ocorrência pendente aberta depois de "Finalizado" traz a carga de volta ao quadro.
+  const pendente = new Set(ocorrencias.filter((o) => (o.situacao === 'aberta' || o.situacao === 'aprovada') && (!finalizado.get(o.viagem_id) || o.aberta_em > finalizado.get(o.viagem_id)!)).map((o) => o.viagem_id));
   for (const v of viagens) {
     const noCliente = v.paradas.some((p) => p.tipo === 'entrega' && (p.situacao === 'chegou' || p.situacao === 'em_operacao'));
     switch (v.etapa) {

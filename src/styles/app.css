@@ -1706,3 +1706,9 @@ button.cf-chip { cursor: pointer; }
 .ind-zap { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 12px; font-weight: 600; color: #fff; background: #1f8f4e; border-radius: 999px; padding: 2px 10px; text-decoration: none; }
 .ind-zap::before { content: '✆'; }
 .ind-zap:hover { background: #17733e; }
+/* Industrializado: escolha ao finalizar a descarga */
+.ind-escolha { display: grid; gap: 10px; }
+.ind-escolha .btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 12px 14px; height: auto; white-space: normal; }
+.ind-escolha .btn span { font-weight: 400; font-size: 13px; }
+.ind-escolha-ok { border-color: var(--verde-700); background: var(--verde-100); color: var(--verde-700); }
+.ind-escolha-oc { border-color: #d9a400; background: #fff6d6; color: #7a5600; }
