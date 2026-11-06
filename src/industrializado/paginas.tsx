@@ -14,7 +14,7 @@ import {
 import { restaurarPrevia, useInd } from './dados';
 
 import {
-  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
+  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, combinadoTransito, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
   PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, retiradasDoDia, type NivelAlerta, type QuadrosPainel,
 } from './regras';
 import {
@@ -153,7 +153,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
     disponiveis: ['Pedido / veículo', 'Cliente', 'Rota', 'Retirada prevista', 'Lançada'],
     contratados: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Conferências', 'Combinado', 'Horário', 'Situação'],
     emissao: ['Pedido / veículo', 'Cliente', 'Rota', 'Conferências', 'Carregada há', 'PO'],
-    transito: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Descarga', 'Previsão', 'Situação'],
+    transito: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Descarga', 'Previsão', 'Situação', 'Combinado de trânsito'],
     marcados: ['Pedido / veículo', 'Cliente', 'Local da descarga', 'Chegou', 'No local há'],
     comOcorrencia: ['Pedido / veículo', 'Cliente', 'Etapa', 'Ocorrências pendentes'],
   };
@@ -187,7 +187,10 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
         if (k === 'transito') { const a = alertaDescarga(v); const p = v.paradas.filter((x) => x.tipo === 'entrega' && x.situacao === 'pendente').sort((x, y) => x.ordem - y.ordem)[0]; return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td>{mot}<td>{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}{p?.protocolo && <div className="suave pequeno">protocolo {p.protocolo}</div>}</td>
             <td>{a.quando ? fmtDataHora(a.quando) : '—'}</td><td><ChipNivel nivel={a.nivel}>{a.texto}</ChipNivel></td>
-            <td>{v.combinado && <ChipCombinado v={v} />}</td></tr>
+            <td>{combinadoTransito(v) ? <><ChipCombinado v={v} /><div className="suave pequeno">{fmtDataHora(v.combinado!.para)}</div></> : <span className="suave pequeno">sem combinado</span>}</td>
+            <td style={{ whiteSpace: 'nowrap' }}>{pode('ind.avancar') && <>
+              {combinadoTransito(v) && !v.combinado!.marcou_em && <button className="btn primario peq" onClick={() => marcou(v)}>Marcou</button>}
+              <button className="btn peq" style={{ marginLeft: 4 }} onClick={() => acao('combinado', v)}>{combinadoTransito(v) ? 'Alterar' : 'Combinado'}</button></>}</td></tr>
         ); }
         if (k === 'marcados') { const p = v.paradas.find((x) => x.tipo === 'entrega' && (x.situacao === 'chegou' || x.situacao === 'em_operacao')); return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td><td>{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}<div className="suave pequeno">{p?.situacao === 'em_operacao' ? 'Descarregando' : 'Aguardando descarga'}</div></td>

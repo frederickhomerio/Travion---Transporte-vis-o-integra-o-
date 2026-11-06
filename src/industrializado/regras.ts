@@ -242,3 +242,14 @@ export function avisoConferencia(v: Pick<ViagemInd, 'checagens'>, para: string):
   const f = faltaConferencia(v);
   return f.length ? [`Marque ${f.map((c) => ROTULO_CHECAGEM[c]).join(', ')} antes de ${para}`] : [];
 }
+
+/** Etapas em que um combinado novo é de trânsito (tracking até a descarga). */
+export const ETAPAS_TRANSITO: EtapaInd[] = ['carregada', 'documentada', 'transito', 'entregas'];
+/** Combinado de trânsito da viagem (o da coleta não aparece depois de carregado). */
+export function combinadoTransito<T extends Pick<ViagemInd, 'combinado'>>(v: T): T['combinado'] {
+  return v.combinado?.fase === 'transito' ? v.combinado : null;
+}
+/** Combinado que vale agora: até carregar, o da coleta; depois de carregado, só o de trânsito. */
+export function combinadoAtual<T extends Pick<ViagemInd, 'combinado' | 'etapa'>>(v: T): T['combinado'] {
+  return ['lancada', 'contratado', 'coleta_agendada', 'carregando'].includes(v.etapa) ? v.combinado : combinadoTransito(v);
+}

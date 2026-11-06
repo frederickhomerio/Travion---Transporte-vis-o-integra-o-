@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
+import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, combinadoAtual, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
 import { VALORES_ZERO, type ClienteInd, type OcorrenciaInd, type ViagemInd } from './tipos';
 
 const base: ViagemInd = {
@@ -146,5 +146,15 @@ describe('conferências travam emissão e trânsito', () => {
     const d = { cte: '1', nfs: '2', po: '' };
     expect(pendenciasEmissao({ ...base, etapa: 'carregada', checagens: { cadastro: ok } }, undefined, d)).toHaveLength(1);
     expect(pendenciasEmissao({ ...base, etapa: 'carregada', checagens: tudo }, undefined, d)).toHaveLength(0);
+  });
+});
+
+describe('combinado de trânsito', () => {
+  const c = { o_que: 'Chegada na coleta', para: 'x', marcou_em: 'y', registrado_por: 'z' };
+  it('o combinado da coleta some depois de carregado; o de trânsito aparece', () => {
+    expect(combinadoAtual({ etapa: 'contratado', combinado: c })).toBe(c);
+    expect(combinadoAtual({ etapa: 'transito', combinado: c })).toBeNull();
+    const t = { ...c, o_que: 'Chegada no cliente', fase: 'transito' as const };
+    expect(combinadoAtual({ etapa: 'transito', combinado: t })).toBe(t);
   });
 });

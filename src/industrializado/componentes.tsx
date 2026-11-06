@@ -5,7 +5,7 @@ import { Alerta, Gaveta, Modal, useAviso } from '../components/ui';
 import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
 import { useInd, type NovaViagem } from './dados';
 import {
-  alertaCanhoto, alertaCombinado, calcularMargem, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
+  alertaCanhoto, alertaCombinado, calcularMargem, combinadoAtual, combinadoTransito, ETAPAS_TRANSITO, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
 } from './regras';
 import {
   ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_SIT_PARADA, ROTULO_TIPO_CARGA, VALORES_ZERO, CHECAGENS, ROTULO_CHECAGEM,
@@ -32,9 +32,10 @@ export function ChipNivel({ nivel, children, titulo }: { nivel: NivelAlerta; chi
 }
 
 export function ChipCombinado({ v }: { v: ViagemInd }) {
-  const a = alertaCombinado(v);
-  if (!v.combinado) return null;
-  return <ChipNivel nivel={a.nivel} titulo={`${v.combinado.o_que} · ${fmtDataHora(v.combinado.para)}`}>{v.combinado.o_que}: {a.texto}</ChipNivel>;
+  const c = combinadoAtual(v);
+  if (!c) return null;
+  const a = alertaCombinado({ combinado: c });
+  return <ChipNivel nivel={a.nivel} titulo={`${c.o_que} · ${fmtDataHora(c.para)}`}>{c.o_que}: {a.texto}</ChipNivel>;
 }
 
 export function ChipCanhoto({ v }: { v: ViagemInd }) {
@@ -113,8 +114,11 @@ const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 6
 export function ModalCombinado({ v, aoFechar }: { v: ViagemInd; aoFechar: () => void }) {
   const { acoes } = useInd();
   const exec = useExecutar();
-  const [o, setO] = useState(v.combinado?.o_que ?? OPCOES_COMBINADO[0]);
-  const [para, setPara] = useState(v.combinado ? localInput(new Date(v.combinado.para)) : localInput(new Date(Date.now() + 2 * 3600e3)));
+  // Depois de carregado, o combinado é de trânsito: não reaproveita o da coleta.
+  const emTransito = ETAPAS_TRANSITO.includes(v.etapa);
+  const base = emTransito ? combinadoTransito(v) : v.combinado;
+  const [o, setO] = useState(base?.o_que ?? (emTransito ? 'Chegada no cliente' : OPCOES_COMBINADO[0]));
+  const [para, setPara] = useState(base ? localInput(new Date(base.para)) : localInput(new Date(Date.now() + 2 * 3600e3)));
   return (
     <Modal titulo={`Combinado com o motorista · Pedido ${pedidoCarga(v)}`} aoFechar={aoFechar} rodape={<>
       <button className="btn" onClick={aoFechar}>Voltar</button>
@@ -423,7 +427,7 @@ export function DetalhesViagem({ id, aoFechar }: { id: string; aoFechar: () => v
           <dt>Veículo</dt><dd>{v.tipo_veiculo} · {v.frota === 'frota' ? 'Frota própria' : 'Terceiro'} · {[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ') || '—'}</dd>
           <dt>Motorista</dt><dd>{v.motorista ?? '—'}{v.motorista_cpf ? ` · CPF ${v.motorista_cpf}` : ''}{v.motorista_telefone ? ` · ${v.motorista_telefone}` : ''}</dd>
           <dt>Documentos</dt><dd>{v.cte ? `CT-e ${v.cte}` : 'CT-e —'}{v.mdfe ? ` · MDF-e ${v.mdfe}` : ''}{v.nfs ? ` · NF ${v.nfs}` : ''}</dd>
-          <dt>Combinado</dt><dd>{v.combinado ? <><ChipCombinado v={v} /> <span className="suave pequeno">{fmtDataHora(v.combinado.para)} · por {v.combinado.registrado_por}</span></> : '—'}</dd>
+          <dt>Combinado</dt><dd>{combinadoAtual(v) ? <><ChipCombinado v={v} /> <span className="suave pequeno">{fmtDataHora(combinadoAtual(v)!.para)} · por {combinadoAtual(v)!.registrado_por}</span></> : '—'}</dd>
           {v.observacao && <><dt>Observação</dt><dd>{v.observacao}</dd></>}
         </dl>
       </Secao>

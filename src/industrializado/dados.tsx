@@ -6,7 +6,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 import { useApp } from '../data/store';
 import { hojeSP, somarDias } from '../lib/formato';
 import type { Permissao } from '../types';
-import { codigoOcorrencia, etapaAnterior, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, proximaEtapa } from './regras';
+import { codigoOcorrencia, ETAPAS_TRANSITO, etapaAnterior, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, proximaEtapa } from './regras';
 import {
   ROTULO_CHECAGEM, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_PARADA, VALORES_ZERO,
   type CargaOcorrencia, type ChecagemInd, type ClienteInd, type OcorrenciaInd, type ParadaInd, type SituacaoParada, type TipoOcorrencia, type ValoresInd, type ViagemInd,
@@ -72,7 +72,7 @@ function semear(): EstadoInd {
       checagens: { cadastro: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, monitoramento: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, oc_vinculo: { em: emMin(-90), por: '[DEMO] Equipe de embarque' } },
       combinado: { o_que: 'Saída para viagem', para: emMin(-40), marcou_em: emMin(-55), registrado_por: '[DEMO] Equipe de embarque' } }),
     v(1, 'transito', { ...mot(5), cte: '35188', nfs: '77410', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Cuiabá', 'Cuiabá', 'MT', emMin(300), 'pendente', 'AUR-2231')], valores: val(12800, 10900, { pedagio: 610 }),
-      combinado: { o_que: 'Chegada no cliente', para: emMin(240), marcou_em: null, registrado_por: '[DEMO] Equipe de pós-embarque' } }),
+      combinado: { o_que: 'Chegada no cliente', para: emMin(240), marcou_em: null, registrado_por: '[DEMO] Equipe de pós-embarque', fase: 'transito' } }),
     v(3, 'entregas', { ...mot(6), tipo_carga: 'fracionada', cte: '35170', nfs: '55120, 55121, 55122', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Loja 1', 'Itumbiara', 'GO', emMin(-300), 'concluida'), par(3, 'entrega', 'Loja 2', 'Uberlândia', 'MG', emMin(-30), 'em_operacao', 'PL-7781'), par(4, 'entrega', 'Loja 3', 'Uberaba', 'MG', emDias(1))], valores: val(8600, 7200, { descarga: 250 }) }),
     v(0, 'entregue', { ...mot(7), po: '4500231987', cte: '35102', nfs: '99001', entregue_em: emDias(-33), canhoto_digital_em: emDias(-32), paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Sorriso', 'Sorriso', 'MT', emDias(-33), 'concluida', 'CG-4410')], valores: val(15200, 13300, { pedagio: 720, descarga: 400 }) }),
     v(2, 'entregue', { ...mot(1), cte: '35140', nfs: '30221', entregue_em: emDias(-6), canhoto_digital_em: emDias(-6), canhoto_fisico_em: emDias(-1), paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null, 'concluida'), par(2, 'entrega', 'Distribuidora Oeste', 'Jataí', 'GO', null, 'concluida')], valores: val(4800, 4400) }),
@@ -272,7 +272,8 @@ export function useInd() {
       definirCombinado(id: string, o_que: string, para: string) {
         exigir('ind.avancar');
         if (!o_que.trim() || !para) falha('Informe o que foi combinado e o horário.');
-        mudar(id, 'Combinado com o motorista', () => ({ combinado: { o_que: o_que.trim(), para: new Date(para).toISOString(), marcou_em: null, registrado_por: usuario } }),
+        const fase = ETAPAS_TRANSITO.includes(viagem(id).etapa) ? 'transito' as const : 'coleta' as const;
+        mudar(id, fase === 'transito' ? 'Combinado de trânsito com o motorista' : 'Combinado com o motorista', () => ({ combinado: { o_que: o_que.trim(), para: new Date(para).toISOString(), marcou_em: null, registrado_por: usuario, fase } }),
           `${o_que.trim()} às ${new Date(para).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`);
       },
 

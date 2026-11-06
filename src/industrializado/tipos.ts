@@ -44,6 +44,8 @@ export interface ValoresInd {
 /** Combinado entre o funcionário e o motorista (tracking). Alerta 1 hora antes se o veículo não marcou. */
 export interface CombinadoInd {
   o_que: string; para: string; marcou_em: string | null; registrado_por: string;
+  /** coleta = até carregar; transito = registrado depois de carregado (tracking até a descarga). Ausente = coleta. */
+  fase?: 'coleta' | 'transito';
 }
 
 /** Conferências do veículo contratado antes da coleta (vermelho até marcar, verde depois). */
