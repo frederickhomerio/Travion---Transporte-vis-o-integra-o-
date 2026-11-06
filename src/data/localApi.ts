@@ -83,6 +83,7 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['ind.pos_entrega', 'Industrializado', 'Registrar canhotos, conferir comprovante e encerrar viagens'],
   ['ind.financeiro', 'Industrializado', 'Ver e lançar valores da viagem e a margem final'],
   ['ind.clientes', 'Industrializado', 'Gerenciar a lista de clientes do Industrializado'],
+  ['ind.meta', 'Industrializado', 'Definir a meta diária de cargas a retirar'],
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
 
 /** Mesma matriz inicial de supabase/migrations/20261026000200_permissoes.sql */
@@ -93,7 +94,7 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
     'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver',
     'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote',
-    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes'],
+    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
@@ -112,7 +113,7 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
     'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar',
     'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila',
-    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes'],
+    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
   consulta: ['embarques.ver'],
   // Industrializado: só o módulo, sem Lista de Fretes nem outros centros de custo.
   ind_embarque: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.financeiro', 'ind.clientes'],
@@ -448,7 +449,7 @@ export function criarLocalApi(): Api {
   if (!db.perfilCentros) { migrarCentros(db); gravarStorage(CHAVE, JSON.stringify(db)); }
   // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
   for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote', 'embarques.corrigir_lote_pc_tabela',
-    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes'] as Permissao[]) {
+    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'] as Permissao[]) {
     if (db.papelPermissoes.some((x) => x.chave === nova)) continue;
     for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) if (ps.includes(nova)) db.papelPermissoes.push({ papel: papel as Papel, chave: nova });
     // Migração 2800: o Coordenador Comercial passa a editar o lote inteiro.

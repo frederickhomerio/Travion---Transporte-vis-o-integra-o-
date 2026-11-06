@@ -23,7 +23,7 @@ export type Permissao =
   | 'cadastro.solicitar' | 'cadastro.ver' | 'permissoes.gerenciar' | 'analise.operacional' | 'analise.fila'
   | 'estadia.solicitar' | 'estadia.ver' | 'estadia.reabrir' | 'usuarios.inativar' | 'usuarios.excluir'
   | 'ind.pagina' | 'ind.lancar' | 'ind.avancar' | 'ind.voltar' | 'ind.cancelar' | 'ind.emissao' | 'ind.ocorrencias'
-  | 'ind.ocorrencias_aprovar' | 'ind.pos_entrega' | 'ind.financeiro' | 'ind.clientes';
+  | 'ind.ocorrencias_aprovar' | 'ind.pos_entrega' | 'ind.financeiro' | 'ind.clientes' | 'ind.meta';
 
 export interface Filial { id: string; nome: string; codigo: string | null; supervisor?: string | null; centro_custo_id?: string | null; ativo: boolean; is_demo: boolean }
 export interface CentroCusto { id: string; nome: string; ativo: boolean; is_demo: boolean; acesso_total?: boolean }

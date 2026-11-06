@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, EstadoVazio, Modal, Segmentado } from '../components/ui';
-import { fmtDataHora, fmtPct, fmtReais } from '../lib/formato';
+import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
 import { normalizar } from '../lib/texto';
 import type { Permissao } from '../types';
 import {
@@ -12,8 +12,8 @@ import {
 } from './componentes';
 import { restaurarPrevia, useInd } from './dados';
 import {
-  alertaCanhoto, alertaCombinado, calcularMargem, codigoViagem, META_MARGEM_PCT, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
-  PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento,
+  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
+  PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, retiradasDoDia, type NivelAlerta, type QuadrosPainel,
 } from './regras';
 import {
   ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_TIPO_CARGA,
@@ -42,115 +42,183 @@ const ativa = (v: ViagemInd) => v.etapa !== 'encerrada' && v.etapa !== 'cancelad
 // Painel (torre de controle)
 // ===========================================================================
 export function PainelInd() {
-  const { viagens, ocorrencias, clientePorId, pode } = useInd();
+  const { viagens, ocorrencias, clientePorId, metas, acoes, pode } = useInd();
+  const exec = useExecutar();
+  const [sel, setSel] = useState<ChaveQuadro | null>(null);
   const [aberta, setAberta] = useState<string | null>(null);
-  const abertas = viagens.filter(ativa);
-  const combinados = abertas.filter((v) => ['aviso', 'atraso'].includes(alertaCombinado(v).nivel))
-    .sort((a, b) => (alertaCombinado(a).minutos ?? 0) - (alertaCombinado(b).minutos ?? 0));
-  const ocAbertas = ocorrencias.filter((o) => o.situacao === 'aberta');
-  const ocCarregado = ocAbertas.filter((o) => o.carga === 'carregado');
-  const canhotos = viagens.filter((v) => v.etapa === 'entregue' && alertaCanhoto(v).nivel === 'atraso');
-  const hoje = new Date().toDateString();
-  const agendaHoje = abertas.flatMap((v) => v.paradas.filter((p) => p.agendado_para && new Date(p.agendado_para).toDateString() === hoje && p.situacao !== 'concluida').map((p) => ({ v, p })))
-    .sort((a, b) => Date.parse(a.p.agendado_para!) - Date.parse(b.p.agendado_para!));
-  const emissao = viagens.filter((v) => v.etapa === 'carregada');
-  const comMargem = viagens.filter((v) => v.etapa === 'entregue' || v.etapa === 'encerrada');
-  const tot = comMargem.reduce((a, v) => { const m = calcularMargem(v, ocorrencias); return { r: a.r + m.receita, d: a.d + m.despesa }; }, { r: 0, d: 0 });
-  const pct = tot.r > 0 ? ((tot.r - tot.d) / tot.r) * 100 : null;
-  const abaixo = comMargem.filter((v) => calcularMargem(v, ocorrencias).abaixoMeta);
+  const [modal, setModal] = useState<{ tipo: 'combinado' | 'ocorrencia' | 'emissao'; v: ViagemInd } | null>(null);
+  const q = quadrosPainel(viagens, ocorrencias);
+  const cont = (vs: ViagemInd[], f: (v: ViagemInd) => NivelAlerta) => {
+    const c: Partial<Record<NivelAlerta, number>> = {};
+    for (const v of vs) { const n = f(v); c[n] = (c[n] ?? 0) + 1; }
+    return c;
+  };
+  const corContratado = (v: ViagemInd) => alertaCombinado(v).nivel;
+  const corTransito = (v: ViagemInd) => alertaDescarga(v).nivel;
+  const quadros: Array<{ k: ChaveQuadro; titulo: string; desc: string; vs: ViagemInd[]; cores?: Partial<Record<NivelAlerta, number>>; ordem?: NivelAlerta[] }> = [
+    { k: 'disponiveis', titulo: 'Cargas Disponíveis', desc: 'Lançadas e ainda sem placa: disponíveis para contratação', vs: q.disponiveis },
+    { k: 'contratados', titulo: 'Veículos Contratados', desc: 'Placa vinculada, indo para o carregamento', vs: q.contratados, cores: cont(q.contratados, corContratado), ordem: ['atraso', 'laranja', 'aviso', 'ok', 'neutro'] },
+    { k: 'emissao', titulo: 'Aguardando Emissão', desc: 'Carregados: informar CT-e, MDF-e, NF (e PO quando exigido)', vs: q.emissao },
+    { k: 'transito', titulo: 'Veículos em Trânsito', desc: 'Tracking até a chegada no cliente', vs: q.transito, cores: cont(q.transito, corTransito), ordem: ['atraso', 'aviso', 'ok', 'neutro'] },
+    { k: 'marcados', titulo: 'Veículos Marcados', desc: 'No local do cliente para descarga', vs: q.marcados },
+    { k: 'comOcorrencia', titulo: 'Finalizados com Ocorrência', desc: 'Entregues com ocorrência ainda pendente (sem ocorrência, saem do painel)', vs: q.comOcorrencia },
+  ];
+  const atual = quadros.find((x) => x.k === sel) ?? null;
 
   return (
     <Pagina titulo="Painel Industrializado">
-      <div className="kpis">
-        <Kpi rot="Viagens em andamento" val={abertas.length} />
-        <Kpi rot="Combinados em alerta" val={combinados.length} nivel={combinados.some((v) => alertaCombinado(v).nivel === 'atraso') ? 'atraso' : combinados.length ? 'aviso' : 'ok'} />
-        <Kpi rot="Aguardando emissão" val={emissao.length} nivel={emissao.length ? 'aviso' : 'ok'} />
-        <Kpi rot="Ocorrências com carga no veículo" val={ocCarregado.length} nivel={ocCarregado.length ? 'aviso' : 'ok'} />
-        <Kpi rot={`Canhotos com mais de ${PRAZO_CANHOTO_DIAS} dias`} val={canhotos.length} nivel={canhotos.length ? 'atraso' : 'ok'} />
-        {pode('ind.financeiro') && <Kpi rot="Margem das entregues" val={fmtPct(pct)} sub={`meta ${META_MARGEM_PCT}% · ${fmtReais(tot.r - tot.d, 0)}`} nivel={pct !== null && pct < META_MARGEM_PCT ? 'atraso' : 'ok'} />}
+      <div className="ind-quadros">
+        {quadros.map((x) => {
+          const pior = x.ordem?.find((n) => n !== 'neutro' && x.cores?.[n]) ?? (x.vs.length ? 'info' : 'vazio');
+          return (
+            <button key={x.k} type="button" className={`cartao ind-quadro-btn ${pior}${sel === x.k ? ' selecionado' : ''}`} aria-pressed={sel === x.k} onClick={() => setSel(sel === x.k ? null : x.k)}>
+              <span className="rot">{x.titulo}</span>
+              <span className="ind-kpi-val num">{x.vs.length}</span>
+              {x.ordem ? (
+                <span className="ind-cores">{x.ordem.filter((n) => x.cores?.[n]).map((n) => <span key={n} className={`ind-chip ${n}`}>{x.cores![n]} {ROTULO_COR[x.k === 'transito' ? 'transito' : 'contratado'][n]}</span>)}</span>
+              ) : <span className="suave pequeno">{x.desc}</span>}
+              <span className="ind-entrar">{sel === x.k ? 'Fechar lista' : 'Ver lista →'}</span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="ind-grade2">
-        <Quadro titulo="Combinados com motorista em alerta" vazio="Nenhum combinado em alerta.">
-          {combinados.map((v) => (
-            <button key={v.id} className="ind-item" onClick={() => setAberta(v.id)}>
-              <span><strong>{codigoViagem(v.codigo)}</strong> {clientePorId[v.cliente_id]?.nome} · {v.motorista}</span>
-              <ChipCombinado v={v} />
-            </button>
-          ))}
-        </Quadro>
-        <Quadro titulo="Agendamentos de hoje" vazio="Nenhum agendamento para hoje.">
-          {agendaHoje.map(({ v, p }) => (
-            <button key={p.id} className="ind-item" onClick={() => setAberta(v.id)}>
-              <span><strong>{new Date(p.agendado_para!).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong> {p.tipo === 'coleta' ? 'Coleta' : 'Entrega'} · {p.local} ({p.cidade}/{p.uf})</span>
-              <span className="suave pequeno">{codigoViagem(v.codigo)}{p.protocolo ? ` · ${p.protocolo}` : ''}</span>
-            </button>
-          ))}
-        </Quadro>
-        <Quadro titulo="Ocorrências abertas" vazio="Nenhuma ocorrência aberta.">
-          {[...ocCarregado, ...ocAbertas.filter((o) => o.carga === 'descarregado')].map((o) => {
-            const v = viagens.find((x) => x.id === o.viagem_id);
-            return (
-              <button key={o.id} className="ind-item" onClick={() => v && setAberta(v.id)}>
-                <span><strong className="mono">{o.codigo}</strong> {ROTULO_OCORRENCIA[o.tipo]} · {v ? codigoViagem(v.codigo) : ''} {v ? clientePorId[v.cliente_id]?.nome : ''}</span>
-                <ChipNivel nivel={o.carga === 'carregado' ? 'aviso' : 'ok'}>{o.carga === 'carregado' ? 'Carregado' : 'Descarregado'}</ChipNivel>
-              </button>
-            );
-          })}
-        </Quadro>
-        <Quadro titulo={`Canhotos vencidos (mais de ${PRAZO_CANHOTO_DIAS} dias)`} vazio="Nenhum canhoto vencido.">
-          {canhotos.map((v) => (
-            <button key={v.id} className="ind-item" onClick={() => setAberta(v.id)}>
-              <span><strong>{codigoViagem(v.codigo)}</strong> {clientePorId[v.cliente_id]?.nome}</span><ChipCanhoto v={v} />
-            </button>
-          ))}
-        </Quadro>
-        {pode('ind.financeiro') && (
-          <Quadro titulo={`Viagens abaixo da meta de ${META_MARGEM_PCT}%`} vazio="Todas as viagens entregues estão na meta.">
-            {abaixo.map((v) => {
-              const m = calcularMargem(v, ocorrencias);
-              return (
-                <button key={v.id} className="ind-item" onClick={() => setAberta(v.id)}>
-                  <span><strong>{codigoViagem(v.codigo)}</strong> {clientePorId[v.cliente_id]?.nome}</span>
-                  <ChipNivel nivel="atraso">{fmtPct(m.pct)} · {fmtReais(m.margem, 0)}</ChipNivel>
-                </button>
-              );
-            })}
-          </Quadro>
-        )}
-        <Quadro titulo="Viagens por etapa" vazio="">
-          <div className="ind-etapas">
-            {ETAPAS_FLUXO.slice(0, -1).map((e) => {
-              const n = abertas.filter((v) => v.etapa === e).length;
-              return <div key={e} className={n ? '' : 'zero'}><span>{ROTULO_ETAPA[e]}</span><strong className="num">{n}</strong></div>;
-            })}
-          </div>
-        </Quadro>
-      </div>
+      {atual && (
+        <section className="cartao ind-lista-quadro">
+          <div className="cartao-cab"><div><h2>{atual.titulo} ({atual.vs.length})</h2><div className="suave pequeno">{atual.desc}</div></div>
+            <button className="btn sutil peq" onClick={() => setSel(null)}>Fechar</button></div>
+          {atual.vs.length === 0 ? <div className="cartao-corpo suave">Nenhuma carga neste quadro.</div> : (
+            <div style={{ overflowX: 'auto' }}>
+              {atual.k === 'contratados' || atual.k === 'transito' ? (
+                (atual.ordem ?? []).filter((n) => atual.cores?.[n]).map((n) => {
+                  const vs = atual.vs.filter((v) => (atual.k === 'contratados' ? corContratado(v) : corTransito(v)) === n)
+                    .sort((a, b) => (atual.k === 'contratados' ? Date.parse(a.combinado?.para ?? '') - Date.parse(b.combinado?.para ?? '') : Date.parse(alertaDescarga(a).quando ?? '') - Date.parse(alertaDescarga(b).quando ?? '')));
+                  return (
+                    <div key={n} className={`ind-faixa ${n}`}>
+                      <h3><span className={`ind-chip ${n}`}>{ROTULO_COR[atual.k === 'transito' ? 'transito' : 'contratado'][n]}</span> <span className="suave pequeno">{vs.length}</span></h3>
+                      <TabelaQuadro k={atual.k} vs={vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={(v) => exec(() => acoes.registrarMarcou(v.id), 'Marcação registrada.')} pode={pode} />
+                    </div>
+                  );
+                })
+              ) : <TabelaQuadro k={atual.k} vs={atual.vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={() => undefined} pode={pode} />}
+            </div>
+          )}
+        </section>
+      )}
+
+      <MetaDia viagens={viagens} metas={metas} podeEditar={pode('ind.meta')} definir={(d, n) => exec(() => acoes.definirMeta(d, n), 'Meta salva.')} />
+
       <p className="suave pequeno" style={{ marginTop: 16 }}>
         Prévia com dados fictícios. <button className="btn sutil peq" onClick={() => restaurarPrevia()}>Restaurar dados da prévia</button>
       </p>
+      {modal?.tipo === 'combinado' && <ModalCombinado v={modal.v} aoFechar={() => setModal(null)} />}
+      {modal?.tipo === 'ocorrencia' && <ModalOcorrencia v={modal.v} aoFechar={() => setModal(null)} />}
+      {modal?.tipo === 'emissao' && <ModalEmissao v={modal.v} aoFechar={() => setModal(null)} />}
       {aberta && <DetalhesViagem id={aberta} aoFechar={() => setAberta(null)} />}
     </Pagina>
   );
 }
 
-function Kpi({ rot, val, sub, nivel }: { rot: string; val: ReactNode; sub?: string; nivel?: 'ok' | 'aviso' | 'atraso' }) {
+type ChaveQuadro = keyof QuadrosPainel;
+const ROTULO_COR: Record<'contratado' | 'transito', Partial<Record<NivelAlerta, string>>> = {
+  contratado: { atraso: 'Atrasados', laranja: 'Até 2 h para marcar', aviso: 'Mais de 2 h para marcar', ok: 'Marcados', neutro: 'Sem combinado' },
+  transito: { atraso: 'Descarga hoje', aviso: 'Descarga amanhã', ok: 'Descarga D+2 ou mais', neutro: 'Sem data de descarga' },
+};
+
+function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, pode }: {
+  k: ChaveQuadro; vs: ViagemInd[]; clientePorId: Record<string, ClienteInd>; ocorrencias: OcorrenciaInd[];
+  abrir: (id: string) => void; acao: (t: 'combinado' | 'ocorrencia' | 'emissao', v: ViagemInd) => void; marcou: (v: ViagemInd) => void; pode: (p: Permissao) => boolean;
+}) {
+  const cab: Record<ChaveQuadro, string[]> = {
+    disponiveis: ['Viagem', 'Cliente', 'Rota', 'Retirada prevista', 'Lançada'],
+    contratados: ['Viagem', 'Cliente', 'Motorista / placa', 'Combinado', 'Horário', 'Situação'],
+    emissao: ['Viagem', 'Cliente', 'Rota', 'Carregada há', 'PO'],
+    transito: ['Viagem', 'Cliente', 'Motorista / placa', 'Descarga', 'Previsão', 'Situação'],
+    marcados: ['Viagem', 'Cliente', 'Local da descarga', 'Chegou', 'No local há'],
+    comOcorrencia: ['Viagem', 'Cliente', 'Etapa', 'Ocorrências pendentes'],
+  };
+  const min = (iso: string | null) => (iso ? Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)) : null);
+  const tempo = (m: number | null) => (m === null ? '—' : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`);
   return (
-    <div className={`cartao kpi ind-kpi ${nivel ?? ''}`}>
-      <div className="rot">{rot}</div>
-      <div className="ind-kpi-val num">{val}</div>
-      {sub && <div className="suave pequeno">{sub}</div>}
-    </div>
+    <table className="tabela ind-tabela">
+      <thead><tr>{cab[k].map((c) => <th key={c}>{c}</th>)}<th /></tr></thead>
+      <tbody>{vs.map((v) => {
+        const cli = clientePorId[v.cliente_id];
+        const via = <td><button className="btn sutil peq" onClick={() => abrir(v.id)}><strong>{codigoViagem(v.codigo)}</strong></button><div className="suave pequeno">{ROTULO_TIPO_CARGA[v.tipo_carga]}</div></td>;
+        const mot = <td>{v.motorista ?? '—'}<div className="suave pequeno">{[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ')}</div></td>;
+        if (k === 'disponiveis') return (
+          <tr key={v.id}>{via}<td>{cli?.nome}</td><td><Rota v={v} /></td><td>{v.coleta_prevista ? fmtData(v.coleta_prevista) : '—'}</td><td className="pequeno">{fmtDataHora(v.criado_em)}</td>
+            <td>{pode('ind.lancar') && <button className="btn primario peq" onClick={() => abrir(v.id)}>Vincular placa</button>}</td></tr>
+        );
+        if (k === 'contratados') { const a = alertaCombinado(v); return (
+          <tr key={v.id}>{via}<td>{cli?.nome}</td>{mot}<td>{v.combinado?.o_que ?? '—'}<div className="suave pequeno">{ROTULO_ETAPA[v.etapa]}</div></td>
+            <td>{v.combinado ? fmtDataHora(v.combinado.para) : '—'}{v.combinado?.marcou_em && <div className="suave pequeno">marcou {fmtDataHora(v.combinado.marcou_em)}</div>}</td>
+            <td><ChipNivel nivel={a.nivel}>{a.texto}</ChipNivel></td>
+            <td style={{ whiteSpace: 'nowrap' }}>{pode('ind.avancar') && <>
+              {v.combinado && !v.combinado.marcou_em && <button className="btn primario peq" onClick={() => marcou(v)}>Marcou</button>}
+              <button className="btn peq" style={{ marginLeft: 4 }} onClick={() => acao('combinado', v)}>{v.combinado ? 'Alterar' : 'Combinado'}</button></>}</td></tr>
+        ); }
+        if (k === 'emissao') { const ini = [...v.historico].reverse().find((h) => h.acao.includes('→ Carregada'))?.em ?? null; return (
+          <tr key={v.id}>{via}<td>{cli?.nome}</td><td><Rota v={v} /></td><td>{tempo(min(ini))}</td>
+            <td>{cli?.exige_po ? (v.po ?? <span className="ind-falta">exigido</span>) : <span className="suave">não exige</span>}</td>
+            <td>{pode('ind.emissao') && <button className="btn primario peq" onClick={() => acao('emissao', v)}>Informar documentos</button>}</td></tr>
+        ); }
+        if (k === 'transito') { const a = alertaDescarga(v); const p = v.paradas.filter((x) => x.tipo === 'entrega' && x.situacao === 'pendente').sort((x, y) => x.ordem - y.ordem)[0]; return (
+          <tr key={v.id}>{via}<td>{cli?.nome}</td>{mot}<td>{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}{p?.protocolo && <div className="suave pequeno">protocolo {p.protocolo}</div>}</td>
+            <td>{a.quando ? fmtDataHora(a.quando) : '—'}</td><td><ChipNivel nivel={a.nivel}>{a.texto}</ChipNivel></td>
+            <td>{v.combinado && <ChipCombinado v={v} />}</td></tr>
+        ); }
+        if (k === 'marcados') { const p = v.paradas.find((x) => x.tipo === 'entrega' && (x.situacao === 'chegou' || x.situacao === 'em_operacao')); return (
+          <tr key={v.id}>{via}<td>{cli?.nome}</td><td>{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}<div className="suave pequeno">{p?.situacao === 'em_operacao' ? 'Descarregando' : 'Aguardando descarga'}</div></td>
+            <td>{p?.chegada_em ? fmtDataHora(p.chegada_em) : '—'}</td><td>{tempo(min(p?.chegada_em ?? null))}</td>
+            <td>{pode('ind.ocorrencias') && <button className="btn secundario peq" onClick={() => acao('ocorrencia', v)}>Ocorrência</button>}</td></tr>
+        ); }
+        const pend = ocorrencias.filter((o) => o.viagem_id === v.id && (o.situacao === 'aberta' || o.situacao === 'aprovada'));
+        return (
+          <tr key={v.id}>{via}<td>{cli?.nome}</td><td><ChipEtapa etapa={v.etapa} /></td>
+            <td>{pend.map((o) => <div key={o.id}><span className="mono">{o.codigo}</span> {ROTULO_OCORRENCIA[o.tipo]} · {ROTULO_SIT_OCORRENCIA[o.situacao]} <ChipNivel nivel={o.carga === 'carregado' ? 'aviso' : 'ok'}>{o.carga === 'carregado' ? 'Carregado' : 'Descarregado'}</ChipNivel></div>)}</td><td /></tr>
+        );
+      })}</tbody>
+    </table>
   );
 }
 
-function Quadro({ titulo, vazio, children }: { titulo: string; vazio: string; children: ReactNode }) {
-  const lista = Array.isArray(children) ? children.flat().filter(Boolean) : children ? [children] : [];
+function MetaDia({ viagens, metas, podeEditar, definir }: { viagens: ViagemInd[]; metas: Record<string, number>; podeEditar: boolean; definir: (d: string, n: number) => void }) {
+  const [data, setData] = useState(hojeSP());
+  const meta = metas[data] ?? null;
+  const [edit, setEdit] = useState<string | null>(null);
+  const r = retiradasDoDia(viagens, data);
+  const pct = meta ? (r.retiradas / meta) * 100 : null;
+  const cor = pct === null ? 'neutro' : pct <= 60 ? 'atraso' : pct <= 80 ? 'aviso' : 'ok';
+  const max = Math.max(meta ?? 0, r.previstas, r.retiradas, 1);
+  const barra = (rot: string, n: number, cls: string) => (
+    <div className="ind-barra"><span className="ind-barra-rot">{rot}</span><span className="ind-barra-trilho"><span className={`ind-barra-valor ${cls}`} style={{ width: `${(n / max) * 100}%` }} /></span><strong className="num">{n}</strong></div>
+  );
   return (
-    <section className="cartao">
-      <div className="cartao-cab"><h2>{titulo}</h2></div>
-      <div className="cartao-corpo ind-quadro">{lista.length ? children : <p className="suave" style={{ margin: 0 }}>{vazio}</p>}</div>
+    <section className="cartao" style={{ marginTop: 16 }}>
+      <div className="cartao-cab">
+        <div><h2>Cargas a retirar no dia × meta</h2><div className="suave pequeno">Pela retirada prevista de cada viagem. Retirada = passou de Carregando.</div></div>
+        <input className="entrada" type="date" value={data} onChange={(e) => setData(e.target.value || hojeSP())} style={{ width: 'auto' }} aria-label="Data" />
+      </div>
+      <div className="cartao-corpo ind-meta">
+        <div className="ind-meta-num">
+          <div><span className="rot">Meta do dia</span>
+            {edit !== null ? (
+              <span style={{ display: 'flex', gap: 6 }}><input className="entrada num" type="number" min={0} value={edit} onChange={(e) => setEdit(e.target.value)} style={{ width: 90 }} autoFocus />
+                <button className="btn primario peq" onClick={() => { definir(data, Number(edit)); setEdit(null); }}>Salvar</button></span>
+            ) : <strong className="ind-kpi-val num">{meta ?? '—'}{podeEditar && <button className="btn sutil peq" onClick={() => setEdit(String(meta ?? ''))}>Alterar</button>}</strong>}
+          </div>
+          <div><span className="rot">Programadas</span><strong className="ind-kpi-val num">{r.previstas}</strong></div>
+          <div><span className="rot">Retiradas</span><strong className="ind-kpi-val num">{r.retiradas}</strong></div>
+          <div><span className="rot">Atingido</span><strong className={`ind-kpi-val num ind-txt-${cor}`}>{fmtPct(pct, 0)}</strong>
+            <span className="suave pequeno">{meta !== null ? (meta - r.retiradas > 0 ? `faltam ${meta - r.retiradas}` : 'meta batida') : 'sem meta'}</span></div>
+        </div>
+        <div className="ind-barras">
+          {barra('Meta', meta ?? 0, 'meta')}
+          {barra('Programadas', r.previstas, 'prog')}
+          {barra('Retiradas', r.retiradas, cor)}
+        </div>
+      </div>
     </section>
   );
 }

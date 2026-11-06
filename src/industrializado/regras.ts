@@ -6,8 +6,8 @@ import {
 
 export const META_MARGEM_PCT = 12;
 export const PRAZO_CANHOTO_DIAS = 30;
-/** Antecedência do alerta do combinado com o motorista. */
-export const ALERTA_COMBINADO_MIN = 60;
+/** Laranja: faltam até 2 horas para o horário combinado e o veículo não marcou. */
+export const ALERTA_COMBINADO_MIN = 120;
 
 const H = 3600e3;
 const DIA = 24 * H;
@@ -47,18 +47,69 @@ export function calcularMargem(v: ViagemInd, ocorrencias: OcorrenciaInd[] = []):
 // Tracking: combinado entre funcionário e motorista
 // ---------------------------------------------------------------------------
 
-export type NivelAlerta = 'ok' | 'aviso' | 'atraso' | 'neutro';
+/** ok = verde, aviso = amarelo, laranja, atraso = vermelho, neutro = cinza. */
+export type NivelAlerta = 'ok' | 'aviso' | 'laranja' | 'atraso' | 'neutro';
 export interface AlertaCombinado { nivel: NivelAlerta; texto: string; minutos: number | null }
 
-/** Verde quando o veículo marcou; amarelo de 1 hora antes até o horário; vermelho depois do horário sem marcar. */
+/** Verde: marcou. Amarelo: faltam mais de 2 horas. Laranja: faltam até 2 horas. Vermelho: passou do horário sem marcar. */
 export function alertaCombinado(v: Pick<ViagemInd, 'combinado'>, agora: Date = new Date()): AlertaCombinado {
   const c = v.combinado;
   if (!c) return { nivel: 'neutro', texto: 'Sem combinado', minutos: null };
-  if (c.marcou_em) return { nivel: 'ok', texto: 'Veículo marcou', minutos: null };
+  if (c.marcou_em) return { nivel: 'ok', texto: 'Marcado', minutos: null };
   const faltam = Math.round((Date.parse(c.para) - agora.getTime()) / 60000);
-  if (faltam < 0) return { nivel: 'atraso', texto: `Não marcou, ${duracao(-faltam)} de atraso`, minutos: faltam };
-  if (faltam <= ALERTA_COMBINADO_MIN) return { nivel: 'aviso', texto: `Faltam ${duracao(faltam)} e o veículo não marcou`, minutos: faltam };
-  return { nivel: 'neutro', texto: `Combinado em ${duracao(faltam)}`, minutos: faltam };
+  if (faltam < 0) return { nivel: 'atraso', texto: `Atrasado ${duracao(-faltam)}`, minutos: faltam };
+  if (faltam <= ALERTA_COMBINADO_MIN) return { nivel: 'laranja', texto: `Faltam ${duracao(faltam)}`, minutos: faltam };
+  return { nivel: 'aviso', texto: `Faltam ${duracao(faltam)}`, minutos: faltam };
+}
+
+// ---------------------------------------------------------------------------
+// Descarga (veículos em trânsito): vermelho hoje, amarelo amanhã, verde D+2 ou mais
+// ---------------------------------------------------------------------------
+
+const diaLocal = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400e3;
+
+export function alertaDescarga(v: Pick<ViagemInd, 'paradas'>, agora: Date = new Date()): { nivel: NivelAlerta; texto: string; quando: string | null } {
+  const p = v.paradas.filter((x) => x.tipo === 'entrega' && x.situacao !== 'concluida' && x.situacao !== 'recusada')
+    .sort((a, b) => a.ordem - b.ordem)[0];
+  if (!p?.agendado_para) return { nivel: 'neutro', texto: 'Sem data de descarga', quando: null };
+  const d = diaLocal(new Date(p.agendado_para)) - diaLocal(agora);
+  if (d <= 0) return { nivel: 'atraso', texto: d < 0 ? `Descarga atrasada (${-d} d)` : 'Descarga hoje', quando: p.agendado_para };
+  if (d === 1) return { nivel: 'aviso', texto: 'Descarga amanhã', quando: p.agendado_para };
+  return { nivel: 'ok', texto: `Descarga em D+${d}`, quando: p.agendado_para };
+}
+
+// ---------------------------------------------------------------------------
+// Quadros do Painel
+// ---------------------------------------------------------------------------
+
+export interface QuadrosPainel {
+  disponiveis: ViagemInd[]; contratados: ViagemInd[]; emissao: ViagemInd[]; transito: ViagemInd[]; marcados: ViagemInd[]; comOcorrencia: ViagemInd[];
+}
+
+/** Uma viagem fica em um só quadro. Finalizadas sem ocorrência pendente saem do painel. */
+export function quadrosPainel(viagens: ViagemInd[], ocorrencias: OcorrenciaInd[]): QuadrosPainel {
+  const q: QuadrosPainel = { disponiveis: [], contratados: [], emissao: [], transito: [], marcados: [], comOcorrencia: [] };
+  const pendente = new Set(ocorrencias.filter((o) => o.situacao === 'aberta' || o.situacao === 'aprovada').map((o) => o.viagem_id));
+  for (const v of viagens) {
+    const noCliente = v.paradas.some((p) => p.tipo === 'entrega' && (p.situacao === 'chegou' || p.situacao === 'em_operacao'));
+    switch (v.etapa) {
+      case 'lancada': (v.placa_cavalo ? q.contratados : q.disponiveis).push(v); break;
+      case 'contratado': case 'coleta_agendada': case 'carregando': q.contratados.push(v); break;
+      case 'carregada': q.emissao.push(v); break;
+      case 'documentada': q.transito.push(v); break;
+      case 'transito': case 'entregas': (noCliente ? q.marcados : q.transito).push(v); break;
+      case 'entregue': case 'encerrada': if (pendente.has(v.id)) q.comOcorrencia.push(v); break;
+      default: break;
+    }
+  }
+  return q;
+}
+
+/** Meta do dia: cargas com coleta prevista para a data e quantas já foram retiradas (passaram de Carregando). */
+export function retiradasDoDia(viagens: ViagemInd[], data: string): { previstas: number; retiradas: number } {
+  const doDia = viagens.filter((v) => v.coleta_prevista === data && v.etapa !== 'cancelada');
+  const depois = ETAPAS_FLUXO.indexOf('carregada');
+  return { previstas: doDia.length, retiradas: doDia.filter((v) => ETAPAS_FLUXO.indexOf(v.etapa) >= depois).length };
 }
 
 export function duracao(min: number): string {

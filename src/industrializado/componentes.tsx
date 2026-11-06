@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { Alerta, Gaveta, Modal, useAviso } from '../components/ui';
-import { fmtDataHora, fmtPct, fmtReais } from '../lib/formato';
+import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
 import { useInd, type NovaViagem } from './dados';
 import {
   alertaCanhoto, alertaCombinado, calcularMargem, codigoViagem, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
@@ -218,12 +218,12 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
   const exec = useExecutar();
   const ativos = clientes.filter((c) => c.ativo);
   const [d, setD] = useState<NovaViagem>(() => v ? {
-    cliente_id: v.cliente_id, tipo_carga: v.tipo_carga, pedido: v.pedido ?? '', po: v.po ?? '', frota: v.frota, tipo_veiculo: v.tipo_veiculo,
+    cliente_id: v.cliente_id, tipo_carga: v.tipo_carga, pedido: v.pedido ?? '', po: v.po ?? '', coleta_prevista: v.coleta_prevista ?? '', frota: v.frota, tipo_veiculo: v.tipo_veiculo,
     placa_cavalo: v.placa_cavalo ?? '', placa_carreta: v.placa_carreta ?? '', motorista: v.motorista ?? '', motorista_cpf: v.motorista_cpf ?? '',
     motorista_telefone: v.motorista_telefone ?? '', paradas: v.paradas.map((p) => ({ ...p, agendado_para: p.agendado_para ? localInput(new Date(p.agendado_para)) : null })),
     valores: { ...v.valores }, observacao: v.observacao ?? '',
   } : {
-    cliente_id: '', tipo_carga: 'paletizada', pedido: '', po: '', frota: 'terceiro', tipo_veiculo: 'Carreta', placa_cavalo: '', placa_carreta: '',
+    cliente_id: '', tipo_carga: 'paletizada', pedido: '', po: '', coleta_prevista: hojeSP(), frota: 'terceiro', tipo_veiculo: 'Carreta', placa_cavalo: '', placa_carreta: '',
     motorista: '', motorista_cpf: '', motorista_telefone: '', paradas: [paradaVazia('coleta', 1, false), paradaVazia('entrega', 2, false)],
     valores: { ...VALORES_ZERO }, observacao: '',
   });
@@ -273,6 +273,8 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
             <label className="campo"><span>PO</span><input className="entrada" value={d.po} onChange={(e) => set('po', e.target.value)} maxLength={40} />
               <small>Obrigatório depois que o veículo carregar.</small></label>
           )}
+          <label className="campo"><span>Retirada prevista</span><input className="entrada" type="date" value={d.coleta_prevista} onChange={(e) => set('coleta_prevista', e.target.value)} />
+            <small>Conta na meta de cargas do dia.</small></label>
           <label className="campo"><span>Filial</span><input className="entrada" value={FILIAL_IND} disabled /></label>
         </div>
 
@@ -409,6 +411,7 @@ export function DetalhesViagem({ id, aoFechar }: { id: string; aoFechar: () => v
       <Secao titulo="Carga">
         <dl className="ind-dl">
           <dt>Pedido</dt><dd>{v.pedido ?? '—'}</dd>
+          <dt>Retirada prevista</dt><dd>{v.coleta_prevista ? fmtData(v.coleta_prevista) : '—'}</dd>
           {cli?.exige_po && <><dt>PO</dt><dd>{v.po ?? <span className="ind-falta">pendente</span>}</dd></>}
           <dt>Rota</dt><dd><Rota v={v} /></dd>
           <dt>Veículo</dt><dd>{v.tipo_veiculo} · {v.frota === 'frota' ? 'Frota própria' : 'Terceiro'} · {[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ') || '—'}</dd>

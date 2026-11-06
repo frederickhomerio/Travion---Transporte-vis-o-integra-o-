@@ -4,6 +4,7 @@
 
 import { useMemo, useSyncExternalStore } from 'react';
 import { useApp } from '../data/store';
+import { hojeSP, somarDias } from '../lib/formato';
 import type { Permissao } from '../types';
 import { codigoOcorrencia, etapaAnterior, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, proximaEtapa } from './regras';
 import {
@@ -11,15 +12,20 @@ import {
   type CargaOcorrencia, type ClienteInd, type OcorrenciaInd, type ParadaInd, type SituacaoParada, type TipoOcorrencia, type ValoresInd, type ViagemInd,
 } from './tipos';
 
-export interface EstadoInd { versao: 1; seq: number; seqOc: number; clientes: ClienteInd[]; viagens: ViagemInd[]; ocorrencias: OcorrenciaInd[] }
+export interface EstadoInd {
+  versao: 1; seq: number; seqOc: number; clientes: ClienteInd[]; viagens: ViagemInd[]; ocorrencias: OcorrenciaInd[];
+  /** Meta diária de cargas a retirar, por data (AAAA-MM-DD). */
+  metas: Record<string, number>;
+}
 
-const CHAVE = 'travion-industrializado-previa-v1';
+const CHAVE = 'travion-industrializado-previa-v2';
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const iso = (d: Date) => d.toISOString();
 const emMin = (m: number) => iso(new Date(Date.now() + m * 60e3));
 const emDias = (d: number, h = 0) => iso(new Date(Date.now() + d * 86400e3 + h * 3600e3));
 
 function semear(): EstadoInd {
+  const hoje = hojeSP();
   const cli = (nome: string, cnpj: string, exige_agendamento: boolean, exige_po: boolean): ClienteInd =>
     ({ id: uid(), nome, cnpj, contato: null, telefone: null, exige_agendamento, exige_po, ativo: true });
   const clientes = [
@@ -38,6 +44,7 @@ function semear(): EstadoInd {
   let n = 0;
   const v = (cliente: number, etapa: ViagemInd['etapa'], p: Partial<ViagemInd>): ViagemInd => ({
     id: uid(), codigo: ++n, cliente_id: clientes[cliente].id, tipo_carga: 'paletizada', pedido: `PED-${5100 + n}`, po: null, etapa,
+    coleta_prevista: ['entregue', 'encerrada', 'transito', 'entregas'].includes(etapa) ? somarDias(hoje, -2) : hoje,
     frota: 'terceiro', tipo_veiculo: 'Carreta', placa_cavalo: null, placa_carreta: null, motorista: null, motorista_cpf: null, motorista_telefone: null,
     paradas: [], valores: val(0, 0), combinado: null, emissao_assumida_por: null, emissao_assumida_em: null, cte: null, mdfe: null, nfs: null,
     entregue_em: null, canhoto_digital_em: null, canhoto_fisico_em: null, comprovante_ok_em: null, reversa_de: null, observacao: null,
@@ -68,6 +75,18 @@ function semear(): EstadoInd {
     v(2, 'entregue', { ...mot(1), cte: '35140', nfs: '30221', entregue_em: emDias(-6), canhoto_digital_em: emDias(-6), canhoto_fisico_em: emDias(-1), paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null, 'concluida'), par(2, 'entrega', 'Distribuidora Oeste', 'Jataí', 'GO', null, 'concluida')], valores: val(4800, 4400) }),
     v(4, 'encerrada', { ...mot(2), cte: '35090', nfs: '20110', entregue_em: emDias(-20), canhoto_digital_em: emDias(-20), canhoto_fisico_em: emDias(-12), comprovante_ok_em: emDias(-12), paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Cliente final', 'Catalão', 'GO', null, 'concluida')], valores: val(3600, 3050, { pedagio: 90 }) }),
   ];
+  // Mais cargas para os quadros do Painel (disponíveis, contratados em cada cor, trânsito e marcados).
+  viagens.push(
+    v(3, 'lancada', { tipo_carga: 'fracionada', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', null), par(2, 'entrega', 'Atacado Norte', 'Palmas', 'TO', emDias(2))], valores: val(9800, 8300) }),
+    v(4, 'lancada', { paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null), par(2, 'entrega', 'Cliente final', 'Goianésia', 'GO', null)], valores: val(2900, 2450) }),
+    v(1, 'contratado', { ...mot(3), placa_cavalo: 'SDF4G55', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null), par(2, 'entrega', 'Loja Sul', 'Caldas Novas', 'GO', emDias(1))], valores: val(3800, 3200),
+      combinado: { o_que: 'Chegada no CD para carregar', para: emMin(200), marcou_em: null, registrado_por: '[DEMO] Equipe de embarque' } }),
+    v(2, 'coleta_agendada', { ...mot(6), placa_cavalo: 'HJK7L88', paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', emMin(30), 'chegou'), par(2, 'entrega', 'Distribuidora Sul', 'Itumbiara', 'GO', null)], valores: val(4100, 3600),
+      combinado: { o_que: 'Chegada na fábrica', para: emMin(-10), marcou_em: emMin(-15), registrado_por: '[DEMO] Equipe de embarque' } }),
+    v(0, 'transito', { ...mot(4), placa_cavalo: 'PLM2N44', po: '4500233001', cte: '35210', nfs: '99102', paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Terminal Rondonópolis', 'Rondonópolis', 'MT', emDias(1, 1), 'pendente', 'CG-5600')], valores: val(11200, 9600, { pedagio: 480 }) }),
+    v(1, 'transito', { ...mot(0), placa_cavalo: 'QAZ5W66', cte: '35211', nfs: '77455', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Belém', 'Belém', 'PA', emDias(3), 'pendente', 'AUR-2290')], valores: val(18900, 16100, { pedagio: 900 }) }),
+    v(4, 'entregas', { ...mot(5), placa_cavalo: 'WSX8E99', cte: '35199', nfs: '20155', paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Cliente final', 'Anápolis', 'GO', emMin(-60), 'chegou')], valores: val(2600, 2200) }),
+  );
   const o = (k: number, vi: number, tipo: TipoOcorrencia, carga: CargaOcorrencia, desc: string, vm: number, vc: number, situacao: OcorrenciaInd['situacao'], avaria = false): OcorrenciaInd => ({
     id: uid(), codigo: codigoOcorrencia(k), viagem_id: viagens[vi].id, parada_id: (viagens[vi].paradas.find((x) => x.tipo === 'entrega' && x.situacao === 'em_operacao') ?? viagens[vi].paradas.find((x) => x.tipo === 'entrega'))?.id ?? null,
     tipo, carga, avaria, descricao: desc, valor_motorista: vm, valor_cliente: vc, situacao, aberta_em: emMin(-60 * k), aberta_por: '[DEMO] Equipe de pós-embarque',
@@ -80,7 +99,7 @@ function semear(): EstadoInd {
     o(3, 8, 'devolucao', 'descarregado', 'Devolução parcial de 4 paletes, avaria na embalagem', 600, 800, 'aprovada', true),
     o(4, 9, 'retrabalho', 'descarregado', 'Repaletização exigida pelo cliente', 200, 300, 'paga'),
   ];
-  return { versao: 1, seq: n, seqOc: ocorrencias.length, clientes, viagens, ocorrencias };
+  return { versao: 1, seq: n, seqOc: ocorrencias.length, clientes, viagens, ocorrencias, metas: { [hoje]: 8 } };
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +124,7 @@ export function restaurarPrevia() { gravar(semear()); }
 // Ações (cada uma confere a permissão e grava o histórico da carga)
 // ---------------------------------------------------------------------------
 export interface NovaViagem {
-  cliente_id: string; tipo_carga: ViagemInd['tipo_carga']; pedido: string; po: string; frota: ViagemInd['frota'];
+  cliente_id: string; tipo_carga: ViagemInd['tipo_carga']; pedido: string; po: string; frota: ViagemInd['frota']; coleta_prevista: string;
   tipo_veiculo: string; placa_cavalo: string; placa_carreta: string; motorista: string; motorista_cpf: string; motorista_telefone: string;
   paradas: Array<Omit<ParadaInd, 'id' | 'situacao' | 'chegada_em' | 'inicio_em' | 'fim_em'> & { id?: string }>;
   valores: ValoresInd; observacao: string;
@@ -158,6 +177,12 @@ export function useInd() {
     };
 
     return {
+      definirMeta(data: string, n: number) {
+        exigir('ind.meta');
+        if (!Number.isInteger(n) || n < 0 || n > 999) falha('Informe a meta em número de cargas (0 a 999).');
+        gravar({ ...estado, metas: { ...estado.metas, [data]: n } });
+      },
+
       salvarCliente(c: Omit<ClienteInd, 'id'> & { id?: string }) {
         exigir('ind.clientes');
         if (!c.nome.trim()) falha('Informe o nome do cliente.');
@@ -169,7 +194,7 @@ export function useInd() {
         exigir('ind.lancar');
         validarNova(d);
         const v: ViagemInd = {
-          id: uid(), codigo: estado.seq + 1, cliente_id: d.cliente_id, tipo_carga: d.tipo_carga, pedido: t(d.pedido), po: t(d.po), etapa: 'lancada',
+          id: uid(), codigo: estado.seq + 1, cliente_id: d.cliente_id, tipo_carga: d.tipo_carga, pedido: t(d.pedido), po: t(d.po), etapa: 'lancada', coleta_prevista: d.coleta_prevista || null,
           frota: d.frota, tipo_veiculo: d.tipo_veiculo, placa_cavalo: t(d.placa_cavalo)?.toUpperCase() ?? null, placa_carreta: t(d.placa_carreta)?.toUpperCase() ?? null,
           motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone),
           paradas: paradasNovas(d.paradas), valores: pode('ind.financeiro') ? d.valores : { ...VALORES_ZERO }, combinado: null,
@@ -190,7 +215,7 @@ export function useInd() {
         const mudouValor = (Object.keys(valores) as Array<keyof ValoresInd>).filter((k) => valores[k] !== v.valores[k]);
         if (mudouValor.length && v.etapa !== 'lancada' && !motivo.trim()) falha('Informe o motivo: valores alterados depois do lançamento ficam na auditoria.');
         mudar(id, 'Viagem editada', () => ({
-          cliente_id: d.cliente_id, tipo_carga: d.tipo_carga, pedido: t(d.pedido), po: t(d.po), frota: d.frota, tipo_veiculo: d.tipo_veiculo,
+          cliente_id: d.cliente_id, tipo_carga: d.tipo_carga, pedido: t(d.pedido), po: t(d.po), coleta_prevista: d.coleta_prevista || null, frota: d.frota, tipo_veiculo: d.tipo_veiculo,
           placa_cavalo: t(d.placa_cavalo)?.toUpperCase() ?? null, placa_carreta: t(d.placa_carreta)?.toUpperCase() ?? null,
           motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone),
           paradas: paradasNovas(d.paradas, v.paradas), valores, observacao: t(d.observacao),
@@ -354,7 +379,7 @@ export function useInd() {
         const r: ViagemInd = {
           ...v, id: uid(), codigo: estado.seq + 1, etapa: 'lancada', reversa_de: v.id, po: null, pedido: v.pedido,
           paradas: inv.map((p, i) => ({ ...p, id: uid(), ordem: i + 1, tipo: i === 0 ? 'coleta' : i === inv.length - 1 ? 'entrega' : p.tipo, situacao: 'pendente', chegada_em: null, inicio_em: null, fim_em: null, agendado_para: null, protocolo: null, exige_agendamento: false })),
-          valores: { ...VALORES_ZERO }, combinado: null, emissao_assumida_por: null, emissao_assumida_em: null, cte: null, mdfe: null, nfs: null,
+          valores: { ...VALORES_ZERO }, combinado: null, emissao_assumida_por: null, emissao_assumida_em: null, cte: null, mdfe: null, nfs: null, coleta_prevista: null,
           entregue_em: null, canhoto_digital_em: null, canhoto_fisico_em: null, comprovante_ok_em: null, observacao: `Reversa da viagem IND-${String(v.codigo).padStart(4, '0')}: ${motivo.trim()}`,
           criado_em: agora(), criado_por: usuario, historico: [{ em: agora(), usuario, acao: 'Reversa lançada', detalhe: `Origem: IND-${String(v.codigo).padStart(4, '0')}`, motivo: motivo.trim() }],
         };

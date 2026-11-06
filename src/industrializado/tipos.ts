@@ -52,6 +52,8 @@ export interface ViagemInd {
   id: string; codigo: number; cliente_id: string; tipo_carga: TipoCarga;
   /** Pedido do cliente (todo cliente tem). */
   pedido: string | null;
+  /** Dia previsto para retirar a carga (AAAA-MM-DD), base da meta diária. */
+  coleta_prevista: string | null;
   /** PO (clientes que exigem, como a Cargill): obrigatório depois de carregado. */
   po: string | null;
   etapa: EtapaInd;

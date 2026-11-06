@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { alertaCanhoto, alertaCombinado, calcularMargem, pendenciasAvanco, pendenciasEncerrar } from './regras';
+import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, pendenciasAvanco, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
 import { VALORES_ZERO, type ClienteInd, type OcorrenciaInd, type ViagemInd } from './tipos';
 
 const base: ViagemInd = {
-  id: 'v1', codigo: 1, cliente_id: 'c1', tipo_carga: 'paletizada', pedido: 'P1', po: null, etapa: 'lancada', frota: 'terceiro',
+  id: 'v1', codigo: 1, cliente_id: 'c1', tipo_carga: 'paletizada', pedido: 'P1', coleta_prevista: null, po: null, etapa: 'lancada', frota: 'terceiro',
   tipo_veiculo: 'Carreta', placa_cavalo: null, placa_carreta: null, motorista: null, motorista_cpf: null, motorista_telefone: null,
   paradas: [], valores: { ...VALORES_ZERO }, combinado: null, emissao_assumida_por: null, emissao_assumida_em: null,
   cte: null, mdfe: null, nfs: null, entregue_em: null, canhoto_digital_em: null, canhoto_fisico_em: null, comprovante_ok_em: null,
@@ -49,9 +49,10 @@ describe('margem final', () => {
 describe('combinado com o motorista', () => {
   const agora = new Date('2026-11-06T12:00:00Z');
   const com = (para: string, marcou: string | null = null) => ({ combinado: { o_que: 'Chegada na coleta', para, marcou_em: marcou, registrado_por: 'x' } });
-  it('alerta 1 hora antes', () => {
-    expect(alertaCombinado(com('2026-11-06T13:30:00Z'), agora).nivel).toBe('neutro');
-    expect(alertaCombinado(com('2026-11-06T13:00:00Z'), agora).nivel).toBe('aviso');
+  it('vermelho, laranja (até 2 h), amarelo (mais de 2 h) e verde', () => {
+    expect(alertaCombinado(com('2026-11-06T14:30:00Z'), agora).nivel).toBe('aviso');
+    expect(alertaCombinado(com('2026-11-06T13:59:00Z'), agora).nivel).toBe('laranja');
+    expect(alertaCombinado({ combinado: null }, agora).nivel).toBe('neutro');
     expect(alertaCombinado(com('2026-11-06T11:50:00Z'), agora).nivel).toBe('atraso');
     expect(alertaCombinado(com('2026-11-06T11:50:00Z', '2026-11-06T11:45:00Z'), agora).nivel).toBe('ok');
   });
@@ -87,5 +88,34 @@ describe('avanço', () => {
     const v = { ...base, etapa: 'entregue' as const, entregue_em: '2026-11-01T00:00:00Z' };
     expect(pendenciasEncerrar(v, [oc({ situacao: 'aberta' })])).toHaveLength(3);
     expect(pendenciasEncerrar({ ...v, canhoto_fisico_em: 'x', comprovante_ok_em: 'x' }, [oc({ situacao: 'paga' })])).toHaveLength(0);
+  });
+});
+
+describe('painel', () => {
+  const ent = (ag: string | null, situacao: 'pendente' | 'chegou' = 'pendente') => ({ id: 'e', ordem: 2, tipo: 'entrega' as const, local: 'L', cidade: 'C', uf: 'GO', exige_agendamento: !!ag, agendado_para: ag, protocolo: null, situacao, chegada_em: null, inicio_em: null, fim_em: null, nfs: null });
+  it('descarga: vermelho hoje, amarelo amanhã, verde D+2', () => {
+    const agora = new Date(2026, 10, 6, 10, 0);
+    expect(alertaDescarga({ paradas: [ent(new Date(2026, 10, 6, 18).toISOString())] }, agora).nivel).toBe('atraso');
+    expect(alertaDescarga({ paradas: [ent(new Date(2026, 10, 7, 8).toISOString())] }, agora).nivel).toBe('aviso');
+    expect(alertaDescarga({ paradas: [ent(new Date(2026, 10, 9, 8).toISOString())] }, agora).nivel).toBe('ok');
+    expect(alertaDescarga({ paradas: [ent(null)] }, agora).nivel).toBe('neutro');
+  });
+  it('cada viagem em um quadro; finalizada sem ocorrência sai', () => {
+    const vs: ViagemInd[] = [
+      { ...base, id: 'a' }, { ...base, id: 'b', placa_cavalo: 'X' }, { ...base, id: 'c', etapa: 'carregada' },
+      { ...base, id: 'd', etapa: 'transito', paradas: [ent(null)] }, { ...base, id: 'e', etapa: 'entregas', paradas: [ent(null, 'chegou')] },
+      { ...base, id: 'f', etapa: 'entregue' }, { ...base, id: 'g', etapa: 'encerrada' },
+    ];
+    const q = quadrosPainel(vs, [oc({ viagem_id: 'f', situacao: 'aberta' }), oc({ viagem_id: 'g', situacao: 'paga' })]);
+    expect(q.disponiveis.map((v) => v.id)).toEqual(['a']);
+    expect(q.contratados.map((v) => v.id)).toEqual(['b']);
+    expect(q.emissao.map((v) => v.id)).toEqual(['c']);
+    expect(q.transito.map((v) => v.id)).toEqual(['d']);
+    expect(q.marcados.map((v) => v.id)).toEqual(['e']);
+    expect(q.comOcorrencia.map((v) => v.id)).toEqual(['f']);
+  });
+  it('retiradas do dia contam quem passou de Carregando', () => {
+    const vs: ViagemInd[] = [{ ...base, coleta_prevista: '2026-11-06' }, { ...base, coleta_prevista: '2026-11-06', etapa: 'documentada' }, { ...base, coleta_prevista: '2026-11-07' }];
+    expect(retiradasDoDia(vs, '2026-11-06')).toEqual({ previstas: 2, retiradas: 1 });
   });
 });
