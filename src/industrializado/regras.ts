@@ -1,7 +1,7 @@
 // Regras do módulo Industrializado (puras, testadas em regras.test.ts).
 
 import {
-  CHECAGENS, ETAPAS_FLUXO, ROTULO_ETAPA, type ChecagemInd, type ClienteInd, type EtapaInd, type OcorrenciaInd, type ValoresInd, type ViagemInd,
+  CHECAGENS, ETAPAS_FLUXO, ROTULO_CHECAGEM, ROTULO_ETAPA, type ChecagemInd, type ClienteInd, type EtapaInd, type OcorrenciaInd, type ValoresInd, type ViagemInd,
 } from './tipos';
 
 export const META_MARGEM_PCT = 12;
@@ -161,7 +161,11 @@ export function pendenciasAvanco(v: ViagemInd, cliente: ClienteInd | undefined, 
       break;
     case 'carregada':
       if (cliente?.exige_po && !v.po) p.push(`${cliente.nome} exige PO depois de carregado`);
+      p.push(...avisoConferencia(v, 'emitir os documentos'));
       p.push('A documentação sai pela Emissão do Industrializado');
+      break;
+    case 'documentada':
+      p.push(...avisoConferencia(v, 'seguir para Em trânsito'));
       break;
     case 'entregas':
       if (v.paradas.some((x) => x.tipo === 'entrega' && x.situacao !== 'concluida' && x.situacao !== 'recusada')) p.push('Feche todas as entregas (concluída ou recusada)');
@@ -193,6 +197,7 @@ export function pendenciasEmissao(v: ViagemInd, cliente: ClienteInd | undefined,
   if (!d.cte.trim()) p.push('Informe o CT-e');
   if (!d.nfs.trim()) p.push('Informe as NFs');
   if (cliente?.exige_po && !d.po.trim() && !v.po) p.push(`${cliente.nome} exige PO`);
+  p.push(...avisoConferencia(v, 'emitir os documentos'));
   return p;
 }
 
@@ -231,4 +236,9 @@ const ETAPAS_CONFERENCIA: EtapaInd[] = ['lancada', 'contratado', 'coleta_agendad
 /** Veículo já marcou o combinado mas ainda falta alguma conferência: vira notificação no sino e alerta no Painel. */
 export function marcadoSemConferencia(v: Pick<ViagemInd, 'checagens' | 'combinado' | 'etapa'>): boolean {
   return !!v.combinado?.marcou_em && ETAPAS_CONFERENCIA.includes(v.etapa) && faltaConferencia(v).length > 0;
+}
+/** Sem Cadastro, Monitoramento e OC/Vínculo marcados, a carga não é documentada nem sai para trânsito. */
+export function avisoConferencia(v: Pick<ViagemInd, 'checagens'>, para: string): string[] {
+  const f = faltaConferencia(v);
+  return f.length ? [`Marque ${f.map((c) => ROTULO_CHECAGEM[c]).join(', ')} antes de ${para}`] : [];
 }

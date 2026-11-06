@@ -8,8 +8,8 @@ import {
   alertaCanhoto, alertaCombinado, calcularMargem, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
 } from './regras';
 import {
-  ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_SIT_PARADA, ROTULO_TIPO_CARGA, VALORES_ZERO,
-  type CargaOcorrencia, type EtapaInd, type OcorrenciaInd, type ParadaInd, type TipoOcorrencia, type ValoresInd, type ViagemInd,
+  ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_SIT_PARADA, ROTULO_TIPO_CARGA, VALORES_ZERO, CHECAGENS, ROTULO_CHECAGEM,
+  type CargaOcorrencia, type ChecagemInd, type EtapaInd, type OcorrenciaInd, type ParadaInd, type TipoOcorrencia, type ValoresInd, type ViagemInd,
 } from './tipos';
 
 export const FILIAL_IND = 'Goiânia · Industrializado';
@@ -408,6 +408,12 @@ export function DetalhesViagem({ id, aoFechar }: { id: string; aoFechar: () => v
         </div>
       )}
 
+      {['lancada', 'contratado', 'coleta_agendada', 'carregando', 'carregada', 'documentada'].includes(v.etapa) && v.placa_cavalo && (
+        <Secao titulo="Conferências">
+          <Checagens v={v} podeMarcar={aberta && pode('ind.avancar')} horizontal
+            checar={(x, item, m) => exec(() => acoes.marcarChecagem(x.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} />
+        </Secao>
+      )}
       <Secao titulo="Carga">
         <dl className="ind-dl">
           <dt>Pedido</dt><dd>{v.pedido ?? '—'}</dd>
@@ -528,3 +534,21 @@ export function ParadasTracking({ v, compacto }: { v: ViagemInd; compacto?: bool
     </ul>
   );
 }
+
+/** Cadastro, Monitoramento e OC/Vínculo: vermelho até conferir, verde depois. Clicar marca ou desmarca (fica no histórico). */
+export function Checagens({ v, podeMarcar, checar, horizontal }: { v: ViagemInd; podeMarcar: boolean; horizontal?: boolean; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void }) {
+  return (
+    <div className={`ind-checagens${horizontal ? ' horizontal' : ''}`}>
+      {CHECAGENS.map((item) => {
+        const c = v.checagens?.[item];
+        return (
+          <label key={item} className={`ind-checagem ${c ? 'ok' : 'pendente'}`} title={c ? `Conferido por ${c.por} em ${fmtDataHora(c.em)}` : 'Pendente'}>
+            <input type="checkbox" checked={!!c} disabled={!podeMarcar} onChange={(e) => checar(v, item, e.target.checked)} />
+            {ROTULO_CHECAGEM[item]}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+

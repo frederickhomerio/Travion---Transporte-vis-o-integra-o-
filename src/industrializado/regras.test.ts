@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
+import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
 import { VALORES_ZERO, type ClienteInd, type OcorrenciaInd, type ViagemInd } from './tipos';
 
 const base: ViagemInd = {
@@ -132,5 +132,19 @@ describe('conferências', () => {
   it('sem marcar o combinado ou já em trânsito, não alerta', () => {
     expect(marcadoSemConferencia({ ...marcado, combinado: { ...marcado.combinado, marcou_em: null } })).toBe(false);
     expect(marcadoSemConferencia({ ...marcado, etapa: 'transito' })).toBe(false);
+  });
+});
+
+describe('conferências travam emissão e trânsito', () => {
+  const ok = { em: 'x', por: 'y' };
+  const tudo = { cadastro: ok, monitoramento: ok, oc_vinculo: ok };
+  it('documentada sem as 3 não segue para trânsito', () => {
+    expect(pendenciasAvanco({ ...base, etapa: 'documentada' }, undefined)).toHaveLength(1);
+    expect(pendenciasAvanco({ ...base, etapa: 'documentada', checagens: tudo }, undefined)).toHaveLength(0);
+  });
+  it('emissão exige as 3', () => {
+    const d = { cte: '1', nfs: '2', po: '' };
+    expect(pendenciasEmissao({ ...base, etapa: 'carregada', checagens: { cadastro: ok } }, undefined, d)).toHaveLength(1);
+    expect(pendenciasEmissao({ ...base, etapa: 'carregada', checagens: tudo }, undefined, d)).toHaveLength(0);
   });
 });

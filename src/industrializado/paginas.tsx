@@ -9,15 +9,16 @@ import { normalizar } from '../lib/texto';
 import type { Permissao } from '../types';
 import {
   ChipCanhoto, ChipCombinado, ChipEtapa, ChipNivel, DetalhesViagem, FILIAL_IND, FormViagem, ModalCombinado, ModalMotivo, ModalOcorrencia,
-  ParadasTracking, Rota, useExecutar,
+  Checagens, ParadasTracking, Rota, useExecutar,
 } from './componentes';
 import { restaurarPrevia, useInd } from './dados';
+
 import {
   alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
   PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, retiradasDoDia, type NivelAlerta, type QuadrosPainel,
 } from './regras';
 import {
-  ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_TIPO_CARGA, ROTULO_CHECAGEM, CHECAGENS, type ChecagemInd,
+  ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_TIPO_CARGA, ROTULO_CHECAGEM, type ChecagemInd,
   type ClienteInd, type EtapaInd, type OcorrenciaInd, type ViagemInd,
 } from './tipos';
 
@@ -119,7 +120,7 @@ export function PainelInd() {
                     </div>
                   );
                 })
-              ) : <TabelaQuadro k={atual.k} vs={atual.vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={() => undefined} checar={() => undefined} pode={pode} />}
+              ) : <TabelaQuadro k={atual.k} vs={atual.vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={() => undefined} checar={(v, item, m) => exec(() => acoes.marcarChecagem(v.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} pode={pode} />}
             </div>
           )}
         </section>
@@ -144,23 +145,6 @@ const ROTULO_COR: Record<'contratado' | 'transito', Partial<Record<NivelAlerta, 
   transito: { atraso: 'Descarga hoje', aviso: 'Descarga amanhã', ok: 'Descarga D+2 ou mais', neutro: 'Sem data de descarga' },
 };
 
-/** Cadastro, Monitoramento e OC/Vínculo: vermelho até conferir, verde depois. Clicar marca ou desmarca (fica no histórico). */
-function Checagens({ v, podeMarcar, checar }: { v: ViagemInd; podeMarcar: boolean; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void }) {
-  return (
-    <div className="ind-checagens">
-      {CHECAGENS.map((item) => {
-        const c = v.checagens?.[item];
-        return (
-          <label key={item} className={`ind-checagem ${c ? 'ok' : 'pendente'}`} title={c ? `Conferido por ${c.por} em ${fmtDataHora(c.em)}` : 'Pendente'}>
-            <input type="checkbox" checked={!!c} disabled={!podeMarcar} onChange={(e) => checar(v, item, e.target.checked)} />
-            {ROTULO_CHECAGEM[item]}
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
 function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, checar, pode }: {
   k: ChaveQuadro; vs: ViagemInd[]; clientePorId: Record<string, ClienteInd>; ocorrencias: OcorrenciaInd[];
   abrir: (id: string) => void; acao: (t: 'combinado' | 'ocorrencia' | 'emissao', v: ViagemInd) => void; marcou: (v: ViagemInd) => void; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void; pode: (p: Permissao) => boolean;
@@ -168,7 +152,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
   const cab: Record<ChaveQuadro, string[]> = {
     disponiveis: ['Pedido / veículo', 'Cliente', 'Rota', 'Retirada prevista', 'Lançada'],
     contratados: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Conferências', 'Combinado', 'Horário', 'Situação'],
-    emissao: ['Pedido / veículo', 'Cliente', 'Rota', 'Carregada há', 'PO'],
+    emissao: ['Pedido / veículo', 'Cliente', 'Rota', 'Conferências', 'Carregada há', 'PO'],
     transito: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Descarga', 'Previsão', 'Situação'],
     marcados: ['Pedido / veículo', 'Cliente', 'Local da descarga', 'Chegou', 'No local há'],
     comOcorrencia: ['Pedido / veículo', 'Cliente', 'Etapa', 'Ocorrências pendentes'],
@@ -195,7 +179,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
               <button className="btn peq" style={{ marginLeft: 4 }} onClick={() => acao('combinado', v)}>{v.combinado ? 'Alterar' : 'Combinado'}</button></>}</td></tr>
         ); }
         if (k === 'emissao') { const ini = [...v.historico].reverse().find((h) => h.acao.includes('→ Carregada'))?.em ?? null; return (
-          <tr key={v.id}>{via}<td>{cli?.nome}</td><td><Rota v={v} /></td><td>{tempo(min(ini))}</td>
+          <tr key={v.id}>{via}<td>{cli?.nome}</td><td><Rota v={v} /></td><td><Checagens v={v} podeMarcar={pode('ind.avancar')} checar={checar} /></td><td>{tempo(min(ini))}</td>
             <td>{cli?.exige_po ? (v.po ?? <span className="ind-falta">exigido</span>) : <span className="suave">não exige</span>}</td>
             <td>{pode('ind.emissao') && <button className="btn primario peq" onClick={() => acao('emissao', v)}>Informar documentos</button>}</td></tr>
         ); }
@@ -392,7 +376,7 @@ export function ControleInd() {
 // Emissão do Industrializado (fila própria, fora do Apoio Operacional)
 // ===========================================================================
 export function EmissaoInd() {
-  const { viagens, clientePorId, acoes } = useInd();
+  const { viagens, clientePorId, acoes, pode } = useInd();
   const exec = useExecutar();
   const [atender, setAtender] = useState<ViagemInd | null>(null);
   const [aberta, setAberta] = useState<string | null>(null);
@@ -406,7 +390,7 @@ export function EmissaoInd() {
         <div className="cartao-cab"><h2>Aguardando emissão ({fila.length})</h2></div>
         {fila.length === 0 ? <div className="cartao-corpo suave">Nenhuma viagem aguardando.</div> : (
           <table className="tabela">
-            <thead><tr><th>Pedido / veículo</th><th>Cliente</th><th>Rota</th><th>Carregada há</th><th>PO</th><th>Responsável</th><th /></tr></thead>
+            <thead><tr><th>Pedido / veículo</th><th>Cliente</th><th>Rota</th><th>Conferências</th><th>Carregada há</th><th>PO</th><th>Responsável</th><th /></tr></thead>
             <tbody>{fila.map((v) => {
               const cli = clientePorId[v.cliente_id];
               const min = Math.round((Date.now() - Date.parse(lastAt(v))) / 60000);
@@ -414,6 +398,7 @@ export function EmissaoInd() {
                 <tr key={v.id}>
                   <td><button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td>
                   <td>{cli?.nome}</td><td><Rota v={v} /></td>
+                  <td><Checagens v={v} podeMarcar={pode('ind.avancar')} checar={(x, item, m) => exec(() => acoes.marcarChecagem(x.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} /></td>
                   <td><ChipNivel nivel={min > 40 ? 'atraso' : min > 20 ? 'aviso' : 'ok'}>{min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`}</ChipNivel></td>
                   <td>{cli?.exige_po ? (v.po ?? <span className="ind-falta">exigido</span>) : <span className="suave">—</span>}</td>
                   <td>{v.emissao_assumida_por ?? <span className="suave">livre</span>}</td>
@@ -444,18 +429,21 @@ export function EmissaoInd() {
 const lastAt = (v: ViagemInd) => [...v.historico].reverse().find((h) => h.acao.includes('→ Carregada'))?.em ?? v.criado_em;
 
 function ModalEmissao({ v, aoFechar }: { v: ViagemInd; aoFechar: () => void }) {
-  const { acoes, clientePorId } = useInd();
+  const { acoes, clientePorId, viagens, pode } = useInd();
   const exec = useExecutar();
   const cli = clientePorId[v.cliente_id];
+  const atual = viagens.find((x) => x.id === v.id) ?? v;
   const nfsParadas = v.paradas.map((p) => p.nfs).filter(Boolean).join(', ');
   const [d, setD] = useState({ cte: v.cte ?? '', mdfe: v.mdfe ?? '', nfs: v.nfs ?? nfsParadas, po: v.po ?? '' });
-  const pend = pendenciasEmissao(v, cli, d);
+  const pend = pendenciasEmissao(atual, cli, d);
   return (
     <Modal titulo={`Documentos · Pedido ${pedidoCarga(v)}`} aoFechar={aoFechar} rodape={<>
       <button className="btn" onClick={aoFechar}>Voltar</button>
       <button className="btn primario" disabled={pend.length > 0} title={pend.join('\n')} onClick={() => exec(() => acoes.liberarEmissao(v.id, d), 'Documentos liberados. Viagem documentada.') && aoFechar()}>Liberar documentos</button>
     </>}>
       <p style={{ marginTop: 0 }}>{cli?.nome} · <Rota v={v} /></p>
+      <div className="campo" style={{ marginBottom: 12 }}><span>Conferências (obrigatórias para emitir)</span>
+        <Checagens v={atual} podeMarcar={pode('ind.avancar')} horizontal checar={(x, item, m) => exec(() => acoes.marcarChecagem(x.id, item, m))} /></div>
       <div className="grade-campos">
         <label className="campo"><span>CT-e</span><input className="entrada" value={d.cte} onChange={(e) => setD({ ...d, cte: e.target.value })} /></label>
         <label className="campo"><span>MDF-e (opcional)</span><input className="entrada" value={d.mdfe} onChange={(e) => setD({ ...d, mdfe: e.target.value })} /></label>

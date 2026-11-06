@@ -1692,3 +1692,5 @@ button.cf-chip { cursor: pointer; }
 .ind-checagem.ok { background: var(--verde-100); color: var(--verde-700); }
 .ind-checagem.ok input { accent-color: var(--verde-700); }
 .ind-checagem:has(input:disabled) { cursor: default; }
+.ind-checagens.horizontal { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+.ind-checagens.horizontal .ind-checagem { font-size: 12px; padding: 4px 10px 4px 6px; }
