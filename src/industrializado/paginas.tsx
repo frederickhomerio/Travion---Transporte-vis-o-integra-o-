@@ -116,7 +116,7 @@ export function PainelInd() {
                   return (
                     <div key={n} className={`ind-faixa ${n}`}>
                       <h3><span className={`ind-chip ${n}`}>{ROTULO_COR[atual.k === 'transito' ? 'transito' : 'contratado'][n]}</span> <span className="suave pequeno">{vs.length}</span></h3>
-                      <TabelaQuadro k={atual.k} vs={vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={(v) => exec(() => acoes.registrarMarcou(v.id), marcouMsg(v))} checar={(v, item, m) => exec(() => acoes.marcarChecagem(v.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} pode={pode} />
+                      <TabelaQuadro k={atual.k} vs={vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={(v) => exec(() => acoes.registrarMarcou(v.id), marcouMsg(v))} carregado={(v) => exec(() => acoes.veiculoCarregado(v.id), `Pedido ${pedidoCarga(v)} carregado: foi para Aguardando Emissão.`)} checar={(v, item, m) => exec(() => acoes.marcarChecagem(v.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} pode={pode} />
                     </div>
                   );
                 })
@@ -145,9 +145,9 @@ const ROTULO_COR: Record<'contratado' | 'transito', Partial<Record<NivelAlerta, 
   transito: { atraso: 'Descarga hoje', aviso: 'Descarga amanhã', ok: 'Descarga D+2 ou mais', neutro: 'Sem data de descarga' },
 };
 
-function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, checar, pode }: {
+function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, checar, carregado = () => undefined, pode }: {
   k: ChaveQuadro; vs: ViagemInd[]; clientePorId: Record<string, ClienteInd>; ocorrencias: OcorrenciaInd[];
-  abrir: (id: string) => void; acao: (t: 'combinado' | 'ocorrencia' | 'emissao', v: ViagemInd) => void; marcou: (v: ViagemInd) => void; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void; pode: (p: Permissao) => boolean;
+  abrir: (id: string) => void; acao: (t: 'combinado' | 'ocorrencia' | 'emissao', v: ViagemInd) => void; marcou: (v: ViagemInd) => void; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void; carregado?: (v: ViagemInd) => void; pode: (p: Permissao) => boolean;
 }) {
   const cab: Record<ChaveQuadro, string[]> = {
     disponiveis: ['Pedido / veículo', 'Cliente', 'Rota', 'Retirada prevista', 'Lançada'],
@@ -176,6 +176,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
             <td><ChipNivel nivel={a.nivel}>{a.texto}</ChipNivel>{marcadoSemConferencia(v) && <div className="ind-falta pequeno">sem conferência</div>}</td>
             <td style={{ whiteSpace: 'nowrap' }}>{pode('ind.avancar') && <>
               {v.combinado && !v.combinado.marcou_em && <button className="btn primario peq" onClick={() => marcou(v)}>Marcou</button>}
+              {v.combinado?.marcou_em && <button className="btn primario peq" onClick={() => carregado(v)}>Veículo carregado</button>}
               <button className="btn peq" style={{ marginLeft: 4 }} onClick={() => acao('combinado', v)}>{v.combinado ? 'Alterar' : 'Combinado'}</button></>}</td></tr>
         ); }
         if (k === 'emissao') { const ini = [...v.historico].reverse().find((h) => h.acao.includes('→ Carregada'))?.em ?? null; return (

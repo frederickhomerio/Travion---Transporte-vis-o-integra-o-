@@ -237,6 +237,21 @@ export function useInd() {
         mudar(id, `Etapa: ${ROTULO_ETAPA[v.etapa]} → ${ROTULO_ETAPA[prox]}`, () => ({ etapa: prox, ...(prox === 'entregue' ? { entregue_em: agora() } : {}) }));
       },
 
+      /** Veículo marcado que terminou de carregar: vai direto para Carregada (fila da Emissão). Coletas abertas são concluídas. */
+      veiculoCarregado(id: string) {
+        exigir('ind.avancar');
+        const v = viagem(id);
+        if (!['lancada', 'contratado', 'coleta_agendada', 'carregando'].includes(v.etapa)) falha('A carga já passou do carregamento.');
+        if (!v.motorista || !v.placa_cavalo) falha('Informe o motorista e a placa antes.');
+        if (!v.combinado?.marcou_em) falha('O veículo ainda não marcou o combinado.');
+        const h = agora();
+        mudar(id, `Etapa: ${ROTULO_ETAPA[v.etapa]} → ${ROTULO_ETAPA.carregada}`, (x) => ({
+          etapa: 'carregada',
+          paradas: x.paradas.map((p) => (p.tipo === 'coleta' && p.situacao !== 'concluida' && p.situacao !== 'recusada'
+            ? { ...p, situacao: 'concluida' as const, chegada_em: p.chegada_em ?? h, inicio_em: p.inicio_em ?? h, fim_em: h } : p)),
+        }), 'Veículo carregado (pelo Painel)');
+      },
+
       voltar(id: string, motivo: string) {
         exigir('ind.voltar');
         if (!motivo.trim()) falha('Informe o motivo para voltar a etapa.');
