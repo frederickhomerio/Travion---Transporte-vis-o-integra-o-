@@ -92,6 +92,48 @@ function semear(): EstadoInd {
     v(1, 'transito', { ...mot(0), placa_cavalo: 'QAZ5W66', cte: '35211', nfs: '77455', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Belém', 'Belém', 'PA', emDias(3), 'pendente', 'AUR-2290')], valores: val(18900, 16100, { pedagio: 900 }) }),
     v(4, 'entregas', { ...mot(5), placa_cavalo: 'WSX8E99', cte: '35199', nfs: '20155', paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Cliente final', 'Anápolis', 'GO', emMin(-60), 'chegou')], valores: val(2600, 2200) }),
   );
+  // Demonstração: um exemplo de cada situação que o supervisor precisa conferir.
+  const ok3 = { cadastro: { em: emMin(-120), por: '[DEMO] Vanessa Duarte' }, monitoramento: { em: emMin(-110), por: '[DEMO] Vanessa Duarte' }, oc_vinculo: { em: emMin(-100), por: '[DEMO] Vanessa Duarte' } };
+  const reg = (acao: string, em: string, detalhe: string | null = null) => ({ em, usuario: '[DEMO] Equipe de embarque', acao, detalhe, motivo: null });
+  viagens.push(
+    // 18 Disponível: Cargill exige PO e agendamento, sem veículo ainda.
+    v(0, 'lancada', { tipo_carga: 'carga_geral', tipo_veiculo: 'Bitrem', paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', emDias(1, 1)), par(2, 'entrega', 'Terminal Itaqui', 'São Luís', 'MA', emDias(4))], valores: val(21500, 18200, { pedagio: 1150 }), observacao: 'Exemplo: cliente exige PO (Cargill)' }),
+    // 19 Contratado SEM combinado e sem conferências (tudo vermelho).
+    v(2, 'contratado', { ...mot(7), placa_cavalo: 'OPA1Z23', tipo_veiculo: 'Truck', paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null), par(2, 'entrega', 'Mercado Bom Preço', 'Trindade', 'GO', null)], valores: val(1900, 1550) }),
+    // 20 Marcou o combinado SEM as 3 conferências: gera alerta no sino e faixa no Painel.
+    v(0, 'coleta_agendada', { ...mot(2), placa_cavalo: 'BRA2E19', po: null, checagens: { cadastro: { em: emMin(-70), por: '[DEMO] Equipe de embarque' } }, paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', emMin(-30), 'chegou', 'CG-5650'), par(2, 'entrega', 'CD Uberlândia', 'Uberlândia', 'MG', emDias(1, 4))], valores: val(8900, 7700, { pedagio: 310 }),
+      combinado: { o_que: 'Chegada na fábrica', para: emMin(-40), marcou_em: emMin(-35), registrado_por: '[DEMO] Equipe de embarque', fase: 'coleta' } }),
+    // 21 Carregando com combinado atrasado (vermelho).
+    v(3, 'carregando', { ...mot(4), placa_cavalo: 'GYN3K45', checagens: ok3, paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', emMin(-180), 'em_operacao', 'AG-88190'), par(2, 'entrega', 'Atacado Norte', 'Araguaína', 'TO', emDias(2))], valores: val(9700, 8150, { pedagio: 260 }),
+      combinado: { o_que: 'Fim do carregamento', para: emMin(-25), marcou_em: null, registrado_por: '[DEMO] Equipe de embarque', fase: 'coleta' } }),
+    // 22 Carregada pronta para emitir (3 conferências ok).
+    v(1, 'carregada', { ...mot(6), placa_cavalo: 'ANP4D67', checagens: ok3, paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', emMin(-200), 'concluida', 'AUR-2301'), par(2, 'entrega', 'Loja Centro', 'Anápolis', 'GO', emDias(1, 2), 'pendente', 'AUR-2302')], valores: val(2400, 1990, { pedagio: 60 }),
+      historico: [reg('Viagem lançada', emDias(-1)), reg('Etapa: Carregando → Carregada', emMin(-15))] }),
+    // 23 Cargill carregada SEM PO: a emissão fica travada até informar o PO.
+    v(0, 'carregada', { ...mot(1), placa_cavalo: 'CGL5P89', checagens: ok3, po: null, paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', emMin(-260), 'concluida', 'CG-5661'), par(2, 'entrega', 'Porto Seco', 'Anápolis', 'GO', emDias(1))], valores: val(3100, 2600, { pedagio: 80 }),
+      historico: [reg('Viagem lançada', emDias(-1)), reg('Etapa: Carregando → Carregada', emMin(-40))] }),
+    // 24 Em trânsito com chegada no cliente amanhã.
+    v(2, 'transito', { ...mot(3), placa_cavalo: 'TRS6H01', checagens: ok3, cte: '35230', mdfe: '9950', nfs: '30290', paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null, 'concluida'), par(2, 'entrega', 'Distribuidora Norte', 'Gurupi', 'TO', emDias(1, 5))], valores: val(6900, 5800, { pedagio: 210 }),
+      combinado: { o_que: 'Chegada no cliente', para: emDias(1, 4), marcou_em: null, registrado_por: '[DEMO] Equipe de pós-embarque', fase: 'transito' } }),
+    // 25 Em trânsito SEM combinado de chegada (falta combinar com o motorista).
+    v(4, 'transito', { ...mot(7), placa_cavalo: 'SEM7C02', checagens: ok3, cte: '35231', nfs: '20190', paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Cliente final', 'Mineiros', 'GO', null)], valores: val(4300, 3700, { pedagio: 120 }) }),
+    // 26 Em trânsito com chegada atrasada e ocorrência de deslocamento aberta.
+    v(3, 'transito', { ...mot(0), placa_cavalo: 'ATR8S03', checagens: ok3, cte: '35232', nfs: '55190', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Atacado Leste', 'Barreiras', 'BA', emMin(-90), 'pendente', 'PL-7799')], valores: val(10400, 8900, { pedagio: 380 }),
+      combinado: { o_que: 'Chegada no cliente', para: emMin(-60), marcou_em: null, registrado_por: '[DEMO] Equipe de pós-embarque', fase: 'transito' } }),
+    // 27 Marcado na descarga, com mais uma entrega depois (fracionada).
+    v(1, 'entregas', { ...mot(5), placa_cavalo: 'MLT9R04', tipo_carga: 'fracionada', checagens: ok3, cte: '35233', nfs: '77501, 77502', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Loja Norte', 'Brasília', 'DF', emMin(-50), 'em_operacao', 'AUR-2310'), par(3, 'entrega', 'Loja Sul', 'Taguatinga', 'DF', emMin(240), 'pendente', 'AUR-2311')], valores: val(5200, 4300, { pedagio: 150, descarga: 180 }) }),
+    // 28 Entregue ontem, sem canhoto ainda.
+    v(2, 'entregue', { ...mot(6), placa_cavalo: 'ENT1A05', cte: '35180', nfs: '30250', entregue_em: emDias(-1), paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null, 'concluida'), par(2, 'entrega', 'Distribuidora Oeste', 'Jataí', 'GO', null, 'concluida')], valores: val(4700, 4050) }),
+    // 29 Entregue com canhoto digital, aguardando o físico (dia 25 de 30: amarelo).
+    v(1, 'entregue', { ...mot(4), placa_cavalo: 'CNH2B06', cte: '35150', nfs: '77300', entregue_em: emDias(-25), canhoto_digital_em: emDias(-25), paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Palmas', 'Palmas', 'TO', null, 'concluida')], valores: val(9100, 7800, { pedagio: 330 }) }),
+    // 30 Entregue com reentrega aberta: aparece em Finalizados com ocorrência.
+    v(3, 'entregue', { ...mot(2), placa_cavalo: 'REE3C07', cte: '35160', nfs: '55160', entregue_em: emDias(-2), canhoto_digital_em: emDias(-2), paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Atacado Sul', 'Goiânia', 'GO', null, 'concluida')], valores: val(2300, 1900) }),
+    // 31 Cancelada (cliente desistiu).
+    v(4, 'cancelada', { paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null), par(2, 'entrega', 'Cliente final', 'Itaberaí', 'GO', null)], valores: val(1800, 1500),
+      historico: [reg('Viagem lançada', emDias(-2)), { em: emDias(-1), usuario: '[DEMO] Gestor', acao: 'Viagem cancelada', detalhe: null, motivo: 'Cliente cancelou o pedido' }] }),
+  );
+  // 32 Entrega reversa da devolução da carga 8 (volta para o cliente de origem).
+  viagens.push(v(0, 'lancada', { tipo_carga: 'paletizada', reversa_de: viagens[8].id, tipo_veiculo: 'Truck', paradas: [par(1, 'coleta', 'CD Sorriso', 'Sorriso', 'MT', null), par(2, 'entrega', 'Fábrica Cargill', 'Goiânia', 'GO', null)], valores: val(4200, 3500), observacao: 'Entrega reversa: retorno de 4 paletes devolvidos' }));
   const o = (k: number, vi: number, tipo: TipoOcorrencia, carga: CargaOcorrencia, desc: string, vm: number, vc: number, situacao: OcorrenciaInd['situacao'], avaria = false): OcorrenciaInd => ({
     id: uid(), codigo: codigoOcorrencia(k), viagem_id: viagens[vi].id, parada_id: (viagens[vi].paradas.find((x) => x.tipo === 'entrega' && x.situacao === 'em_operacao') ?? viagens[vi].paradas.find((x) => x.tipo === 'entrega'))?.id ?? null,
     tipo, carga, avaria, descricao: desc, valor_motorista: vm, valor_cliente: vc, situacao, aberta_em: emMin(-60 * k), aberta_por: '[DEMO] Equipe de pós-embarque',
@@ -103,6 +145,9 @@ function semear(): EstadoInd {
     o(2, 7, 'reagendamento', 'carregado', 'Loja 3 pediu para descarregar amanhã', 0, 0, 'aberta'),
     o(3, 8, 'devolucao', 'descarregado', 'Devolução parcial de 4 paletes, avaria na embalagem', 600, 800, 'aprovada', true),
     o(4, 9, 'retrabalho', 'descarregado', 'Repaletização exigida pelo cliente', 200, 300, 'paga'),
+    o(5, 26, 'deslocamento', 'carregado', 'Desvio por interdição na BR-020, chegada atrasada', 150, 0, 'aberta'),
+    o(6, 30, 'reentrega', 'descarregado', 'Cliente recusou 2 paletes por divergência de NF, reentrega amanhã', 280, 350, 'aberta'),
+    o(7, 27, 'diaria', 'carregado', 'Fila na doca da Loja Norte', 0, 0, 'cancelada'),
   ];
   return { versao: 1, seq: n, seqOc: ocorrencias.length, clientes, viagens, ocorrencias, metas: { [hoje]: 8 } };
 }

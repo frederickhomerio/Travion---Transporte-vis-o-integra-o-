@@ -12,6 +12,7 @@ import {
   BotaoInfo, Checagens, ParadasTracking, Rota, useExecutar,
 } from './componentes';
 import { restaurarPrevia, useInd } from './dados';
+import { AnotarCorrecao, RoteiroDemo } from './demo';
 
 import {
   alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, combinadoTransito, linkWhatsApp, valoresConfirmados, type ValoresEmissao, META_MARGEM_PCT, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
@@ -34,6 +35,7 @@ function Pagina({ titulo, permissao = 'ind.pagina', acoes, children }: { titulo:
   return (
     <Layout titulo={titulo} aoLadoTitulo={<span className="badge info">{FILIAL_IND}</span>} acoes={acoes}>
       {!pode('ind.pagina') || !pode(permissao) ? <AcessoNegado motivo="Esta tela é do módulo Industrializado. Fale com o administrador se precisar de acesso." /> : children}
+      <AnotarCorrecao />
     </Layout>
   );
 }
@@ -84,6 +86,7 @@ export function PainelInd() {
 
   return (
     <Pagina titulo="Painel Industrializado">
+      <RoteiroDemo />
       {semConf.length > 0 && (
         <Alerta tipo="erro"><div>
           <strong>{semConf.length === 1 ? '1 veículo marcado' : `${semConf.length} veículos marcados`} sem as 3 conferências:</strong>{' '}
