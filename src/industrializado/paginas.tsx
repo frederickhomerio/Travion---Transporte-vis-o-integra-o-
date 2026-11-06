@@ -16,7 +16,7 @@ import {
   PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, retiradasDoDia, type NivelAlerta, type QuadrosPainel,
 } from './regras';
 import {
-  ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_TIPO_CARGA,
+  ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_TIPO_CARGA, ROTULO_CHECAGEM, CHECAGENS, type ChecagemInd,
   type ClienteInd, type EtapaInd, type OcorrenciaInd, type ViagemInd,
 } from './tipos';
 
@@ -96,11 +96,11 @@ export function PainelInd() {
                   return (
                     <div key={n} className={`ind-faixa ${n}`}>
                       <h3><span className={`ind-chip ${n}`}>{ROTULO_COR[atual.k === 'transito' ? 'transito' : 'contratado'][n]}</span> <span className="suave pequeno">{vs.length}</span></h3>
-                      <TabelaQuadro k={atual.k} vs={vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={(v) => exec(() => acoes.registrarMarcou(v.id), 'Marcação registrada.')} pode={pode} />
+                      <TabelaQuadro k={atual.k} vs={vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={(v) => exec(() => acoes.registrarMarcou(v.id), 'Marcação registrada.')} checar={(v, item, m) => exec(() => acoes.marcarChecagem(v.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} pode={pode} />
                     </div>
                   );
                 })
-              ) : <TabelaQuadro k={atual.k} vs={atual.vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={() => undefined} pode={pode} />}
+              ) : <TabelaQuadro k={atual.k} vs={atual.vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={() => undefined} checar={() => undefined} pode={pode} />}
             </div>
           )}
         </section>
@@ -125,13 +125,30 @@ const ROTULO_COR: Record<'contratado' | 'transito', Partial<Record<NivelAlerta, 
   transito: { atraso: 'Descarga hoje', aviso: 'Descarga amanhã', ok: 'Descarga D+2 ou mais', neutro: 'Sem data de descarga' },
 };
 
-function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, pode }: {
+/** Cadastro, Monitoramento e OC/Vínculo: vermelho até conferir, verde depois. Clicar marca ou desmarca (fica no histórico). */
+function Checagens({ v, podeMarcar, checar }: { v: ViagemInd; podeMarcar: boolean; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void }) {
+  return (
+    <div className="ind-checagens">
+      {CHECAGENS.map((item) => {
+        const c = v.checagens?.[item];
+        return (
+          <label key={item} className={`ind-checagem ${c ? 'ok' : 'pendente'}`} title={c ? `Conferido por ${c.por} em ${fmtDataHora(c.em)}` : 'Pendente'}>
+            <input type="checkbox" checked={!!c} disabled={!podeMarcar} onChange={(e) => checar(v, item, e.target.checked)} />
+            {ROTULO_CHECAGEM[item]}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, checar, pode }: {
   k: ChaveQuadro; vs: ViagemInd[]; clientePorId: Record<string, ClienteInd>; ocorrencias: OcorrenciaInd[];
-  abrir: (id: string) => void; acao: (t: 'combinado' | 'ocorrencia' | 'emissao', v: ViagemInd) => void; marcou: (v: ViagemInd) => void; pode: (p: Permissao) => boolean;
+  abrir: (id: string) => void; acao: (t: 'combinado' | 'ocorrencia' | 'emissao', v: ViagemInd) => void; marcou: (v: ViagemInd) => void; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void; pode: (p: Permissao) => boolean;
 }) {
   const cab: Record<ChaveQuadro, string[]> = {
     disponiveis: ['Pedido / veículo', 'Cliente', 'Rota', 'Retirada prevista', 'Lançada'],
-    contratados: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Combinado', 'Horário', 'Situação'],
+    contratados: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Conferências', 'Combinado', 'Horário', 'Situação'],
     emissao: ['Pedido / veículo', 'Cliente', 'Rota', 'Carregada há', 'PO'],
     transito: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Descarga', 'Previsão', 'Situação'],
     marcados: ['Pedido / veículo', 'Cliente', 'Local da descarga', 'Chegou', 'No local há'],
@@ -151,7 +168,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, p
             <td>{pode('ind.lancar') && <button className="btn primario peq" onClick={() => abrir(v.id)}>Vincular placa</button>}</td></tr>
         );
         if (k === 'contratados') { const a = alertaCombinado(v); return (
-          <tr key={v.id}>{via}<td>{cli?.nome}</td>{mot}<td>{v.combinado?.o_que ?? '—'}<div className="suave pequeno">{ROTULO_ETAPA[v.etapa]}</div></td>
+          <tr key={v.id}>{via}<td>{cli?.nome}</td>{mot}<td><Checagens v={v} podeMarcar={pode('ind.avancar')} checar={checar} /></td><td>{v.combinado?.o_que ?? '—'}<div className="suave pequeno">{ROTULO_ETAPA[v.etapa]}</div></td>
             <td>{v.combinado ? fmtDataHora(v.combinado.para) : '—'}{v.combinado?.marcou_em && <div className="suave pequeno">marcou {fmtDataHora(v.combinado.marcou_em)}</div>}</td>
             <td><ChipNivel nivel={a.nivel}>{a.texto}</ChipNivel></td>
             <td style={{ whiteSpace: 'nowrap' }}>{pode('ind.avancar') && <>
@@ -306,7 +323,7 @@ export function ControleInd() {
       <div className="ind-filtros">
         <Segmentado rotulo="Mostrar" valor={soAlerta ? 'alerta' : 'todas'} aoMudar={(x) => setSoAlerta(x === 'alerta')}
           opcoes={[{ valor: 'todas', rotulo: 'Todas' }, { valor: 'alerta', rotulo: `Em alerta (${alertas})` }]} />
-        <span className="suave pequeno">Combinado com o motorista: <ChipNivel nivel="aviso">1 h antes sem marcar</ChipNivel> <ChipNivel nivel="atraso">passou do horário</ChipNivel> <ChipNivel nivel="ok">marcou</ChipNivel></span>
+        <span className="suave pequeno">Combinado com o motorista: <ChipNivel nivel="aviso">mais de 2 h</ChipNivel> <ChipNivel nivel="laranja">2 h ou menos</ChipNivel> <ChipNivel nivel="atraso">passou do horário</ChipNivel> <ChipNivel nivel="ok">marcou</ChipNivel></span>
       </div>
       <div className="ind-kanban">
         {COLUNAS.map((col) => {

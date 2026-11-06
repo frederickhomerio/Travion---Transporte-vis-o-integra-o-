@@ -46,6 +46,12 @@ export interface CombinadoInd {
   o_que: string; para: string; marcou_em: string | null; registrado_por: string;
 }
 
+/** Conferências do veículo contratado antes da coleta (vermelho até marcar, verde depois). */
+export type ChecagemInd = 'cadastro' | 'monitoramento' | 'oc_vinculo';
+export const CHECAGENS: ChecagemInd[] = ['cadastro', 'monitoramento', 'oc_vinculo'];
+export const ROTULO_CHECAGEM: Record<ChecagemInd, string> = { cadastro: 'Cadastro', monitoramento: 'Monitoramento', oc_vinculo: 'OC/Vínculo' };
+export type ChecagensInd = Partial<Record<ChecagemInd, { em: string; por: string }>>;
+
 export interface AcaoInd { em: string; usuario: string; acao: string; detalhe: string | null; motivo: string | null }
 
 export interface ViagemInd {
@@ -63,6 +69,8 @@ export interface ViagemInd {
   paradas: ParadaInd[];
   valores: ValoresInd;
   combinado: CombinadoInd | null;
+  /** Cadastro, Monitoramento e OC/Vínculo (ausente = nada marcado). */
+  checagens?: ChecagensInd;
   // Emissão própria do Industrializado (fora do Apoio Operacional)
   emissao_assumida_por: string | null; emissao_assumida_em: string | null;
   cte: string | null; mdfe: string | null; nfs: string | null;
