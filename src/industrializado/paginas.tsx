@@ -130,12 +130,12 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, p
   abrir: (id: string) => void; acao: (t: 'combinado' | 'ocorrencia' | 'emissao', v: ViagemInd) => void; marcou: (v: ViagemInd) => void; pode: (p: Permissao) => boolean;
 }) {
   const cab: Record<ChaveQuadro, string[]> = {
-    disponiveis: ['Viagem', 'Cliente', 'Rota', 'Retirada prevista', 'Lançada'],
-    contratados: ['Viagem', 'Cliente', 'Motorista / placa', 'Combinado', 'Horário', 'Situação'],
-    emissao: ['Viagem', 'Cliente', 'Rota', 'Carregada há', 'PO'],
-    transito: ['Viagem', 'Cliente', 'Motorista / placa', 'Descarga', 'Previsão', 'Situação'],
-    marcados: ['Viagem', 'Cliente', 'Local da descarga', 'Chegou', 'No local há'],
-    comOcorrencia: ['Viagem', 'Cliente', 'Etapa', 'Ocorrências pendentes'],
+    disponiveis: ['Pedido / veículo', 'Cliente', 'Rota', 'Retirada prevista', 'Lançada'],
+    contratados: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Combinado', 'Horário', 'Situação'],
+    emissao: ['Pedido / veículo', 'Cliente', 'Rota', 'Carregada há', 'PO'],
+    transito: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Descarga', 'Previsão', 'Situação'],
+    marcados: ['Pedido / veículo', 'Cliente', 'Local da descarga', 'Chegou', 'No local há'],
+    comOcorrencia: ['Pedido / veículo', 'Cliente', 'Etapa', 'Ocorrências pendentes'],
   };
   const min = (iso: string | null) => (iso ? Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)) : null);
   const tempo = (m: number | null) => (m === null ? '—' : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`);
@@ -144,7 +144,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, p
       <thead><tr>{cab[k].map((c) => <th key={c}>{c}</th>)}<th /></tr></thead>
       <tbody>{vs.map((v) => {
         const cli = clientePorId[v.cliente_id];
-        const via = <td><button className="btn sutil peq" onClick={() => abrir(v.id)}><strong>{codigoViagem(v.codigo)}</strong></button><div className="suave pequeno">{ROTULO_TIPO_CARGA[v.tipo_carga]}</div></td>;
+        const via = <td><button className="btn sutil peq" onClick={() => abrir(v.id)}><strong>{v.pedido ?? 'Sem pedido'}</strong></button><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td>;
         const mot = <td>{v.motorista ?? '—'}<div className="suave pequeno">{[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ')}</div></td>;
         if (k === 'disponiveis') return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td><td><Rota v={v} /></td><td>{v.coleta_prevista ? fmtData(v.coleta_prevista) : '—'}</td><td className="pequeno">{fmtDataHora(v.criado_em)}</td>
