@@ -146,7 +146,7 @@ const ROTULO_COR: Record<'contratado' | 'transito', Partial<Record<NivelAlerta, 
 };
 
 /** Mensagem pronta para o motorista, conforme o quadro. */
-function mensagemMotorista(k: ChaveQuadro, v: ViagemInd): string {
+function mensagemMotorista(k: ChaveQuadro, v: ViagemInd, cliente?: string): string {
   const nome = v.motorista?.split(' ')[0] ?? '';
   const pedido = `pedido ${pedidoCarga(v)}`;
   if (k === 'transito' || k === 'marcados') {
@@ -155,7 +155,8 @@ function mensagemMotorista(k: ChaveQuadro, v: ViagemInd): string {
     return `Olá, ${nome}! Aqui é da Transpanorama (Industrializado), sobre o ${pedido}${dest}. Pode nos enviar sua localização e a previsão de chegada?`;
   }
   const c = v.combinado;
-  return `Olá, ${nome}! Aqui é da Transpanorama (Industrializado), sobre o ${pedido}${c ? `. Combinado: ${c.o_que.toLowerCase()} às ${fmtDataHora(c.para)}` : ''}. Pode confirmar?`;
+  const local = cliente ? ` no cliente ${cliente.replace(/^\[DEMO\]\s*/, '')}` : '';
+  return `Olá, ${nome}! Aqui é da Transpanorama (Industrializado), sobre o ${pedido}. Combinado: Já marcou o carregamento${local}${c ? `, combinado às ${fmtDataHora(c.para)}` : ''}. Pode confirmar?`;
 }
 
 function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, checar, carregado = () => undefined, descarga = () => undefined, pode }: {
@@ -178,7 +179,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
       <tbody>{vs.map((v) => {
         const cli = clientePorId[v.cliente_id];
         const via = <td><button className="btn sutil peq" onClick={() => abrir(v.id)}><strong>{v.pedido ?? 'Sem pedido'}</strong></button><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td>;
-        const zap = linkWhatsApp(v.motorista_telefone, mensagemMotorista(k, v));
+        const zap = linkWhatsApp(v.motorista_telefone, mensagemMotorista(k, v, cli?.nome));
         const mot = <td>{v.motorista ?? '—'}<div className="suave pequeno">{[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ')}</div>
           {v.motorista_telefone && <div className="suave pequeno">{v.motorista_telefone}</div>}
           {zap ? <a className="ind-zap" href={zap} target="_blank" rel="noopener noreferrer" title="Abrir conversa no WhatsApp com a mensagem pronta">WhatsApp</a>
