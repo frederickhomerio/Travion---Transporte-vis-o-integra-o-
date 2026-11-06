@@ -1712,3 +1712,31 @@ button.cf-chip { cursor: pointer; }
 .ind-escolha .btn span { font-weight: 400; font-size: 13px; }
 .ind-escolha-ok { border-color: var(--verde-700); background: var(--verde-100); color: var(--verde-700); }
 .ind-escolha-oc { border-color: #d9a400; background: #fff6d6; color: #7a5600; }
+/* Industrializado: botão de informações e ficha completa da carga */
+.ind-info { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 4px; padding: 0; border-radius: 50%; border: 1px solid var(--vinho); background: #fff; color: var(--vinho); font: italic 700 11px/1 Georgia, serif; cursor: pointer; vertical-align: middle; }
+.ind-info:hover { background: var(--vinho); color: #fff; }
+.modal.ind-ficha { width: min(920px, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+.modal.ind-ficha .modal-corpo { overflow-y: auto; }
+.ind-ficha-fase { display: grid; grid-template-columns: 110px 1fr; gap: 8px; padding: 6px 0; border-top: 1px solid var(--cinza-100); }
+.ind-ficha-fase-nome { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--vinho); padding-top: 2px; }
+.ind-marcos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ind-marcos li { position: relative; padding-left: 18px; }
+.ind-marcos li::before { content: ''; position: absolute; left: 0; top: 5px; width: 10px; height: 10px; border-radius: 50%; }
+.ind-marcos li.feito::before { background: var(--verde-700); }
+.ind-marcos li.pendente::before { background: #fff; border: 2px solid var(--cinza-300); width: 6px; height: 6px; }
+.ind-marcos li.pendente strong { color: var(--texto-suave); font-weight: 500; }
+.ind-marco-lin { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ind-ficha-hist { margin-top: 14px; }
+.ind-ficha-hist summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 600px) { .ind-ficha-fase { grid-template-columns: 1fr; } }
+@media print {
+  body:has(.ind-ficha) * { visibility: hidden; }
+  .ind-ficha, .ind-ficha * { visibility: visible; }
+  .modal.ind-ficha { position: absolute; left: 0; top: 0; width: 100%; max-height: none; box-shadow: none; }
+  .modal.ind-ficha .modal-corpo { overflow: visible; }
+  .ind-ficha-hist[open] summary, .ind-ficha-hist summary { display: none; }
+}
+.ind-card { position: relative; }
+.ind-card > .ind-info { position: absolute; top: 8px; right: 8px; margin: 0; z-index: 1; }
+.ind-marcos li.sem-registro::before { background: #fff; border: 2px solid var(--verde-700); width: 6px; height: 6px; }
+.ind-marcos li.sem-registro .pequeno { color: var(--texto-suave); font-style: italic; }

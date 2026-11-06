@@ -289,3 +289,59 @@ export function linkWhatsApp(telefone: string | null, texto: string): string | n
   if (d.length < 12 || d.length > 13) return null;
   return `https://wa.me/${d}?text=${encodeURIComponent(texto)}`;
 }
+
+// ---------------------------------------------------------------------------
+// Ficha da carga: marcos do início ao fim
+// ---------------------------------------------------------------------------
+export interface MarcoCarga { fase: string; rotulo: string; em: string | null; por: string | null; detalhe: string | null; /** A carga já passou desse ponto, mas sem registro de data. */ semRegistro?: boolean }
+
+/** Marcos da carga em ordem (da carga disponível à finalização). em = null quando ainda não aconteceu. */
+export function marcosCarga(v: ViagemInd): MarcoCarga[] {
+  const ult = (f: (a: string) => boolean) => [...v.historico].reverse().find((h) => f(h.acao)) ?? null;
+  const m = (fase: string, rotulo: string, h: { em: string; usuario: string; detalhe?: string | null } | null, detalhe: string | null = null): MarcoCarga =>
+    ({ fase, rotulo, em: h?.em ?? null, por: h?.usuario ?? null, detalhe: detalhe ?? h?.detalhe ?? null });
+  const etapa = (rot: string) => ult((a) => a.includes(`→ ${rot}`) && !a.startsWith('Etapa voltou'));
+  const out: MarcoCarga[] = [
+    { fase: 'Contratação', rotulo: 'Carga lançada (disponível)', em: v.criado_em, por: v.criado_por, detalhe: v.pedido ? `Pedido ${v.pedido}` : null },
+    m('Contratação', 'Veículo contratado', etapa(ROTULO_ETAPA.contratado), v.placa_cavalo ? `${v.motorista ?? ''} · ${[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ')}` : null),
+  ];
+  const comb = ult((a) => a === 'Combinado com o motorista');
+  if (comb) out.push(m('Carregamento', 'Combinado da coleta', comb));
+  out.push(m('Carregamento', 'Veículo marcou', ult((a) => a === 'Veículo marcou')));
+  for (const c of CHECAGENS) {
+    const x = v.checagens?.[c];
+    out.push({ fase: 'Carregamento', rotulo: `${ROTULO_CHECAGEM[c]} conferido`, em: x?.em ?? null, por: x?.por ?? null, detalhe: null });
+  }
+  out.push(m('Carregamento', 'Veículo carregado', etapa(ROTULO_ETAPA.carregada)));
+  const doc = ult((a) => a.startsWith('Documentos liberados'));
+  out.push(m('Emissão', 'Documentos emitidos e valores conferidos', doc, doc ? [v.cte && `CT-e ${v.cte}`, v.mdfe && `MDF-e ${v.mdfe}`, v.nfs && `NF ${v.nfs}`, v.po && `PO ${v.po}`].filter(Boolean).join(' · ') : null));
+  out.push(m('Trânsito', 'Saiu para trânsito', etapa(ROTULO_ETAPA.transito) ?? ult((a) => a.startsWith('Marcado na descarga') && a.includes(ROTULO_ETAPA.documentada))));
+  for (const p of v.paradas.filter((x) => x.tipo === 'entrega').sort((a, b) => a.ordem - b.ordem)) {
+    const lugar = `${p.local} (${p.cidade}/${p.uf})`;
+    const marc = ult((a) => a.startsWith(`Marcado na descarga: Entrega ${p.ordem}`));
+    out.push({ fase: 'Descarga', rotulo: `Entrega ${p.ordem}: chegou ao cliente`, em: p.chegada_em, por: marc?.usuario ?? null, detalhe: `${lugar}${p.agendado_para ? ` · agendada ${new Date(p.agendado_para).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}${p.protocolo ? ` · protocolo ${p.protocolo}` : ''}` });
+    const fim = ult((a) => a.includes(`ocorrência: Entrega ${p.ordem}`));
+    out.push({ fase: 'Descarga', rotulo: `Entrega ${p.ordem}: ${p.situacao === 'recusada' ? 'recusada' : fim ? fim.acao.split(':')[0].toLowerCase() : 'finalizada'}`, em: p.situacao === 'concluida' || p.situacao === 'recusada' ? p.fim_em : null, por: fim?.usuario ?? null, detalhe: lugar });
+  }
+  out.push({ fase: 'Pós-entrega', rotulo: 'Carga entregue', em: v.entregue_em, por: (etapa(ROTULO_ETAPA.entregue) ?? ult((a) => a.includes(`→ ${ROTULO_ETAPA.entregue}`)))?.usuario ?? null, detalhe: null });
+  out.push(m('Pós-entrega', 'Canhoto digital', v.canhoto_digital_em ? ult((a) => a === 'Canhoto digital recebido') ?? { em: v.canhoto_digital_em, usuario: '' } : null));
+  out.push(m('Pós-entrega', 'Canhoto físico', v.canhoto_fisico_em ? ult((a) => a === 'Canhoto físico recebido') ?? { em: v.canhoto_fisico_em, usuario: '' } : null));
+  out.push(m('Pós-entrega', 'Comprovante conferido', v.comprovante_ok_em ? ult((a) => a === 'Comprovante de entrega conferido') ?? { em: v.comprovante_ok_em, usuario: '' } : null));
+  out.push(m('Pós-entrega', 'Carga encerrada', etapa(ROTULO_ETAPA.encerrada)));
+  if (v.etapa === 'cancelada') out.push(m('Pós-entrega', 'Carga cancelada', ult((a) => a === 'Viagem cancelada')));
+  // Etapa mínima em que cada marco já aconteceu: a carga passou dele mesmo sem registro (cargas antigas).
+  const idx = ETAPAS_FLUXO.indexOf(v.etapa);
+  const minimo = (r: string): EtapaInd | null => {
+    if (r === 'Veículo contratado') return 'contratado';
+    if (r === 'Veículo marcou' || r.endsWith('conferido') || r === 'Veículo carregado') return 'carregada';
+    if (r.startsWith('Documentos')) return 'documentada';
+    if (r === 'Saiu para trânsito') return 'entregas';
+    if (r === 'Carga entregue') return 'entregue';
+    return null;
+  };
+  return out.map((x) => {
+    const e = minimo(x.rotulo);
+    const passou = !x.em && e !== null && idx >= ETAPAS_FLUXO.indexOf(e);
+    return { ...x, por: x.por || null, ...(passou ? { semRegistro: true } : {}) };
+  });
+}

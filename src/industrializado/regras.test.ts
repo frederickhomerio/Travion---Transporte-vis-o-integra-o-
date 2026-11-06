@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, combinadoAtual, linkWhatsApp, pendenciasValores, valoresConfirmados, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
+import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, combinadoAtual, marcosCarga, linkWhatsApp, pendenciasValores, valoresConfirmados, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
 import { VALORES_ZERO, type ClienteInd, type OcorrenciaInd, type ViagemInd } from './tipos';
 
 const base: ViagemInd = {
@@ -188,5 +188,20 @@ describe('Finalizado no Painel', () => {
     const v = { ...base, id: 'f', etapa: 'entregue' as const, painel_finalizado_em: '2026-11-06T12:00:00Z' };
     expect(quadrosPainel([v], [oc({ viagem_id: 'f', situacao: 'aberta', aberta_em: '2026-11-06T10:00:00Z' })]).comOcorrencia).toHaveLength(0);
     expect(quadrosPainel([v], [oc({ viagem_id: 'f', situacao: 'aberta', aberta_em: '2026-11-06T13:00:00Z' })]).comOcorrencia).toHaveLength(1);
+  });
+});
+
+describe('ficha da carga', () => {
+  it('marcos do lançamento à entrega, com quem e quando', () => {
+    const h = (acao: string, em: string) => ({ em, usuario: 'Ana', acao, detalhe: null, motivo: null });
+    const v = { ...base, motorista: 'João', placa_cavalo: 'ABC1D23', etapa: 'entregue' as const, entregue_em: '2026-11-06T15:00:00Z',
+      paradas: [{ id: 'e', ordem: 2, tipo: 'entrega' as const, local: 'CD', cidade: 'Anápolis', uf: 'GO', exige_agendamento: false, agendado_para: null, protocolo: null, situacao: 'concluida' as const, chegada_em: '2026-11-06T14:00:00Z', inicio_em: null, fim_em: '2026-11-06T15:00:00Z', nfs: null }],
+      historico: [h('Etapa: Lançada → Veículo contratado', '2026-11-06T08:00:00Z'), h('Etapa: Carregando → Carregada', '2026-11-06T10:00:00Z'), h('Finalizado sem ocorrência: Entrega 2 (Em entregas → Entregue)', '2026-11-06T15:00:00Z')] };
+    const ms = marcosCarga(v);
+    expect(ms[0].rotulo).toContain('lançada');
+    expect(ms.find((x) => x.rotulo === 'Veículo contratado')?.em).toBe('2026-11-06T08:00:00Z');
+    expect(ms.find((x) => x.rotulo === 'Veículo carregado')?.por).toBe('Ana');
+    expect(ms.find((x) => x.rotulo === 'Entrega 2: finalizado sem ocorrência')?.em).toBe('2026-11-06T15:00:00Z');
+    expect(ms.find((x) => x.rotulo === 'Carga encerrada')?.em).toBeNull();
   });
 });

@@ -5,7 +5,7 @@ import { Alerta, Gaveta, Modal, useAviso } from '../components/ui';
 import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
 import { useInd, type NovaViagem } from './dados';
 import {
-  alertaCanhoto, alertaCombinado, calcularMargem, combinadoAtual, combinadoTransito, ETAPAS_TRANSITO, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
+  alertaCanhoto, alertaCombinado, calcularMargem, combinadoAtual, duracao, marcosCarga, combinadoTransito, ETAPAS_TRANSITO, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
 } from './regras';
 import {
   ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_SIT_PARADA, ROTULO_TIPO_CARGA, VALORES_ZERO, CHECAGENS, ROTULO_CHECAGEM,
@@ -561,3 +561,106 @@ export function Checagens({ v, podeMarcar, checar, horizontal }: { v: ViagemInd;
   );
 }
 
+
+// ---------------------------------------------------------------------------
+// Ficha completa da carga (botão "i" nas linhas): da carga disponível à finalização
+// ---------------------------------------------------------------------------
+export function BotaoInfo({ v }: { v: ViagemInd }) {
+  const [aberta, setAberta] = useState(false);
+  return (
+    <>
+      <button type="button" className="ind-info" title="Informações da carga (do lançamento à finalização)" aria-label={`Informações do pedido ${pedidoCarga(v)}`}
+        onClick={(e) => { e.stopPropagation(); setAberta(true); }}>i</button>
+      {aberta && <FichaCarga id={v.id} aoFechar={() => setAberta(false)} />}
+    </>
+  );
+}
+
+export function FichaCarga({ id, aoFechar }: { id: string; aoFechar: () => void }) {
+  const { viagens, ocorrencias, clientePorId, pode } = useInd();
+  const v = viagens.find((x) => x.id === id);
+  if (!v) return null;
+  const cli = clientePorId[v.cliente_id];
+  const ocs = ocorrencias.filter((o) => o.viagem_id === v.id).sort((a, b) => a.aberta_em.localeCompare(b.aberta_em));
+  const marcos = marcosCarga(v);
+  let anterior: string | null = null;
+  const fases = [...new Set(marcos.map((m) => m.fase))];
+  const valor = pode('ind.financeiro');
+  return (
+    <div className="fundo-modal centro" onMouseDown={(e) => { if (e.target === e.currentTarget) aoFechar(); }}>
+      <div className="modal ind-ficha" role="dialog" aria-modal="true" aria-label={`Ficha do pedido ${pedidoCarga(v)}`}>
+        <div className="modal-cab"><h2>Pedido {pedidoCarga(v)} · {cli?.nome ?? '—'}</h2>
+          <div className="pequeno"><ChipEtapa etapa={v.etapa} /> <span className="suave">{v.tipo_veiculo} · {ROTULO_TIPO_CARGA[v.tipo_carga]} · {FILIAL_IND}</span></div></div>
+        <div className="modal-corpo">
+          <dl className="ind-dl ind-ficha-dados">
+            <dt>Rota</dt><dd><Rota v={v} /></dd>
+            <dt>Retirada prevista</dt><dd>{v.coleta_prevista ? fmtData(v.coleta_prevista) : '—'}</dd>
+            {(cli?.exige_po || v.po) && <><dt>PO</dt><dd>{v.po ?? <span className="ind-falta">pendente</span>}</dd></>}
+            <dt>Motorista</dt><dd>{v.motorista ?? '—'}{v.motorista_cpf ? ` · CPF ${v.motorista_cpf}` : ''}{v.motorista_telefone ? ` · ${v.motorista_telefone}` : ''}</dd>
+            <dt>Veículo</dt><dd>{v.tipo_veiculo} · {v.frota === 'frota' ? 'Frota própria' : 'Terceiro'} · {[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ') || '—'}</dd>
+            <dt>Documentos</dt><dd>{[v.cte && `CT-e ${v.cte}`, v.mdfe && `MDF-e ${v.mdfe}`, v.nfs && `NF ${v.nfs}`].filter(Boolean).join(' · ') || '—'}</dd>
+            {v.observacao && <><dt>Observação</dt><dd>{v.observacao}</dd></>}
+          </dl>
+
+          <h3 className="ind-h3">Linha do tempo</h3>
+          {fases.map((f) => (
+            <div key={f} className="ind-ficha-fase">
+              <div className="ind-ficha-fase-nome">{f}</div>
+              <ol className="ind-marcos">
+                {marcos.filter((m) => m.fase === f).map((m, i) => {
+                  const desde = m.em && anterior ? Math.round((Date.parse(m.em) - Date.parse(anterior)) / 60000) : null;
+                  if (m.em) anterior = m.em;
+                  return (
+                    <li key={i} className={m.em ? 'feito' : m.semRegistro ? 'sem-registro' : 'pendente'}>
+                      <div className="ind-marco-lin"><strong>{m.rotulo}</strong>
+                        <span className="pequeno">{m.em ? fmtDataHora(m.em) : m.semRegistro ? 'feito, sem registro de data' : 'pendente'}{desde !== null && desde > 0 ? <span className="suave"> · +{duracao(desde)}</span> : null}</span></div>
+                      {(m.por || m.detalhe) && <div className="suave pequeno">{[m.por && `por ${m.por}`, m.detalhe].filter(Boolean).join(' · ')}</div>}
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          ))}
+
+          <h3 className="ind-h3">Coletas e entregas</h3>
+          <table className="tabela"><thead><tr><th>#</th><th>Local</th><th>Agendado</th><th>Chegou</th><th>Fim</th><th>Situação</th></tr></thead>
+            <tbody>{[...v.paradas].sort((a, b) => a.ordem - b.ordem).map((p) => (
+              <tr key={p.id}><td>{p.tipo === 'coleta' ? 'C' : 'E'}{p.ordem}</td><td>{p.local}<div className="suave pequeno">{p.cidade}/{p.uf}{p.protocolo ? ` · protocolo ${p.protocolo}` : ''}</div></td>
+                <td>{p.agendado_para ? fmtDataHora(p.agendado_para) : '—'}</td><td>{p.chegada_em ? fmtDataHora(p.chegada_em) : '—'}</td><td>{p.fim_em ? fmtDataHora(p.fim_em) : '—'}</td><td>{ROTULO_SIT_PARADA[p.situacao]}</td></tr>
+            ))}</tbody></table>
+
+          <h3 className="ind-h3">Ocorrências ({ocs.length})</h3>
+          {ocs.length === 0 ? <p className="suave" style={{ margin: 0 }}>Nenhuma ocorrência.</p> : (
+            <table className="tabela"><thead><tr><th>ID</th><th>Tipo</th><th>Descrição</th><th>Aberta</th><th>Aprovada</th><th>Paga</th>{valor && <><th className="n">Motorista</th><th className="n">Cliente</th></>}</tr></thead>
+              <tbody>{ocs.map((o) => (
+                <tr key={o.id}><td className="mono">{o.codigo}</td>
+                  <td>{ROTULO_OCORRENCIA[o.tipo]}{o.avaria ? ' · avaria' : ''}<div><ChipNivel nivel={o.carga === 'carregado' ? 'aviso' : 'ok'}>{o.carga === 'carregado' ? 'Carregado' : 'Descarregado'}</ChipNivel></div></td>
+                  <td>{o.descricao}<div className="suave pequeno">{ROTULO_SIT_OCORRENCIA[o.situacao]}</div></td>
+                  <td className="pequeno">{fmtDataHora(o.aberta_em)}<div className="suave">{o.aberta_por}</div></td>
+                  <td className="pequeno">{o.aprovada_em ? <>{fmtDataHora(o.aprovada_em)}<div className="suave">{o.aprovada_por}</div></> : '—'}</td>
+                  <td className="pequeno">{o.paga_em ? <>{fmtDataHora(o.paga_em)}<div className="suave">{o.paga_por}</div></> : '—'}</td>
+                  {valor && <><td className="n">{fmtReais(o.valor_motorista)}</td><td className="n">{fmtReais(o.valor_cliente)}</td></>}</tr>
+              ))}</tbody></table>
+          )}
+
+          {valor && <><h3 className="ind-h3">Valores e margem</h3><QuadroMargem v={v} ocorrencias={ocorrencias} /></>}
+
+          <details className="ind-ficha-hist">
+            <summary>Histórico completo ({v.historico.length} ações)</summary>
+            <ol className="ind-auditoria" style={{ marginTop: 8 }}>
+              {[...v.historico].reverse().map((h, i) => (
+                <li key={i}><div><strong>{h.acao}</strong>{h.detalhe && <span className="suave"> · {h.detalhe}</span>}</div>
+                  {h.motivo && <div className="pequeno">Motivo: {h.motivo}</div>}
+                  <div className="suave pequeno">{h.usuario} · {fmtDataHora(h.em)}</div></li>
+              ))}
+            </ol>
+          </details>
+        </div>
+        <div className="modal-rodape nao-imprimir">
+          <button className="btn" onClick={() => window.print()}>Imprimir / PDF</button>
+          <button className="btn primario" onClick={aoFechar}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}

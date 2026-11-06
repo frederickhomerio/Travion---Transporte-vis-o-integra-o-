@@ -9,7 +9,7 @@ import { normalizar } from '../lib/texto';
 import type { Permissao } from '../types';
 import {
   ChipCanhoto, ChipCombinado, ChipEtapa, ChipNivel, DetalhesViagem, FILIAL_IND, FormViagem, ModalCombinado, ModalMotivo, ModalOcorrencia,
-  Checagens, ParadasTracking, Rota, useExecutar,
+  BotaoInfo, Checagens, ParadasTracking, Rota, useExecutar,
 } from './componentes';
 import { restaurarPrevia, useInd } from './dados';
 
@@ -206,7 +206,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
       <thead><tr>{cab[k].map((c) => <th key={c}>{c}</th>)}<th /></tr></thead>
       <tbody>{vs.map((v) => {
         const cli = clientePorId[v.cliente_id];
-        const via = <td><button className="btn sutil peq" onClick={() => abrir(v.id)}><strong>{v.pedido ?? 'Sem pedido'}</strong></button><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td>;
+        const via = <td><button className="btn sutil peq" onClick={() => abrir(v.id)}><strong>{v.pedido ?? 'Sem pedido'}</strong></button><BotaoInfo v={v} /><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td>;
         const zap = linkWhatsApp(v.motorista_telefone, mensagemMotorista(k, v, cli?.nome));
         const mot = <td>{v.motorista ?? '—'}<div className="suave pequeno">{[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ')}</div>
           {v.motorista_telefone && <div className="suave pequeno">{v.motorista_telefone}</div>}
@@ -341,7 +341,7 @@ export function ViagensInd() {
                   const m = calcularMargem(v, ocorrencias);
                   return (
                     <tr key={v.id} className="clicavel" onClick={() => setAberta(v.id)}>
-                      <td><strong>{pedidoCarga(v)}</strong><div className="suave pequeno">{v.tipo_veiculo || '—'} · {ROTULO_TIPO_CARGA[v.tipo_carga]}{v.reversa_de ? ' · reversa' : ''}</div></td>
+                      <td><strong>{pedidoCarga(v)}</strong> <BotaoInfo v={v} /><div className="suave pequeno">{v.tipo_veiculo || '—'} · {ROTULO_TIPO_CARGA[v.tipo_carga]}{v.reversa_de ? ' · reversa' : ''}</div></td>
                       <td><ChipEtapa etapa={v.etapa} /></td>
                       <td><Rota v={v} /></td>
                       <td>{ag ? <>{fmtDataHora(ag.agendado_para)}<div className="suave pequeno">{ag.local}{ag.protocolo ? ` · ${ag.protocolo}` : ''}</div></> : <span className="suave">—</span>}</td>
@@ -397,6 +397,7 @@ export function ControleInd() {
                 const a = alertaCombinado(v);
                 return (
                   <article key={v.id} className={`ind-card ${a.nivel}`}>
+                    <BotaoInfo v={v} />
                     <button className="ind-card-cab" onClick={() => setAberta(v.id)}>
                       <strong>{pedidoCarga(v)}</strong><span className="suave">{v.tipo_veiculo} · {clientePorId[v.cliente_id]?.nome}</span>
                     </button>
@@ -453,7 +454,7 @@ export function EmissaoInd() {
               const min = Math.round((Date.now() - Date.parse(lastAt(v))) / 60000);
               return (
                 <tr key={v.id}>
-                  <td><button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td>
+                  <td><button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button><BotaoInfo v={v} /><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td>
                   <td>{cli?.nome}</td><td><Rota v={v} /></td>
                   <td><Checagens v={v} podeMarcar={pode('ind.avancar')} checar={(x, item, m) => exec(() => acoes.marcarChecagem(x.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} /></td>
                   <td><ChipNivel nivel={min > 40 ? 'atraso' : min > 20 ? 'aviso' : 'ok'}>{min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`}</ChipNivel></td>
@@ -474,7 +475,7 @@ export function EmissaoInd() {
         <table className="tabela">
           <thead><tr><th>Pedido / veículo</th><th>Cliente</th><th>CT-e</th><th>MDF-e</th><th>NF</th><th>Emitido por</th></tr></thead>
           <tbody>{liberadas.map((v) => (
-            <tr key={v.id}><td>{pedidoCarga(v)}<div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td><td>{clientePorId[v.cliente_id]?.nome}</td><td>{v.cte}</td><td>{v.mdfe ?? '—'}</td><td>{v.nfs}</td><td>{v.emissao_assumida_por ?? '—'}</td></tr>
+            <tr key={v.id}><td>{pedidoCarga(v)} <BotaoInfo v={v} /><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td><td>{clientePorId[v.cliente_id]?.nome}</td><td>{v.cte}</td><td>{v.mdfe ?? '—'}</td><td>{v.nfs}</td><td>{v.emissao_assumida_por ?? '—'}</td></tr>
           ))}</tbody>
         </table>
       </div>
@@ -573,7 +574,7 @@ export function OcorrenciasInd() {
           <tr key={o.id}>
             <td className="mono"><strong>{o.codigo}</strong></td>
             <td>{ROTULO_OCORRENCIA[o.tipo]}{o.avaria && <div><span className="badge suspenso">Avaria</span></div>}</td>
-            <td>{v && <button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button>}<div className="suave pequeno">{v ? `${v.tipo_veiculo} · ${clientePorId[v.cliente_id]?.nome ?? ''}` : ''}</div></td>
+            <td>{v && <button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button>}{v && <BotaoInfo v={v} />}<div className="suave pequeno">{v ? `${v.tipo_veiculo} · ${clientePorId[v.cliente_id]?.nome ?? ''}` : ''}</div></td>
             <td className="pequeno">{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}</td>
             <td className="pequeno" style={{ maxWidth: 260 }}>{o.descricao}</td>
             <td className="pequeno">{fmtDataHora(o.aberta_em)}<div className="suave">{o.aberta_por}</div></td>
@@ -658,7 +659,7 @@ export function PosEntregaInd() {
               const pp = pode('ind.pos_entrega');
               return (
                 <tr key={v.id}>
-                  <td><button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button><div className="suave pequeno">{v.tipo_veiculo} · {clientePorId[v.cliente_id]?.nome}</div></td>
+                  <td><button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button><BotaoInfo v={v} /><div className="suave pequeno">{v.tipo_veiculo} · {clientePorId[v.cliente_id]?.nome}</div></td>
                   <td className="pequeno">{fmtDataHora(v.entregue_em)}</td>
                   <td>{v.canhoto_digital_em ? <ChipNivel nivel="ok">Recebido</ChipNivel> : pp ? <button className="btn peq" onClick={() => exec(() => acoes.registrarCanhoto(v.id, 'digital'))}>Recebi</button> : '—'}</td>
                   <td>{v.canhoto_fisico_em ? <ChipNivel nivel="ok">Recebido</ChipNivel> : <><ChipCanhoto v={v} />{pp && <div><button className="btn peq" style={{ marginTop: 4 }} onClick={() => exec(() => acoes.registrarCanhoto(v.id, 'fisico'))}>Recebi</button></div>}</>}</td>
