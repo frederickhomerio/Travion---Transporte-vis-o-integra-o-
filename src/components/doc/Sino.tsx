@@ -6,14 +6,21 @@ import { useDoc } from '../../data/documentacao';
 import { useApp } from '../../data/store';
 import { fmtDataHora } from '../../lib/formato';
 import type { NotificacaoApp } from '../../types';
+import { useInd } from '../../industrializado/dados';
+import { faltaConferencia, marcadoSemConferencia, pedidoCarga } from '../../industrializado/regras';
+import { ROTULO_CHECAGEM } from '../../industrializado/tipos';
 
 export function Sino() {
-  const { api } = useApp();
+  const { api, pode } = useApp();
   const { estado, recarregarNotificacoes } = useDoc();
+  const ind = useInd();
+  // Industrializado: veículo marcou o combinado sem Cadastro, Monitoramento e OC/Vínculo conferidos.
+  // Fica no sino enquanto a situação durar (some sozinho quando as 3 conferências forem marcadas).
+  const alertasInd = pode('ind.pagina') ? ind.viagens.filter(marcadoSemConferencia) : [];
   const nav = useNavigate();
   const [aberto, setAberto] = useState(false);
   const caixa = useRef<HTMLDivElement>(null);
-  const naoLidas = estado.notificacoes.filter((n) => !n.lida_em).length;
+  const naoLidas = (estado.ativo ? estado.notificacoes.filter((n) => !n.lida_em).length : 0) + alertasInd.length;
 
   useEffect(() => {
     if (!aberto) return;
@@ -24,7 +31,7 @@ export function Sino() {
     return () => { document.removeEventListener('mousedown', fora); window.removeEventListener('keydown', esc); };
   }, [aberto]);
 
-  if (!estado.ativo) return null;
+  if (!estado.ativo && !alertasInd.length && !pode('ind.pagina')) return null;
   const abrir = async (n: NotificacaoApp) => {
     setAberto(false);
     if (!n.lida_em) { try { await api.doc.marcarLidas([n.id]); } catch { /* fica não lida */ } void recarregarNotificacoes(); }
@@ -48,7 +55,21 @@ export function Sino() {
             <strong>Notificações</strong>
             {naoLidas > 0 && <button className="btn sutil peq" onClick={async () => { await api.doc.marcarLidas(null).catch(() => undefined); void recarregarNotificacoes(); }}>Marcar todas como lidas</button>}
           </div>
-          {!estado.notificacoes.length ? <p className="suave sino-vazio">Nenhuma notificação.</p> : (
+          {alertasInd.length > 0 && (
+            <ul>
+              {alertasInd.map((v) => (
+                <li key={`ind-${v.id}`}>
+                  <button className="sino-item nao-lida alerta-ind" onClick={() => { setAberto(false); nav(`/industrializado?quadro=contratados&v=${v.id}`); }}>
+                    <strong>Veículo marcado sem conferência · Pedido {pedidoCarga(v)}</strong>
+                    <span>{v.motorista ?? 'Motorista'} ({v.placa_cavalo ?? 'sem placa'}) · {ind.clientePorId[v.cliente_id]?.nome ?? ''}</span>
+                    <span>Falta: {faltaConferencia(v).map((c) => ROTULO_CHECAGEM[c]).join(', ')}</span>
+                    <span className="suave pequeno">Marcou em {fmtDataHora(v.combinado!.marcou_em!)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!estado.ativo ? (!alertasInd.length && <p className="suave sino-vazio">Nenhuma notificação.</p>) : !estado.notificacoes.length ? (!alertasInd.length && <p className="suave sino-vazio">Nenhuma notificação.</p>) : (
             <ul>
               {estado.notificacoes.slice(0, 30).map((n) => (
                 <li key={n.id}>

@@ -1,7 +1,7 @@
 // Regras do módulo Industrializado (puras, testadas em regras.test.ts).
 
 import {
-  ETAPAS_FLUXO, ROTULO_ETAPA, type ClienteInd, type EtapaInd, type OcorrenciaInd, type ValoresInd, type ViagemInd,
+  CHECAGENS, ETAPAS_FLUXO, ROTULO_ETAPA, type ChecagemInd, type ClienteInd, type EtapaInd, type OcorrenciaInd, type ValoresInd, type ViagemInd,
 } from './tipos';
 
 export const META_MARGEM_PCT = 12;
@@ -218,3 +218,17 @@ export function codigoOcorrencia(n: number): string { return `OC-${String(n).pad
 export function codigoViagem(n: number): string { return `IND-${String(n).padStart(4, '0')}`; }
 /** Como a carga aparece nas telas: pelo pedido do cliente (o código IND fica só para busca interna). */
 export function pedidoCarga(v: { pedido: string | null }): string { return v.pedido?.trim() || 'Sem pedido'; }
+
+// ---------------------------------------------------------------------------
+// Conferências (Cadastro, Monitoramento, OC/Vínculo)
+// ---------------------------------------------------------------------------
+/** Conferências ainda não marcadas na viagem. */
+export function faltaConferencia(v: Pick<ViagemInd, 'checagens'>): ChecagemInd[] {
+  return CHECAGENS.filter((c) => !v.checagens?.[c]);
+}
+/** Etapas em que a falta de conferência ainda gera alerta (até a saída para a viagem). */
+const ETAPAS_CONFERENCIA: EtapaInd[] = ['lancada', 'contratado', 'coleta_agendada', 'carregando', 'carregada', 'documentada'];
+/** Veículo já marcou o combinado mas ainda falta alguma conferência: vira notificação no sino e alerta no Painel. */
+export function marcadoSemConferencia(v: Pick<ViagemInd, 'checagens' | 'combinado' | 'etapa'>): boolean {
+  return !!v.combinado?.marcou_em && ETAPAS_CONFERENCIA.includes(v.etapa) && faltaConferencia(v).length > 0;
+}

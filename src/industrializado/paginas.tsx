@@ -1,6 +1,7 @@
 // Telas do módulo Industrializado (exclusivo do centro de custo Industrializado, filial Goiânia).
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, EstadoVazio, Modal, Segmentado } from '../components/ui';
 import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
@@ -12,7 +13,7 @@ import {
 } from './componentes';
 import { restaurarPrevia, useInd } from './dados';
 import {
-  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
+  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
   PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, retiradasDoDia, type NivelAlerta, type QuadrosPainel,
 } from './regras';
 import {
@@ -44,8 +45,19 @@ const ativa = (v: ViagemInd) => v.etapa !== 'encerrada' && v.etapa !== 'cancelad
 export function PainelInd() {
   const { viagens, ocorrencias, clientePorId, metas, acoes, pode } = useInd();
   const exec = useExecutar();
-  const [sel, setSel] = useState<ChaveQuadro | null>(null);
-  const [aberta, setAberta] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const [sel, setSel] = useState<ChaveQuadro | null>((params.get('quadro') as ChaveQuadro | null) ?? null);
+  const [aberta, setAberta] = useState<string | null>(params.get('v'));
+  // Vindo do sino: abre o quadro e a carga indicados e limpa o endereço.
+  useEffect(() => {
+    const qd = params.get('quadro') as ChaveQuadro | null; const vi = params.get('v');
+    if (qd || vi) { if (qd) setSel(qd); if (vi) setAberta(vi); setParams({}, { replace: true }); }
+  }, [params, setParams]);
+  const semConf = viagens.filter(marcadoSemConferencia);
+  const marcouMsg = (v: ViagemInd) => {
+    const f = faltaConferencia(v);
+    return f.length ? `Marcação registrada. Atenção: falta ${f.map((c) => ROTULO_CHECAGEM[c]).join(', ')}.` : 'Marcação registrada.';
+  };
   const [modal, setModal] = useState<{ tipo: 'combinado' | 'ocorrencia' | 'emissao'; v: ViagemInd } | null>(null);
   const q = quadrosPainel(viagens, ocorrencias);
   const cont = (vs: ViagemInd[], f: (v: ViagemInd) => NivelAlerta) => {
@@ -67,6 +79,12 @@ export function PainelInd() {
 
   return (
     <Pagina titulo="Painel Industrializado">
+      {semConf.length > 0 && (
+        <Alerta tipo="erro"><div>
+          <strong>{semConf.length === 1 ? '1 veículo marcado' : `${semConf.length} veículos marcados`} sem as 3 conferências:</strong>{' '}
+          {semConf.map((v, i) => <span key={v.id}>{i > 0 && ' · '}<button className="btn sutil peq" onClick={() => { setSel('contratados'); setAberta(v.id); }}>Pedido {pedidoCarga(v)}</button> <span className="pequeno">(falta {faltaConferencia(v).map((c) => ROTULO_CHECAGEM[c]).join(', ')})</span></span>)}
+        </div></Alerta>
+      )}
       <div className="ind-quadros">
         {quadros.map((x) => {
           const pior = x.ordem?.find((n) => n !== 'neutro' && x.cores?.[n]) ?? (x.vs.length ? 'info' : 'vazio');
@@ -77,6 +95,7 @@ export function PainelInd() {
               {x.ordem ? (
                 <span className="ind-cores">{x.ordem.filter((n) => x.cores?.[n]).map((n) => <span key={n} className={`ind-chip ${n}`}>{x.cores![n]} {ROTULO_COR[x.k === 'transito' ? 'transito' : 'contratado'][n]}</span>)}</span>
               ) : <span className="suave pequeno">{x.desc}</span>}
+              {x.k === 'contratados' && semConf.length > 0 && <span className="ind-chip atraso">{semConf.length} marcado{semConf.length > 1 ? 's' : ''} sem conferência</span>}
               <span className="ind-entrar">{sel === x.k ? 'Fechar lista' : 'Ver lista →'}</span>
             </button>
           );
@@ -96,7 +115,7 @@ export function PainelInd() {
                   return (
                     <div key={n} className={`ind-faixa ${n}`}>
                       <h3><span className={`ind-chip ${n}`}>{ROTULO_COR[atual.k === 'transito' ? 'transito' : 'contratado'][n]}</span> <span className="suave pequeno">{vs.length}</span></h3>
-                      <TabelaQuadro k={atual.k} vs={vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={(v) => exec(() => acoes.registrarMarcou(v.id), 'Marcação registrada.')} checar={(v, item, m) => exec(() => acoes.marcarChecagem(v.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} pode={pode} />
+                      <TabelaQuadro k={atual.k} vs={vs} clientePorId={clientePorId} ocorrencias={ocorrencias} abrir={setAberta} acao={(tipo, v) => setModal({ tipo, v })} marcou={(v) => exec(() => acoes.registrarMarcou(v.id), marcouMsg(v))} checar={(v, item, m) => exec(() => acoes.marcarChecagem(v.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} pode={pode} />
                     </div>
                   );
                 })
@@ -170,7 +189,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
         if (k === 'contratados') { const a = alertaCombinado(v); return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td>{mot}<td><Checagens v={v} podeMarcar={pode('ind.avancar')} checar={checar} /></td><td>{v.combinado?.o_que ?? '—'}<div className="suave pequeno">{ROTULO_ETAPA[v.etapa]}</div></td>
             <td>{v.combinado ? fmtDataHora(v.combinado.para) : '—'}{v.combinado?.marcou_em && <div className="suave pequeno">marcou {fmtDataHora(v.combinado.marcou_em)}</div>}</td>
-            <td><ChipNivel nivel={a.nivel}>{a.texto}</ChipNivel></td>
+            <td><ChipNivel nivel={a.nivel}>{a.texto}</ChipNivel>{marcadoSemConferencia(v) && <div className="ind-falta pequeno">sem conferência</div>}</td>
             <td style={{ whiteSpace: 'nowrap' }}>{pode('ind.avancar') && <>
               {v.combinado && !v.combinado.marcou_em && <button className="btn primario peq" onClick={() => marcou(v)}>Marcou</button>}
               <button className="btn peq" style={{ marginLeft: 4 }} onClick={() => acao('combinado', v)}>{v.combinado ? 'Alterar' : 'Combinado'}</button></>}</td></tr>
@@ -351,7 +370,7 @@ export function ControleInd() {
                           onClick={() => exec(() => acoes.avancar(v.id), `Pedido ${pedidoCarga(v)} em ${ROTULO_ETAPA[prox]}.`)}>Avançar</button>
                       )}
                       {pode('ind.avancar') && <button className="btn peq" onClick={() => setModal({ tipo: 'combinado', v })}>Combinado</button>}
-                      {pode('ind.avancar') && v.combinado && !v.combinado.marcou_em && <button className="btn peq" onClick={() => exec(() => acoes.registrarMarcou(v.id), 'Marcação registrada.')}>Marcou</button>}
+                      {pode('ind.avancar') && v.combinado && !v.combinado.marcou_em && <button className="btn peq" onClick={() => { const f = faltaConferencia(v); exec(() => acoes.registrarMarcou(v.id), f.length ? `Marcação registrada. Atenção: falta ${f.map((c) => ROTULO_CHECAGEM[c]).join(', ')}.` : 'Marcação registrada.'); }}>Marcou</button>}
                       {col === 'entregas' && pode('ind.ocorrencias') && <button className="btn peq secundario" onClick={() => setModal({ tipo: 'ocorrencia', v })}>Ocorrência</button>}
                     </div>
                     {pend.length > 0 && col !== 'carregada' && <div className="ind-pend pequeno">{pend[0]}</div>}

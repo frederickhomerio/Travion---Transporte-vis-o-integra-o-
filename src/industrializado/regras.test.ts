@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, pendenciasAvanco, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
+import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
 import { VALORES_ZERO, type ClienteInd, type OcorrenciaInd, type ViagemInd } from './tipos';
 
 const base: ViagemInd = {
@@ -117,5 +117,20 @@ describe('painel', () => {
   it('retiradas do dia contam quem passou de Carregando', () => {
     const vs: ViagemInd[] = [{ ...base, coleta_prevista: '2026-11-06' }, { ...base, coleta_prevista: '2026-11-06', etapa: 'documentada' }, { ...base, coleta_prevista: '2026-11-07' }];
     expect(retiradasDoDia(vs, '2026-11-06')).toEqual({ previstas: 2, retiradas: 1 });
+  });
+});
+
+describe('conferências', () => {
+  const ok = { em: 'x', por: 'y' };
+  const marcado = { ...base, etapa: 'contratado' as const, combinado: { o_que: 'Chegada', para: '2026-11-06T12:00:00Z', marcou_em: '2026-11-06T11:50:00Z', registrado_por: 'x' } };
+  it('marcado sem as 3 conferências gera alerta; com as 3, não', () => {
+    expect(faltaConferencia(base)).toEqual(['cadastro', 'monitoramento', 'oc_vinculo']);
+    expect(marcadoSemConferencia(marcado)).toBe(true);
+    expect(marcadoSemConferencia({ ...marcado, checagens: { cadastro: ok, monitoramento: ok } })).toBe(true);
+    expect(marcadoSemConferencia({ ...marcado, checagens: { cadastro: ok, monitoramento: ok, oc_vinculo: ok } })).toBe(false);
+  });
+  it('sem marcar o combinado ou já em trânsito, não alerta', () => {
+    expect(marcadoSemConferencia({ ...marcado, combinado: { ...marcado.combinado, marcou_em: null } })).toBe(false);
+    expect(marcadoSemConferencia({ ...marcado, etapa: 'transito' })).toBe(false);
   });
 });
