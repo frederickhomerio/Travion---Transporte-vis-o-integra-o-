@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, combinadoAtual, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
+import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, combinadoAtual, pendenciasValores, valoresConfirmados, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
 import { VALORES_ZERO, type ClienteInd, type OcorrenciaInd, type ViagemInd } from './tipos';
 
 const base: ViagemInd = {
@@ -156,5 +156,20 @@ describe('combinado de trânsito', () => {
     expect(combinadoAtual({ etapa: 'transito', combinado: c })).toBeNull();
     const t = { ...c, o_que: 'Chegada no cliente', fase: 'transito' as const };
     expect(combinadoAtual({ etapa: 'transito', combinado: t })).toBe(t);
+  });
+});
+
+describe('valores conferidos na Emissão', () => {
+  const ok = { frete_empresa: '10000', pedagio_empresa: '0', custo_extra: '', adicional_frete: '', frete_motorista: '8000', pedagio_motorista: '0' };
+  it('pedágios obrigatórios (zero vale); custo extra e adicional opcionais', () => {
+    expect(pendenciasValores(ok)).toHaveLength(0);
+    expect(pendenciasValores({ ...ok, pedagio_empresa: '', pedagio_motorista: '' })).toHaveLength(2);
+    expect(pendenciasValores({ ...ok, frete_empresa: '0', frete_motorista: '' })).toHaveLength(2);
+  });
+  it('adicional de frete entra na receita e pedágio motorista na despesa', () => {
+    const valores = valoresConfirmados(VALORES_ZERO, { ...ok, pedagio_empresa: '300', adicional_frete: '200', pedagio_motorista: '300' });
+    const m = calcularMargem({ ...base, valores });
+    expect(m.receita).toBe(10500);
+    expect(m.despesa).toBe(8300);
   });
 });

@@ -69,11 +69,13 @@ export function QuadroMargem({ v, ocorrencias }: { v: ViagemInd; ocorrencias: Oc
           <tr className="ind-sub"><td colSpan={3}>Receita</td></tr>
           {linha('Frete empresa', l.frete_empresa)}
           {linha('Custo extra', l.custo_extra)}
-          {linha('Pedágio', l.pedagio)}
+          {linha('Pedágio empresa', l.pedagio)}
+          {linha('Adicional de frete', l.adicional_frete ?? 0)}
           {linha('CT-e complementar', l.cte_complementar, v.valores.cte_complementar)}
           <tr className="ind-total"><td>Total receita</td><td className="n">{fmtReais(m.receita)}</td><td /></tr>
           <tr className="ind-sub"><td colSpan={3}>Despesa</td></tr>
           {linha('Frete motorista', l.frete_motorista, v.valores.frete_motorista)}
+          {linha('Pedágio motorista', l.pedagio_motorista ?? 0)}
           {linha('Descarga', l.descarga)}
           {linha('Diária', l.diaria, v.valores.diaria)}
           <tr className="ind-total"><td>Total despesa</td><td className="n">{fmtReais(m.despesa)}</td><td /></tr>
@@ -82,6 +84,7 @@ export function QuadroMargem({ v, ocorrencias }: { v: ViagemInd; ocorrencias: Oc
           </tr>
         </tbody>
       </table>
+      {v.valores_conferidos_em && <p className="pequeno" style={{ margin: '6px 0 0' }}>Valores conferidos na Emissão por {v.valores_conferidos_por} em {fmtDataHora(v.valores_conferidos_em)}.</p>}
       <p className="suave pequeno" style={{ margin: '6px 0 0' }}>
         Ocorrências aprovadas ou pagas entram sozinhas: valor ao cliente no CT-e complementar; valor ao motorista na diária (ocorrência de diária) ou no frete motorista (demais).
       </p>
@@ -342,13 +345,15 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
               <div className="grade-campos">
                 <Dinheiro rotulo="Frete empresa" valor={d.valores.frete_empresa} aoMudar={(x) => setV('frete_empresa', x)} />
                 <Dinheiro rotulo="Custo extra" valor={d.valores.custo_extra} aoMudar={(x) => setV('custo_extra', x)} />
-                <Dinheiro rotulo="Pedágio" valor={d.valores.pedagio} aoMudar={(x) => setV('pedagio', x)} />
+                <Dinheiro rotulo="Pedágio empresa" valor={d.valores.pedagio} aoMudar={(x) => setV('pedagio', x)} />
+                <Dinheiro rotulo="Adicional de frete" valor={d.valores.adicional_frete ?? 0} aoMudar={(x) => setV('adicional_frete', x)} />
                 <Dinheiro rotulo="CT-e complementar" valor={d.valores.cte_complementar} aoMudar={(x) => setV('cte_complementar', x)} />
               </div>
             </div>
             <div><strong className="pequeno">Despesa</strong>
               <div className="grade-campos">
                 <Dinheiro rotulo="Frete motorista" valor={d.valores.frete_motorista} aoMudar={(x) => setV('frete_motorista', x)} />
+                <Dinheiro rotulo="Pedágio motorista" valor={d.valores.pedagio_motorista ?? 0} aoMudar={(x) => setV('pedagio_motorista', x)} />
                 <Dinheiro rotulo="Descarga" valor={d.valores.descarga} aoMudar={(x) => setV('descarga', x)} />
                 <Dinheiro rotulo="Diária" valor={d.valores.diaria} aoMudar={(x) => setV('diaria', x)} />
               </div>

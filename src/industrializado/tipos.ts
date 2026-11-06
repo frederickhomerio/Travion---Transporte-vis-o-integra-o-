@@ -36,9 +36,12 @@ export interface ParadaInd {
 
 export interface ValoresInd {
   // Receita
+  /** pedagio = pedágio empresa (cobrado do cliente). */
   frete_empresa: number; custo_extra: number; pedagio: number; cte_complementar: number;
+  adicional_frete?: number;
   // Despesa
   frete_motorista: number; descarga: number; diaria: number;
+  pedagio_motorista?: number;
 }
 
 /** Combinado entre o funcionário e o motorista (tracking). Alerta 1 hora antes se o veículo não marcou. */
@@ -80,6 +83,8 @@ export interface ViagemInd {
   entregue_em: string | null;
   canhoto_digital_em: string | null; canhoto_fisico_em: string | null; comprovante_ok_em: string | null;
   reversa_de: string | null;
+  /** Valores do CT-e e do contrato conferidos na Emissão. */
+  valores_conferidos_em?: string | null; valores_conferidos_por?: string | null;
   observacao: string | null;
   criado_em: string; criado_por: string;
   historico: AcaoInd[];
@@ -119,4 +124,4 @@ export const ROTULO_SIT_PARADA: Record<SituacaoParada, string> = {
   pendente: 'Pendente', chegou: 'Chegou', em_operacao: 'Em operação', concluida: 'Concluída', recusada: 'Recusada',
 };
 
-export const VALORES_ZERO: ValoresInd = { frete_empresa: 0, custo_extra: 0, pedagio: 0, cte_complementar: 0, frete_motorista: 0, descarga: 0, diaria: 0 };
+export const VALORES_ZERO: ValoresInd = { frete_empresa: 0, custo_extra: 0, pedagio: 0, cte_complementar: 0, adicional_frete: 0, frete_motorista: 0, descarga: 0, diaria: 0, pedagio_motorista: 0 };

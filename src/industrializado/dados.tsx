@@ -6,7 +6,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 import { useApp } from '../data/store';
 import { hojeSP, somarDias } from '../lib/formato';
 import type { Permissao } from '../types';
-import { codigoOcorrencia, ETAPAS_TRANSITO, etapaAnterior, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, proximaEtapa } from './regras';
+import { codigoOcorrencia, ETAPAS_TRANSITO, valoresConfirmados, type ValoresEmissao, etapaAnterior, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, proximaEtapa } from './regras';
 import {
   ROTULO_CHECAGEM, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_PARADA, VALORES_ZERO,
   type CargaOcorrencia, type ChecagemInd, type ClienteInd, type OcorrenciaInd, type ParadaInd, type SituacaoParada, type TipoOcorrencia, type ValoresInd, type ViagemInd,
@@ -321,16 +321,21 @@ export function useInd() {
         mudar(id, 'Emissão assumida', () => ({ emissao_assumida_por: usuario, emissao_assumida_em: agora() }));
       },
 
-      liberarEmissao(id: string, d: { cte: string; mdfe: string; nfs: string; po: string }) {
+      liberarEmissao(id: string, d: { cte: string; mdfe: string; nfs: string; po: string }, valores: ValoresEmissao) {
         exigir('ind.emissao');
         const v = viagem(id);
         if (v.etapa !== 'carregada') falha('A viagem não está aguardando emissão.');
-        const pend = pendenciasEmissao(v, cliente(v.cliente_id), d);
+        const pend = pendenciasEmissao(v, cliente(v.cliente_id), d, valores);
         if (pend.length) falha(pend.join('. ') + '.');
+        const novos = valoresConfirmados(v.valores, valores);
+        const rot: Array<[keyof ValoresInd, string]> = [['frete_empresa', 'Frete empresa'], ['pedagio', 'Pedágio empresa'], ['custo_extra', 'Custo extra'], ['adicional_frete', 'Adicional de frete'], ['frete_motorista', 'Frete motorista'], ['pedagio_motorista', 'Pedágio motorista']];
+        const brl = (x: number) => x.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const conf = rot.map(([k, r]) => `${r} ${brl(novos[k] ?? 0)}${(v.valores[k] ?? 0) !== (novos[k] ?? 0) ? ` (lançado ${brl(v.valores[k] ?? 0)})` : ''}`).join('; ');
         mudar(id, 'Documentos liberados: Carregada → Documentada', () => ({
           etapa: 'documentada', cte: d.cte.trim(), mdfe: t(d.mdfe), nfs: d.nfs.trim(), po: t(d.po) ?? v.po,
           emissao_assumida_por: v.emissao_assumida_por ?? usuario, emissao_assumida_em: v.emissao_assumida_em ?? agora(),
-        }), `CT-e ${d.cte.trim()}${d.mdfe.trim() ? `, MDF-e ${d.mdfe.trim()}` : ''}, NF ${d.nfs.trim()}`);
+          valores: novos, valores_conferidos_em: agora(), valores_conferidos_por: usuario,
+        }), `CT-e ${d.cte.trim()}${d.mdfe.trim() ? `, MDF-e ${d.mdfe.trim()}` : ''}, NF ${d.nfs.trim()}. Valores conferidos: ${conf}`);
       },
 
       abrirOcorrencia(d: { viagem_id: string; parada_id: string | null; tipo: TipoOcorrencia; carga: CargaOcorrencia; avaria: boolean; descricao: string; valor_motorista: number; valor_cliente: number }): OcorrenciaInd {

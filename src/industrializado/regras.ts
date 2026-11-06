@@ -36,8 +36,9 @@ export function calcularMargem(v: ViagemInd, ocorrencias: OcorrenciaInd[] = []):
     l.cte_complementar += o.valor_cliente;
     if (o.tipo === 'diaria') l.diaria += o.valor_motorista; else l.frete_motorista += o.valor_motorista;
   }
-  const receita = l.frete_empresa + l.custo_extra + l.pedagio + l.cte_complementar;
-  const despesa = l.frete_motorista + l.descarga + l.diaria;
+  l.adicional_frete = l.adicional_frete ?? 0; l.pedagio_motorista = l.pedagio_motorista ?? 0;
+  const receita = l.frete_empresa + l.custo_extra + l.pedagio + l.cte_complementar + l.adicional_frete;
+  const despesa = l.frete_motorista + l.descarga + l.diaria + l.pedagio_motorista;
   const margem = receita - despesa;
   const pct = receita > 0 ? (margem / receita) * 100 : null;
   return { receita, despesa, margem, pct, linhas: l, abaixoMeta: pct !== null && pct < META_MARGEM_PCT };
@@ -192,8 +193,32 @@ export function pendenciasEncerrar(v: ViagemInd, ocorrencias: OcorrenciaInd[]): 
 }
 
 /** Documentos que a Emissão precisa informar antes de liberar. */
-export function pendenciasEmissao(v: ViagemInd, cliente: ClienteInd | undefined, d: { cte: string; nfs: string; po: string }): string[] {
+/** Valores do CT-e e do contrato digitados na Emissão (texto vazio = não informado). */
+export interface ValoresEmissao { frete_empresa: string; pedagio_empresa: string; custo_extra: string; adicional_frete: string; frete_motorista: string; pedagio_motorista: string }
+const num = (x: string) => (x.trim() === '' ? null : Number(x.replace(',', '.')));
+/** Frete empresa e frete motorista > 0; pedágio empresa e pedágio motorista obrigatórios (podem ser zero); custo extra e adicional opcionais. */
+export function pendenciasValores(d: ValoresEmissao): string[] {
   const p: string[] = [];
+  const pos = (x: string) => { const n = num(x); return n !== null && Number.isFinite(n) && n > 0; };
+  const pre = (x: string) => { const n = num(x); return n !== null && Number.isFinite(n) && n >= 0; };
+  const opc = (x: string) => { const n = num(x); return n === null || (Number.isFinite(n) && n >= 0); };
+  if (!pos(d.frete_empresa)) p.push('Confirme o frete empresa');
+  if (!pre(d.pedagio_empresa)) p.push('Confirme o pedágio empresa (0 se não houver)');
+  if (!pos(d.frete_motorista)) p.push('Confirme o frete motorista');
+  if (!pre(d.pedagio_motorista)) p.push('Confirme o pedágio motorista (0 se não houver)');
+  if (!opc(d.custo_extra)) p.push('Custo extra inválido');
+  if (!opc(d.adicional_frete)) p.push('Adicional de frete inválido');
+  return p;
+}
+/** Converte os valores digitados para a viagem (opcionais vazios = 0). */
+export function valoresConfirmados(base: ValoresInd, d: ValoresEmissao): ValoresInd {
+  const n = (x: string) => num(x) ?? 0;
+  return { ...base, frete_empresa: n(d.frete_empresa), pedagio: n(d.pedagio_empresa), custo_extra: n(d.custo_extra), adicional_frete: n(d.adicional_frete), frete_motorista: n(d.frete_motorista), pedagio_motorista: n(d.pedagio_motorista) };
+}
+
+export function pendenciasEmissao(v: ViagemInd, cliente: ClienteInd | undefined, d: { cte: string; nfs: string; po: string }, valores?: ValoresEmissao): string[] {
+  const p: string[] = [];
+  if (valores) p.push(...pendenciasValores(valores));
   if (!d.cte.trim()) p.push('Informe o CT-e');
   if (!d.nfs.trim()) p.push('Informe as NFs');
   if (cliente?.exige_po && !d.po.trim() && !v.po) p.push(`${cliente.nome} exige PO`);

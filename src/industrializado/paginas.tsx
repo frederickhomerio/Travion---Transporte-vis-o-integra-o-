@@ -14,7 +14,7 @@ import {
 import { restaurarPrevia, useInd } from './dados';
 
 import {
-  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, combinadoTransito, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
+  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, combinadoTransito, valoresConfirmados, type ValoresEmissao, META_MARGEM_PCT, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
   PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, retiradasDoDia, type NivelAlerta, type QuadrosPainel,
 } from './regras';
 import {
@@ -439,11 +439,29 @@ function ModalEmissao({ v, aoFechar }: { v: ViagemInd; aoFechar: () => void }) {
   const atual = viagens.find((x) => x.id === v.id) ?? v;
   const nfsParadas = v.paradas.map((p) => p.nfs).filter(Boolean).join(', ');
   const [d, setD] = useState({ cte: v.cte ?? '', mdfe: v.mdfe ?? '', nfs: v.nfs ?? nfsParadas, po: v.po ?? '' });
-  const pend = pendenciasEmissao(atual, cli, d);
+  // Valores do CT-e e do contrato: vêm do lançamento quando há valor; pedágios zerados precisam ser confirmados digitando 0.
+  const ini = (x: number | undefined) => (x ? String(x) : '');
+  const [val, setVal] = useState<ValoresEmissao>({
+    frete_empresa: ini(v.valores.frete_empresa), pedagio_empresa: ini(v.valores.pedagio), custo_extra: ini(v.valores.custo_extra), adicional_frete: ini(v.valores.adicional_frete),
+    frete_motorista: ini(v.valores.frete_motorista), pedagio_motorista: ini(v.valores.pedagio_motorista),
+  });
+  const pend = pendenciasEmissao(atual, cli, d, val);
+  const m = calcularMargem({ ...atual, valores: valoresConfirmados(atual.valores, val) });
+  const campoValor = (k: keyof ValoresEmissao, rot: string, obrig: string, lancado: number | undefined) => {
+    const n = Number(val[k].replace(',', '.'));
+    const difere = val[k].trim() !== '' && (lancado ?? 0) !== n;
+    return (
+      <label className="campo"><span>{rot} <span className="suave pequeno">{obrig}</span></span>
+        <input className={`entrada num${val[k].trim() === '' && obrig.startsWith('obrig') ? ' ind-vazio' : ''}`} type="number" min={0} step="0.01" inputMode="decimal" value={val[k]} placeholder={obrig.includes('zero') ? '0,00 se não houver' : ''}
+          onChange={(e) => setVal({ ...val, [k]: e.target.value })} />
+        {difere && <span className="ind-difere pequeno">lançado {fmtReais(lancado ?? 0)}</span>}
+      </label>
+    );
+  };
   return (
     <Modal titulo={`Documentos · Pedido ${pedidoCarga(v)}`} aoFechar={aoFechar} rodape={<>
       <button className="btn" onClick={aoFechar}>Voltar</button>
-      <button className="btn primario" disabled={pend.length > 0} title={pend.join('\n')} onClick={() => exec(() => acoes.liberarEmissao(v.id, d), 'Documentos liberados. Viagem documentada.') && aoFechar()}>Liberar documentos</button>
+      <button className="btn primario" disabled={pend.length > 0} title={pend.join('\n')} onClick={() => exec(() => acoes.liberarEmissao(v.id, d, val), 'Documentos e valores conferidos. Viagem documentada.') && aoFechar()}>Liberar documentos</button>
     </>}>
       <p style={{ marginTop: 0 }}>{cli?.nome} · <Rota v={v} /></p>
       <div className="campo" style={{ marginBottom: 12 }}><span>Conferências (obrigatórias para emitir)</span>
@@ -454,6 +472,27 @@ function ModalEmissao({ v, aoFechar }: { v: ViagemInd; aoFechar: () => void }) {
         <label className="campo"><span>NFs</span><input className="entrada" value={d.nfs} onChange={(e) => setD({ ...d, nfs: e.target.value })} /></label>
         {cli?.exige_po && <label className="campo"><span>PO (obrigatório para {cli.nome})</span><input className="entrada" value={d.po} onChange={(e) => setD({ ...d, po: e.target.value })} /></label>}
       </div>
+      <h3 className="ind-h3">Valores do CT-e e do contrato</h3>
+      <div className="ind-valores">
+        <div><strong className="pequeno">Receita</strong>
+          <div className="grade-campos">
+            {campoValor('frete_empresa', 'Frete empresa', 'obrigatório', v.valores.frete_empresa)}
+            {campoValor('pedagio_empresa', 'Pedágio empresa', 'obrigatório, pode ser zero', v.valores.pedagio)}
+            {campoValor('custo_extra', 'Custo extra', 'opcional', v.valores.custo_extra)}
+            {campoValor('adicional_frete', 'Adicional de frete', 'opcional', v.valores.adicional_frete)}
+          </div>
+        </div>
+        <div><strong className="pequeno">Despesa</strong>
+          <div className="grade-campos">
+            {campoValor('frete_motorista', 'Frete motorista', 'obrigatório', v.valores.frete_motorista)}
+            {campoValor('pedagio_motorista', 'Pedágio motorista', 'obrigatório, pode ser zero', v.valores.pedagio_motorista)}
+          </div>
+        </div>
+      </div>
+      <p className={`ind-margem-previa pequeno ${m.abaixoMeta ? 'ruim' : 'bom'}`}>
+        Receita {fmtReais(m.receita)} · Despesa {fmtReais(m.despesa)} · Margem {fmtReais(m.margem)} ({fmtPct(m.pct)}, meta {META_MARGEM_PCT}%)
+        <span className="suave"> · inclui descarga, diária e CT-e complementar já lançados</span>
+      </p>
       {pend.length > 0 && <p className="ind-pend pequeno">{pend.join(' · ')}</p>}
     </Modal>
   );

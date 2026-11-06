@@ -1694,3 +1694,10 @@ button.cf-chip { cursor: pointer; }
 .ind-checagem:has(input:disabled) { cursor: default; }
 .ind-checagens.horizontal { flex-direction: row; flex-wrap: wrap; gap: 6px; }
 .ind-checagens.horizontal .ind-checagem { font-size: 12px; padding: 4px 10px 4px 6px; }
+/* Industrializado: conferência de valores na Emissão */
+.ind-h3 { font-size: 14px; margin: 16px 0 6px; }
+.ind-vazio { border-color: var(--vermelho-700); background: #fff7f7; }
+.ind-difere { color: var(--ambar-700, #8a5a00); }
+.ind-margem-previa { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; font-weight: 600; }
+.ind-margem-previa.bom { background: var(--verde-100); color: var(--verde-700); }
+.ind-margem-previa.ruim { background: var(--vermelho-100); color: var(--vermelho-700); }
