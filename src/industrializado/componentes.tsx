@@ -5,7 +5,7 @@ import { Alerta, Gaveta, Modal, useAviso } from '../components/ui';
 import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
 import { useInd, type NovaViagem } from './dados';
 import {
-  alertaCanhoto, alertaCombinado, calcularMargem, combinadoAtual, duracao, marcosCarga, combinadoTransito, ETAPAS_TRANSITO, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
+  alertaCanhoto, alertaCombinado, calcularMargem, combinadoAtual, pendenciasEncerrar, duracao, marcosCarga, combinadoTransito, ETAPAS_TRANSITO, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
 } from './regras';
 import {
   ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_SIT_PARADA, ROTULO_TIPO_CARGA, VALORES_ZERO, CHECAGENS, ROTULO_CHECAGEM,
@@ -399,8 +399,16 @@ export function DetalhesViagem({ id, aoFechar }: { id: string; aoFechar: () => v
             Avançar para {ROTULO_ETAPA[prox]}
           </button>
         )}
-        {aberta && pode('ind.avancar') && <button className="btn peq" onClick={() => setModal('combinado')}>Combinado com motorista</button>}
-        {v.combinado && !v.combinado.marcou_em && pode('ind.avancar') && <button className="btn peq" onClick={() => exec(() => acoes.registrarMarcou(v.id), 'Marcação registrada.')}>Veículo marcou</button>}
+        {v.etapa === 'entregue' && pode('ind.pos_entrega') && (<>
+          {!v.canhoto_digital_em && <button className="btn primario peq" onClick={() => exec(() => acoes.registrarCanhoto(v.id, 'digital'), 'Canhoto digital registrado.')}>Canhoto digital recebido</button>}
+          {!v.canhoto_fisico_em && <button className="btn primario peq" onClick={() => exec(() => acoes.registrarCanhoto(v.id, 'fisico'), 'Canhoto físico registrado.')}>Canhoto físico recebido</button>}
+          {!v.comprovante_ok_em && <button className="btn primario peq" onClick={() => exec(() => acoes.conferirComprovante(v.id), 'Comprovante de entrega conferido.')}>Comprovante de entrega conferido</button>}
+          <button className="btn primario peq" disabled={pendenciasEncerrar(v, ocorrencias).length > 0} title={pendenciasEncerrar(v, ocorrencias).join('\n')}
+            onClick={() => exec(() => acoes.encerrar(v.id), `Pedido ${pedidoCarga(v)} finalizado e encerrado.`)}>Finalizar carga (encerrar)</button>
+        </>)}
+        {/* Combinado só enquanto há algo a combinar: some depois que o veículo marcou e depois da entrega. */}
+        {aberta && pode('ind.avancar') && !['entregue', 'encerrada', 'cancelada'].includes(v.etapa) && !combinadoAtual(v)?.marcou_em && <button className="btn peq" onClick={() => setModal('combinado')}>{combinadoAtual(v) ? 'Alterar combinado' : 'Combinado com motorista'}</button>}
+        {combinadoAtual(v) && !combinadoAtual(v)!.marcou_em && pode('ind.avancar') && <button className="btn peq" onClick={() => exec(() => acoes.registrarMarcou(v.id), 'Marcação registrada.')}>Veículo marcou</button>}
         {aberta && pode('ind.ocorrencias') && ['transito', 'entregas', 'entregue'].includes(v.etapa) && <button className="btn peq" onClick={() => setModal('ocorrencia')}>Abrir ocorrência</button>}
         {aberta && pode('ind.lancar') && <button className="btn peq" onClick={() => setModal('editar')}>Editar</button>}
         {aberta && pode('ind.voltar') && v.etapa !== 'lancada' && <button className="btn peq" onClick={() => setModal('voltar')}>Voltar etapa</button>}
