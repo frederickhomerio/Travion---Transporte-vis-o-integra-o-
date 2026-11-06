@@ -5,7 +5,7 @@ import { Alerta, Gaveta, Modal, useAviso } from '../components/ui';
 import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
 import { useInd, type NovaViagem } from './dados';
 import {
-  alertaCanhoto, alertaCombinado, calcularMargem, codigoViagem, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
+  alertaCanhoto, alertaCombinado, calcularMargem, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
 } from './regras';
 import {
   ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_SIT_PARADA, ROTULO_TIPO_CARGA, VALORES_ZERO,
@@ -116,7 +116,7 @@ export function ModalCombinado({ v, aoFechar }: { v: ViagemInd; aoFechar: () => 
   const [o, setO] = useState(v.combinado?.o_que ?? OPCOES_COMBINADO[0]);
   const [para, setPara] = useState(v.combinado ? localInput(new Date(v.combinado.para)) : localInput(new Date(Date.now() + 2 * 3600e3)));
   return (
-    <Modal titulo={`Combinado com o motorista · ${codigoViagem(v.codigo)}`} aoFechar={aoFechar} rodape={<>
+    <Modal titulo={`Combinado com o motorista · Pedido ${pedidoCarga(v)}`} aoFechar={aoFechar} rodape={<>
       <button className="btn" onClick={aoFechar}>Voltar</button>
       <button className="btn primario" onClick={() => exec(() => acoes.definirCombinado(v.id, o, para), 'Combinado registrado.') && aoFechar()}>Registrar</button>
     </>}>
@@ -155,7 +155,7 @@ export function ModalOcorrencia({ v, aoFechar }: { v: ViagemInd; aoFechar: () =>
     );
   }
   return (
-    <Modal titulo={`Abrir ocorrência · ${codigoViagem(v.codigo)}`} aoFechar={aoFechar} rodape={<>
+    <Modal titulo={`Abrir ocorrência · Pedido ${pedidoCarga(v)}`} aoFechar={aoFechar} rodape={<>
       <button className="btn" onClick={aoFechar}>Voltar</button>
       <button className="btn primario" onClick={() => exec(() => setCriada(acoes.abrirOcorrencia({ viagem_id: v.id, ...d })))}>Abrir ocorrência</button>
     </>}>
@@ -247,7 +247,7 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
   const verValores = pode('ind.financeiro');
 
   return (
-    <Modal titulo={v ? `Editar ${codigoViagem(v.codigo)}` : 'Lançar viagem'} aoFechar={aoFechar} rodape={<>
+    <Modal titulo={v ? `Editar pedido ${pedidoCarga(v)}` : 'Lançar viagem'} aoFechar={aoFechar} rodape={<>
       <button className="btn" onClick={aoFechar}>Voltar</button>
       <button className="btn primario" onClick={salvar}>{v ? 'Salvar' : 'Lançar viagem'}</button>
     </>}>
@@ -380,9 +380,9 @@ export function DetalhesViagem({ id, aoFechar }: { id: string; aoFechar: () => v
   const origem = v.reversa_de ? viagens.find((x) => x.id === v.reversa_de) : null;
 
   return (
-    <Gaveta titulo={<>{codigoViagem(v.codigo)} · {cli?.nome ?? '—'}</>} subtitulo={<><ChipEtapa etapa={v.etapa} /> <span style={{ marginLeft: 6 }}>{ROTULO_TIPO_CARGA[v.tipo_carga]} · {FILIAL_IND}</span></>} aoFechar={aoFechar}>
+    <Gaveta titulo={<>Pedido {pedidoCarga(v)} · {cli?.nome ?? '—'}</>} subtitulo={<><ChipEtapa etapa={v.etapa} /> <span style={{ marginLeft: 6 }}>{v.tipo_veiculo} · {ROTULO_TIPO_CARGA[v.tipo_carga]} · {FILIAL_IND}</span></>} aoFechar={aoFechar}>
       <Linha etapa={v.etapa} />
-      {origem && <Alerta tipo="info">Reversa de <strong>{codigoViagem(origem.codigo)}</strong>.</Alerta>}
+      {origem && <Alerta tipo="info">Reversa do pedido <strong>{pedidoCarga(origem)}</strong>.</Alerta>}
 
       <div className="ind-acoes">
         {aberta && prox && v.etapa !== 'carregada' && v.etapa !== 'entregue' && pode('ind.avancar') && (

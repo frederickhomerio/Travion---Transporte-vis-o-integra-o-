@@ -380,11 +380,11 @@ export function useInd() {
           ...v, id: uid(), codigo: estado.seq + 1, etapa: 'lancada', reversa_de: v.id, po: null, pedido: v.pedido,
           paradas: inv.map((p, i) => ({ ...p, id: uid(), ordem: i + 1, tipo: i === 0 ? 'coleta' : i === inv.length - 1 ? 'entrega' : p.tipo, situacao: 'pendente', chegada_em: null, inicio_em: null, fim_em: null, agendado_para: null, protocolo: null, exige_agendamento: false })),
           valores: { ...VALORES_ZERO }, combinado: null, emissao_assumida_por: null, emissao_assumida_em: null, cte: null, mdfe: null, nfs: null, coleta_prevista: null,
-          entregue_em: null, canhoto_digital_em: null, canhoto_fisico_em: null, comprovante_ok_em: null, observacao: `Reversa da viagem IND-${String(v.codigo).padStart(4, '0')}: ${motivo.trim()}`,
-          criado_em: agora(), criado_por: usuario, historico: [{ em: agora(), usuario, acao: 'Reversa lançada', detalhe: `Origem: IND-${String(v.codigo).padStart(4, '0')}`, motivo: motivo.trim() }],
+          entregue_em: null, canhoto_digital_em: null, canhoto_fisico_em: null, comprovante_ok_em: null, observacao: `Reversa do pedido ${v.pedido ?? 'sem pedido'}: ${motivo.trim()}`,
+          criado_em: agora(), criado_por: usuario, historico: [{ em: agora(), usuario, acao: 'Reversa lançada', detalhe: `Origem: pedido ${v.pedido ?? 'sem pedido'}`, motivo: motivo.trim() }],
         };
         gravar({ ...estado, seq: r.codigo, viagens: [...estado.viagens, r] });
-        mudar(v.id, 'Reversa criada', () => ({}), `IND-${String(r.codigo).padStart(4, '0')}`, motivo.trim());
+        mudar(v.id, 'Reversa criada', () => ({}), `Pedido ${r.pedido ?? 'sem pedido'}`, motivo.trim());
         return r;
       },
     };

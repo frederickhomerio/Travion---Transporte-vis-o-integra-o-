@@ -216,3 +216,5 @@ export function proximoAgendamento(v: Pick<ViagemInd, 'paradas'>) {
 
 export function codigoOcorrencia(n: number): string { return `OC-${String(n).padStart(4, '0')}`; }
 export function codigoViagem(n: number): string { return `IND-${String(n).padStart(4, '0')}`; }
+/** Como a carga aparece nas telas: pelo pedido do cliente (o código IND fica só para busca interna). */
+export function pedidoCarga(v: { pedido: string | null }): string { return v.pedido?.trim() || 'Sem pedido'; }

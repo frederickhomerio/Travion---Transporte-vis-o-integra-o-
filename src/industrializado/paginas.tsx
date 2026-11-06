@@ -12,7 +12,7 @@ import {
 } from './componentes';
 import { restaurarPrevia, useInd } from './dados';
 import {
-  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
+  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
   PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, retiradasDoDia, type NivelAlerta, type QuadrosPainel,
 } from './regras';
 import {
@@ -245,7 +245,7 @@ export function ViagensInd() {
   return (
     <Pagina titulo="Viagens" acoes={pode('ind.lancar') ? <button className="btn primario" onClick={() => setNova(true)}>+ Lançar viagem</button> : undefined}>
       <div className="ind-filtros">
-        <input className="entrada" placeholder="Buscar viagem, pedido, PO, motorista, placa, NF, cidade…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <input className="entrada" placeholder="Buscar pedido, PO, motorista, placa, NF, cidade…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <select className="entrada" value={etapa} onChange={(e) => setEtapa(e.target.value as EtapaInd | '')} aria-label="Etapa">
           <option value="">Todas as etapas</option>
           {[...ETAPAS_FLUXO, 'cancelada' as const].map((e) => <option key={e} value={e}>{ROTULO_ETAPA[e]}</option>)}
@@ -255,7 +255,7 @@ export function ViagensInd() {
       {grupos.length === 0 ? <EstadoVazio titulo="Nenhuma viagem encontrada" /> : (
         <div className="cartao" style={{ overflowX: 'auto' }}>
           <table className="tabela ind-tabela">
-            <thead><tr><th>Viagem</th><th>Etapa</th><th>Rota</th><th>Próximo agendamento</th><th>Motorista / placa</th><th>Docs</th><th>Tracking</th>{verValor && <th className="n">Margem</th>}</tr></thead>
+            <thead><tr><th>Pedido / veículo</th><th>Etapa</th><th>Rota</th><th>Próximo agendamento</th><th>Motorista / placa</th><th>Docs</th><th>Tracking</th>{verValor && <th className="n">Margem</th>}</tr></thead>
             <tbody>
               {grupos.map(({ c, vs }) => [
                 <tr key={c.id} className="ind-grupo"><td colSpan={verValor ? 8 : 7}>{c.nome} <span className="suave pequeno">· {vs.length} {vs.length === 1 ? 'viagem' : 'viagens'}</span></td></tr>,
@@ -264,7 +264,7 @@ export function ViagensInd() {
                   const m = calcularMargem(v, ocorrencias);
                   return (
                     <tr key={v.id} className="clicavel" onClick={() => setAberta(v.id)}>
-                      <td><strong>{codigoViagem(v.codigo)}</strong><div className="suave pequeno">{ROTULO_TIPO_CARGA[v.tipo_carga]}{v.pedido ? ` · ${v.pedido}` : ''}{v.reversa_de ? ' · reversa' : ''}</div></td>
+                      <td><strong>{pedidoCarga(v)}</strong><div className="suave pequeno">{v.tipo_veiculo || '—'} · {ROTULO_TIPO_CARGA[v.tipo_carga]}{v.reversa_de ? ' · reversa' : ''}</div></td>
                       <td><ChipEtapa etapa={v.etapa} /></td>
                       <td><Rota v={v} /></td>
                       <td>{ag ? <>{fmtDataHora(ag.agendado_para)}<div className="suave pequeno">{ag.local}{ag.protocolo ? ` · ${ag.protocolo}` : ''}</div></> : <span className="suave">—</span>}</td>
@@ -321,7 +321,7 @@ export function ControleInd() {
                 return (
                   <article key={v.id} className={`ind-card ${a.nivel}`}>
                     <button className="ind-card-cab" onClick={() => setAberta(v.id)}>
-                      <strong>{codigoViagem(v.codigo)}</strong><span className="suave">{clientePorId[v.cliente_id]?.nome}</span>
+                      <strong>{pedidoCarga(v)}</strong><span className="suave">{v.tipo_veiculo} · {clientePorId[v.cliente_id]?.nome}</span>
                     </button>
                     <div className="pequeno"><Rota v={v} /></div>
                     <div className="pequeno">{v.motorista ?? <span className="ind-falta">sem motorista</span>}{v.placa_cavalo ? ` · ${v.placa_cavalo}` : ''}</div>
@@ -331,7 +331,7 @@ export function ControleInd() {
                     <div className="ind-card-botoes">
                       {pode('ind.avancar') && prox && col !== 'carregada' && (
                         <button className="btn primario peq" disabled={pend.length > 0} title={pend.length ? pend.join('\n') : `Avançar para ${ROTULO_ETAPA[prox]}`}
-                          onClick={() => exec(() => acoes.avancar(v.id), `${codigoViagem(v.codigo)} em ${ROTULO_ETAPA[prox]}.`)}>Avançar</button>
+                          onClick={() => exec(() => acoes.avancar(v.id), `Pedido ${pedidoCarga(v)} em ${ROTULO_ETAPA[prox]}.`)}>Avançar</button>
                       )}
                       {pode('ind.avancar') && <button className="btn peq" onClick={() => setModal({ tipo: 'combinado', v })}>Combinado</button>}
                       {pode('ind.avancar') && v.combinado && !v.combinado.marcou_em && <button className="btn peq" onClick={() => exec(() => acoes.registrarMarcou(v.id), 'Marcação registrada.')}>Marcou</button>}
@@ -370,13 +370,13 @@ export function EmissaoInd() {
         <div className="cartao-cab"><h2>Aguardando emissão ({fila.length})</h2></div>
         {fila.length === 0 ? <div className="cartao-corpo suave">Nenhuma viagem aguardando.</div> : (
           <table className="tabela">
-            <thead><tr><th>Viagem</th><th>Cliente</th><th>Rota</th><th>Carregada há</th><th>PO</th><th>Responsável</th><th /></tr></thead>
+            <thead><tr><th>Pedido / veículo</th><th>Cliente</th><th>Rota</th><th>Carregada há</th><th>PO</th><th>Responsável</th><th /></tr></thead>
             <tbody>{fila.map((v) => {
               const cli = clientePorId[v.cliente_id];
               const min = Math.round((Date.now() - Date.parse(lastAt(v))) / 60000);
               return (
                 <tr key={v.id}>
-                  <td><button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{codigoViagem(v.codigo)}</strong></button></td>
+                  <td><button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td>
                   <td>{cli?.nome}</td><td><Rota v={v} /></td>
                   <td><ChipNivel nivel={min > 40 ? 'atraso' : min > 20 ? 'aviso' : 'ok'}>{min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`}</ChipNivel></td>
                   <td>{cli?.exige_po ? (v.po ?? <span className="ind-falta">exigido</span>) : <span className="suave">—</span>}</td>
@@ -394,9 +394,9 @@ export function EmissaoInd() {
       <div className="cartao" style={{ marginTop: 12, overflowX: 'auto' }}>
         <div className="cartao-cab"><h2>Liberadas recentemente</h2></div>
         <table className="tabela">
-          <thead><tr><th>Viagem</th><th>Cliente</th><th>CT-e</th><th>MDF-e</th><th>NF</th><th>Emitido por</th></tr></thead>
+          <thead><tr><th>Pedido / veículo</th><th>Cliente</th><th>CT-e</th><th>MDF-e</th><th>NF</th><th>Emitido por</th></tr></thead>
           <tbody>{liberadas.map((v) => (
-            <tr key={v.id}><td>{codigoViagem(v.codigo)}</td><td>{clientePorId[v.cliente_id]?.nome}</td><td>{v.cte}</td><td>{v.mdfe ?? '—'}</td><td>{v.nfs}</td><td>{v.emissao_assumida_por ?? '—'}</td></tr>
+            <tr key={v.id}><td>{pedidoCarga(v)}<div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td><td>{clientePorId[v.cliente_id]?.nome}</td><td>{v.cte}</td><td>{v.mdfe ?? '—'}</td><td>{v.nfs}</td><td>{v.emissao_assumida_por ?? '—'}</td></tr>
           ))}</tbody>
         </table>
       </div>
@@ -415,7 +415,7 @@ function ModalEmissao({ v, aoFechar }: { v: ViagemInd; aoFechar: () => void }) {
   const [d, setD] = useState({ cte: v.cte ?? '', mdfe: v.mdfe ?? '', nfs: v.nfs ?? nfsParadas, po: v.po ?? '' });
   const pend = pendenciasEmissao(v, cli, d);
   return (
-    <Modal titulo={`Documentos · ${codigoViagem(v.codigo)}`} aoFechar={aoFechar} rodape={<>
+    <Modal titulo={`Documentos · Pedido ${pedidoCarga(v)}`} aoFechar={aoFechar} rodape={<>
       <button className="btn" onClick={aoFechar}>Voltar</button>
       <button className="btn primario" disabled={pend.length > 0} title={pend.join('\n')} onClick={() => exec(() => acoes.liberarEmissao(v.id, d), 'Documentos liberados. Viagem documentada.') && aoFechar()}>Liberar documentos</button>
     </>}>
@@ -445,7 +445,7 @@ export function OcorrenciasInd() {
   const verValor = pode('ind.financeiro') || pode('ind.ocorrencias_aprovar');
   const tabela = (os: OcorrenciaInd[]) => os.length === 0 ? <div className="cartao-corpo suave">Nenhuma.</div> : (
     <table className="tabela">
-      <thead><tr><th>ID</th><th>Tipo</th><th>Viagem</th><th>Entrega</th><th>Descrição</th><th>Aberta</th>{verValor && <><th className="n">Motorista</th><th className="n">Cliente</th></>}<th>Situação</th><th /></tr></thead>
+      <thead><tr><th>ID</th><th>Tipo</th><th>Pedido / veículo</th><th>Entrega</th><th>Descrição</th><th>Aberta</th>{verValor && <><th className="n">Motorista</th><th className="n">Cliente</th></>}<th>Situação</th><th /></tr></thead>
       <tbody>{os.map((o) => {
         const v = viagens.find((x) => x.id === o.viagem_id);
         const p = v?.paradas.find((x) => x.id === o.parada_id);
@@ -453,7 +453,7 @@ export function OcorrenciasInd() {
           <tr key={o.id}>
             <td className="mono"><strong>{o.codigo}</strong></td>
             <td>{ROTULO_OCORRENCIA[o.tipo]}{o.avaria && <div><span className="badge suspenso">Avaria</span></div>}</td>
-            <td>{v && <button className="btn sutil peq" onClick={() => setAberta(v.id)}>{codigoViagem(v.codigo)}</button>}<div className="suave pequeno">{v ? clientePorId[v.cliente_id]?.nome : ''}</div></td>
+            <td>{v && <button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button>}<div className="suave pequeno">{v ? `${v.tipo_veiculo} · ${clientePorId[v.cliente_id]?.nome ?? ''}` : ''}</div></td>
             <td className="pequeno">{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}</td>
             <td className="pequeno" style={{ maxWidth: 260 }}>{o.descricao}</td>
             <td className="pequeno">{fmtDataHora(o.aberta_em)}<div className="suave">{o.aberta_por}</div></td>
@@ -530,7 +530,7 @@ export function PosEntregaInd() {
         <div className="cartao-cab"><h2>Entregues aguardando encerramento ({lista.length})</h2><span className="suave pequeno">Encerra com canhoto físico, comprovante conferido e nenhuma ocorrência aberta</span></div>
         {lista.length === 0 ? <div className="cartao-corpo suave">Nada pendente.</div> : (
           <table className="tabela">
-            <thead><tr><th>Viagem</th><th>Entregue</th><th>Canhoto digital</th><th>Canhoto físico</th><th>Comprovante</th><th>Ocorrências</th>{pode('ind.financeiro') && <th className="n">Margem</th>}<th /></tr></thead>
+            <thead><tr><th>Pedido / veículo</th><th>Entregue</th><th>Canhoto digital</th><th>Canhoto físico</th><th>Comprovante</th><th>Ocorrências</th>{pode('ind.financeiro') && <th className="n">Margem</th>}<th /></tr></thead>
             <tbody>{lista.map((v) => {
               const pend = pendenciasEncerrar(v, ocorrencias);
               const ocs = ocorrencias.filter((o) => o.viagem_id === v.id && o.situacao === 'aberta').length;
@@ -538,7 +538,7 @@ export function PosEntregaInd() {
               const pp = pode('ind.pos_entrega');
               return (
                 <tr key={v.id}>
-                  <td><button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{codigoViagem(v.codigo)}</strong></button><div className="suave pequeno">{clientePorId[v.cliente_id]?.nome}</div></td>
+                  <td><button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button><div className="suave pequeno">{v.tipo_veiculo} · {clientePorId[v.cliente_id]?.nome}</div></td>
                   <td className="pequeno">{fmtDataHora(v.entregue_em)}</td>
                   <td>{v.canhoto_digital_em ? <ChipNivel nivel="ok">Recebido</ChipNivel> : pp ? <button className="btn peq" onClick={() => exec(() => acoes.registrarCanhoto(v.id, 'digital'))}>Recebi</button> : '—'}</td>
                   <td>{v.canhoto_fisico_em ? <ChipNivel nivel="ok">Recebido</ChipNivel> : <><ChipCanhoto v={v} />{pp && <div><button className="btn peq" style={{ marginTop: 4 }} onClick={() => exec(() => acoes.registrarCanhoto(v.id, 'fisico'))}>Recebi</button></div>}</>}</td>
