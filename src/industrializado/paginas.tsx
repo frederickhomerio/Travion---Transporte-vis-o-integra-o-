@@ -209,6 +209,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
         const via = <td><button className="btn sutil peq" onClick={() => abrir(v.id)}><strong>{v.pedido ?? 'Sem pedido'}</strong></button><BotaoInfo v={v} /><div className="suave pequeno">{v.tipo_veiculo || '—'}</div></td>;
         const zap = linkWhatsApp(v.motorista_telefone, mensagemMotorista(k, v, cli?.nome));
         const mot = <td>{v.motorista ?? '—'}<div className="suave pequeno">{[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ')}</div>
+          {v.contratado_por && <div><span className="ind-contratou pequeno" title="Colaborador que contratou o veículo">{v.contratado_por}</span></div>}
           {v.motorista_telefone && <div className="suave pequeno">{v.motorista_telefone}</div>}
           {zap ? <a className="ind-zap" href={zap} target="_blank" rel="noopener noreferrer" title="Abrir conversa no WhatsApp com a mensagem pronta">WhatsApp</a>
             : <span className="ind-falta pequeno">sem telefone</span>}</td>;
@@ -345,7 +346,7 @@ export function ViagensInd() {
                       <td><ChipEtapa etapa={v.etapa} /></td>
                       <td><Rota v={v} /></td>
                       <td>{ag ? <>{fmtDataHora(ag.agendado_para)}<div className="suave pequeno">{ag.local}{ag.protocolo ? ` · ${ag.protocolo}` : ''}</div></> : <span className="suave">—</span>}</td>
-                      <td>{v.motorista ?? <span className="ind-falta">a contratar</span>}<div className="suave pequeno">{v.placa_cavalo ?? ''}</div></td>
+                      <td>{v.motorista ?? <span className="ind-falta">a contratar</span>}<div className="suave pequeno">{v.placa_cavalo ?? ''}</div>{v.contratado_por && <span className="ind-contratou pequeno">{v.contratado_por}</span>}</td>
                       <td className="pequeno">{v.cte ? `CT-e ${v.cte}` : '—'}{clientePorId[v.cliente_id]?.exige_po && <div>{v.po ? `PO ${v.po}` : ETAPAS_FLUXO.indexOf(v.etapa) >= ETAPAS_FLUXO.indexOf('carregada') ? <span className="ind-falta">PO pendente</span> : <span className="suave">PO após carregar</span>}</div>}</td>
                       <td><ChipCombinado v={v} /></td>
                       {verValor && <td className="n"><span className={m.abaixoMeta ? 'ind-ruim' : ''}>{fmtPct(m.pct)}</span><div className="suave pequeno">{fmtReais(m.margem, 0)}</div></td>}
@@ -403,6 +404,7 @@ export function ControleInd() {
                     </button>
                     <div className="pequeno"><Rota v={v} /></div>
                     <div className="pequeno">{v.motorista ?? <span className="ind-falta">sem motorista</span>}{v.placa_cavalo ? ` · ${v.placa_cavalo}` : ''}</div>
+                    {v.contratado_por && <div><span className="ind-contratou pequeno">{v.contratado_por}</span></div>}
                     {v.combinado && <div><ChipCombinado v={v} /></div>}
                     {(col === 'carregando' || col === 'transito' || col === 'entregas' || col === 'coleta_agendada') && <ParadasTracking v={v} compacto />}
                     {col === 'carregada' && <div className="pequeno suave">Aguardando a Emissão{v.emissao_assumida_por ? ` · com ${v.emissao_assumida_por}` : ''}</div>}

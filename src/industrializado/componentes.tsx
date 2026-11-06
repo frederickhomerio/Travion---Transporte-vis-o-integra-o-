@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { Alerta, Gaveta, Modal, useAviso } from '../components/ui';
 import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
+import { useApp } from '../data/store';
 import { useInd, type NovaViagem } from './dados';
 import {
   alertaCanhoto, alertaCombinado, calcularMargem, combinadoAtual, pendenciasEncerrar, duracao, marcosCarga, combinadoTransito, ETAPAS_TRANSITO, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
@@ -227,14 +228,16 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
   const [d, setD] = useState<NovaViagem>(() => v ? {
     cliente_id: v.cliente_id, tipo_carga: v.tipo_carga, pedido: v.pedido ?? '', po: v.po ?? '', coleta_prevista: v.coleta_prevista ?? '', frota: v.frota, tipo_veiculo: v.tipo_veiculo,
     placa_cavalo: v.placa_cavalo ?? '', placa_carreta: v.placa_carreta ?? '', motorista: v.motorista ?? '', motorista_cpf: v.motorista_cpf ?? '',
-    motorista_telefone: v.motorista_telefone ?? '', paradas: v.paradas.map((p) => ({ ...p, agendado_para: p.agendado_para ? localInput(new Date(p.agendado_para)) : null })),
+    motorista_telefone: v.motorista_telefone ?? '', contratado_por: v.contratado_por ?? '', paradas: v.paradas.map((p) => ({ ...p, agendado_para: p.agendado_para ? localInput(new Date(p.agendado_para)) : null })),
     valores: { ...v.valores }, observacao: v.observacao ?? '',
   } : {
     cliente_id: '', tipo_carga: 'paletizada', pedido: '', po: '', coleta_prevista: hojeSP(), frota: 'terceiro', tipo_veiculo: 'Carreta', placa_cavalo: '', placa_carreta: '',
-    motorista: '', motorista_cpf: '', motorista_telefone: '', paradas: [paradaVazia('coleta', 1, false), paradaVazia('entrega', 2, false)],
+    motorista: '', motorista_cpf: '', motorista_telefone: '', contratado_por: '', paradas: [paradaVazia('coleta', 1, false), paradaVazia('entrega', 2, false)],
     valores: { ...VALORES_ZERO }, observacao: '',
   });
   const [motivo, setMotivo] = useState('');
+  const { estado: app } = useApp();
+  const eu = app.sessao?.perfil.nome || app.sessao?.perfil.email || '';
   const cli = clientePorId[d.cliente_id];
   const set = <K extends keyof NovaViagem>(k: K, x: NovaViagem[K]) => setD((a) => ({ ...a, [k]: x }));
   const setP = (i: number, p: Partial<ParadaForm>) => setD((a) => ({ ...a, paradas: a.paradas.map((x, j) => (j === i ? { ...x, ...p } : x)) }));
@@ -297,13 +300,15 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
               {['Carreta', 'Carreta LS', 'Bitrem', 'Truck', 'Toco', '3/4', 'VUC'].map((x) => <option key={x}>{x}</option>)}
             </select>
           </label>
-          <label className="campo"><span>Placa cavalo</span><input className="entrada" value={d.placa_cavalo} onChange={(e) => set('placa_cavalo', e.target.value.toUpperCase())} maxLength={8} /></label>
+          <label className="campo"><span>Placa cavalo</span><input className="entrada" value={d.placa_cavalo} onChange={(e) => { const x = e.target.value.toUpperCase(); setD((p) => ({ ...p, placa_cavalo: x, contratado_por: p.contratado_por || (x.trim() ? eu : '') })); }} maxLength={8} /></label>
           <label className="campo"><span>Placa carreta</span><input className="entrada" value={d.placa_carreta} onChange={(e) => set('placa_carreta', e.target.value.toUpperCase())} maxLength={8} /></label>
           <label className="campo"><span>Motorista</span><input className="entrada" value={d.motorista} onChange={(e) => set('motorista', e.target.value)} /></label>
           <label className="campo"><span>CPF</span><input className="entrada" value={d.motorista_cpf} onChange={(e) => set('motorista_cpf', e.target.value)} maxLength={14} /></label>
           <label className="campo"><span>Telefone</span><input className="entrada" value={d.motorista_telefone} onChange={(e) => set('motorista_telefone', e.target.value)} maxLength={20} /></label>
+          <label className="campo ind-campo-dourado"><span>Contratado por (colaborador)</span>
+            <input className="entrada" value={d.contratado_por} placeholder={eu} onChange={(e) => set('contratado_por', e.target.value)} maxLength={80} /></label>
         </div>
-        <p className="suave pequeno">Motorista e placa do cavalo podem ficar para depois; são exigidos para passar a Veículo contratado.</p>
+        <p className="suave pequeno">Motorista, placa do cavalo e quem contratou podem ficar para depois; são exigidos para passar a Veículo contratado. Ao informar a placa, "Contratado por" vem com o seu nome (pode trocar).</p>
 
         <h3>Coletas e entregas</h3>
         {d.paradas.map((p, i) => (
@@ -439,6 +444,7 @@ export function DetalhesViagem({ id, aoFechar }: { id: string; aoFechar: () => v
           <dt>Rota</dt><dd><Rota v={v} /></dd>
           <dt>Veículo</dt><dd>{v.tipo_veiculo} · {v.frota === 'frota' ? 'Frota própria' : 'Terceiro'} · {[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ') || '—'}</dd>
           <dt>Motorista</dt><dd>{v.motorista ?? '—'}{v.motorista_cpf ? ` · CPF ${v.motorista_cpf}` : ''}{v.motorista_telefone ? ` · ${v.motorista_telefone}` : ''}</dd>
+          <dt>Contratado por</dt><dd>{v.contratado_por ? <span className="ind-contratou">{v.contratado_por}</span> : '—'}</dd>
           <dt>Documentos</dt><dd>{v.cte ? `CT-e ${v.cte}` : 'CT-e —'}{v.mdfe ? ` · MDF-e ${v.mdfe}` : ''}{v.nfs ? ` · NF ${v.nfs}` : ''}</dd>
           <dt>Combinado</dt><dd>{combinadoAtual(v) ? <><ChipCombinado v={v} /> <span className="suave pequeno">{fmtDataHora(combinadoAtual(v)!.para)} · por {combinadoAtual(v)!.registrado_por}</span></> : '—'}</dd>
           {v.observacao && <><dt>Observação</dt><dd>{v.observacao}</dd></>}
@@ -605,6 +611,7 @@ export function FichaCarga({ id, aoFechar }: { id: string; aoFechar: () => void 
             <dt>Retirada prevista</dt><dd>{v.coleta_prevista ? fmtData(v.coleta_prevista) : '—'}</dd>
             {(cli?.exige_po || v.po) && <><dt>PO</dt><dd>{v.po ?? <span className="ind-falta">pendente</span>}</dd></>}
             <dt>Motorista</dt><dd>{v.motorista ?? '—'}{v.motorista_cpf ? ` · CPF ${v.motorista_cpf}` : ''}{v.motorista_telefone ? ` · ${v.motorista_telefone}` : ''}</dd>
+          <dt>Contratado por</dt><dd>{v.contratado_por ? <span className="ind-contratou">{v.contratado_por}</span> : '—'}</dd>
             <dt>Veículo</dt><dd>{v.tipo_veiculo} · {v.frota === 'frota' ? 'Frota própria' : 'Terceiro'} · {[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ') || '—'}</dd>
             <dt>Documentos</dt><dd>{[v.cte && `CT-e ${v.cte}`, v.mdfe && `MDF-e ${v.mdfe}`, v.nfs && `NF ${v.nfs}`].filter(Boolean).join(' · ') || '—'}</dd>
             {v.observacao && <><dt>Observação</dt><dd>{v.observacao}</dd></>}

@@ -71,6 +71,8 @@ export interface ViagemInd {
   frota: 'frota' | 'terceiro';
   tipo_veiculo: string; placa_cavalo: string | null; placa_carreta: string | null;
   motorista: string | null; motorista_cpf: string | null; motorista_telefone: string | null;
+  /** Colaborador que contratou o veículo (aparece em dourado em toda a ficha). */
+  contratado_por?: string | null;
   paradas: ParadaInd[];
   valores: ValoresInd;
   combinado: CombinadoInd | null;

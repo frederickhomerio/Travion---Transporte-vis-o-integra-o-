@@ -70,9 +70,10 @@ describe('canhoto', () => {
 
 describe('avanço', () => {
   const cargill: ClienteInd = { id: 'c1', nome: 'Cargill', cnpj: null, contato: null, telefone: null, exige_agendamento: true, exige_po: true, ativo: true };
-  it('lançada precisa de motorista e placa', () => {
-    expect(pendenciasAvanco(base, cargill)).toHaveLength(2);
-    expect(pendenciasAvanco({ ...base, motorista: 'João', placa_cavalo: 'ABC1D23' }, cargill)).toHaveLength(0);
+  it('lançada precisa de motorista, placa e quem contratou', () => {
+    expect(pendenciasAvanco(base, cargill)).toHaveLength(3);
+    expect(pendenciasAvanco({ ...base, motorista: 'João', placa_cavalo: 'ABC1D23' }, cargill)).toEqual(['Informe quem contratou o veículo']);
+    expect(pendenciasAvanco({ ...base, motorista: 'João', placa_cavalo: 'ABC1D23', contratado_por: 'Vanessa' }, cargill)).toHaveLength(0);
   });
   it('coleta que exige agendamento precisa do horário; protocolo é opcional', () => {
     const p = { id: 'p', ordem: 1, tipo: 'coleta' as const, local: 'Fábrica', cidade: 'Goiânia', uf: 'GO', exige_agendamento: true, agendado_para: null, protocolo: null, situacao: 'pendente' as const, chegada_em: null, inicio_em: null, fim_em: null, nfs: null };

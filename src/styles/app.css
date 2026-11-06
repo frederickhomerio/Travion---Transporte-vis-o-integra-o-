@@ -1740,3 +1740,9 @@ button.cf-chip { cursor: pointer; }
 .ind-card > .ind-info { position: absolute; top: 8px; right: 8px; margin: 0; z-index: 1; }
 .ind-marcos li.sem-registro::before { background: #fff; border: 2px solid var(--verde-700); width: 6px; height: 6px; }
 .ind-marcos li.sem-registro .pequeno { color: var(--texto-suave); font-style: italic; }
+/* Industrializado: colaborador que contratou o veículo (dourado) */
+.ind-contratou { display: inline-block; margin-top: 2px; padding: 1px 8px; border-radius: 999px; background: #fbefc9; color: #6e4f00; border: 1px solid #e3c579; font-weight: 600; white-space: nowrap; }
+.ind-contratou::before { content: 'Contratou: '; font-weight: 500; }
+dd .ind-contratou::before { content: ''; }
+.ind-campo-dourado > span { color: #6e4f00; }
+.ind-campo-dourado .entrada { background: #fbefc9; border-color: #d4ad4a; }

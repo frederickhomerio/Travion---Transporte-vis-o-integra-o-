@@ -55,6 +55,7 @@ function semear(): EstadoInd {
   const mot = (i: number) => ({
     motorista: ['João Batista Lima', 'Carlos Henrique Souza', 'Marcos Vinícius Rocha', 'Edson Pereira', 'Rogério Alves', 'Antônio Carlos Dias', 'Wellington Santos', 'Luiz Fernando Melo'][i],
     motorista_cpf: `${100 + i}.${200 + i}.${300 + i}-${10 + i}`, motorista_telefone: `(62) 9 9${100 + i}-${4000 + i}`,
+    contratado_por: ['[DEMO] Vanessa Duarte', '[DEMO] Equipe de embarque'][i % 2],
     placa_cavalo: `RTA${i}B${10 + i}`, placa_carreta: `QWE${i}C${20 + i}`,
   });
   const viagens: ViagemInd[] = [
@@ -129,7 +130,7 @@ export function restaurarPrevia() { gravar(semear()); }
 // ---------------------------------------------------------------------------
 export interface NovaViagem {
   cliente_id: string; tipo_carga: ViagemInd['tipo_carga']; pedido: string; po: string; frota: ViagemInd['frota']; coleta_prevista: string;
-  tipo_veiculo: string; placa_cavalo: string; placa_carreta: string; motorista: string; motorista_cpf: string; motorista_telefone: string;
+  tipo_veiculo: string; placa_cavalo: string; placa_carreta: string; motorista: string; motorista_cpf: string; motorista_telefone: string; contratado_por: string;
   paradas: Array<Omit<ParadaInd, 'id' | 'situacao' | 'chegada_em' | 'inicio_em' | 'fim_em'> & { id?: string }>;
   valores: ValoresInd; observacao: string;
 }
@@ -178,6 +179,7 @@ export function useInd() {
         if (!p.local.trim() || !p.cidade.trim() || !p.uf.trim()) falha('Preencha local, cidade e UF de todas as paradas.');
         if (p.exige_agendamento && !p.agendado_para) falha(`A parada "${p.local}" exige agendamento: informe o horário (o protocolo é opcional).`);
       }
+      if (d.placa_cavalo.trim() && !d.contratado_por.trim()) falha('Informe quem contratou o veículo.');
     };
 
     return {
@@ -200,7 +202,7 @@ export function useInd() {
         const v: ViagemInd = {
           id: uid(), codigo: estado.seq + 1, cliente_id: d.cliente_id, tipo_carga: d.tipo_carga, pedido: t(d.pedido), po: t(d.po), etapa: 'lancada', coleta_prevista: d.coleta_prevista || null,
           frota: d.frota, tipo_veiculo: d.tipo_veiculo, placa_cavalo: t(d.placa_cavalo)?.toUpperCase() ?? null, placa_carreta: t(d.placa_carreta)?.toUpperCase() ?? null,
-          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone),
+          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone), contratado_por: t(d.contratado_por),
           paradas: paradasNovas(d.paradas), valores: pode('ind.financeiro') ? d.valores : { ...VALORES_ZERO }, combinado: null,
           emissao_assumida_por: null, emissao_assumida_em: null, cte: null, mdfe: null, nfs: null, entregue_em: null,
           canhoto_digital_em: null, canhoto_fisico_em: null, comprovante_ok_em: null, reversa_de: null, observacao: t(d.observacao),
@@ -221,9 +223,10 @@ export function useInd() {
         mudar(id, 'Viagem editada', () => ({
           cliente_id: d.cliente_id, tipo_carga: d.tipo_carga, pedido: t(d.pedido), po: t(d.po), coleta_prevista: d.coleta_prevista || null, frota: d.frota, tipo_veiculo: d.tipo_veiculo,
           placa_cavalo: t(d.placa_cavalo)?.toUpperCase() ?? null, placa_carreta: t(d.placa_carreta)?.toUpperCase() ?? null,
-          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone),
+          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone), contratado_por: t(d.contratado_por),
           paradas: paradasNovas(d.paradas, v.paradas), valores, observacao: t(d.observacao),
-        }), mudouValor.length ? `Valores alterados: ${mudouValor.join(', ')}` : null, t(motivo));
+        }), [mudouValor.length ? `Valores alterados: ${mudouValor.join(', ')}` : null,
+          (t(d.contratado_por) ?? null) !== (v.contratado_por ?? null) ? `Contratado por: ${v.contratado_por ?? '—'} → ${t(d.contratado_por) ?? '—'}` : null].filter(Boolean).join('. ') || null, t(motivo));
       },
 
       avancar(id: string) {

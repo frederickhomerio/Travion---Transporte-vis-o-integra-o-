@@ -158,6 +158,7 @@ export function pendenciasAvanco(v: ViagemInd, cliente: ClienteInd | undefined, 
     case 'lancada':
       if (!v.motorista) p.push('Informe o motorista');
       if (!v.placa_cavalo) p.push('Informe a placa do cavalo');
+      if (!v.contratado_por) p.push('Informe quem contratou o veículo');
       break;
     case 'contratado':
       for (const x of v.paradas) if (x.tipo === 'coleta' && x.exige_agendamento && !x.agendado_para) p.push(`Informe o horário agendado da coleta em ${x.local}`);
@@ -303,7 +304,7 @@ export function marcosCarga(v: ViagemInd): MarcoCarga[] {
   const etapa = (rot: string) => ult((a) => a.includes(`→ ${rot}`) && !a.startsWith('Etapa voltou'));
   const out: MarcoCarga[] = [
     { fase: 'Contratação', rotulo: 'Carga lançada (disponível)', em: v.criado_em, por: v.criado_por, detalhe: v.pedido ? `Pedido ${v.pedido}` : null },
-    m('Contratação', 'Veículo contratado', etapa(ROTULO_ETAPA.contratado), v.placa_cavalo ? `${v.motorista ?? ''} · ${[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ')}` : null),
+    m('Contratação', 'Veículo contratado', etapa(ROTULO_ETAPA.contratado), v.placa_cavalo ? `${v.motorista ?? ''} · ${[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ')}${v.contratado_por ? ` · contratado por ${v.contratado_por}` : ''}` : null),
   ];
   const comb = ult((a) => a === 'Combinado com o motorista');
   if (comb) out.push(m('Carregamento', 'Combinado da coleta', comb));
