@@ -72,6 +72,17 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['estadia.solicitar', 'Estadia', 'Abrir a aba Estadia, enviar solicitações de estadia e responder pendências'],
   ['estadia.ver', 'Estadia', 'Consultar as estadias do seu centro de custo, além das próprias'],
   ['estadia.reabrir', 'Estadia', 'Reabrir estadia cancelada, encerrada ou aprovada (com motivo, fica no histórico)'],
+  ['ind.pagina', 'Industrializado', 'Acessar o módulo Industrializado (só o centro de custo Industrializado)'],
+  ['ind.lancar', 'Industrializado', 'Lançar e editar viagens, informar PO e criar reversa'],
+  ['ind.avancar', 'Industrializado', 'Avançar etapas, registrar combinado com o motorista e situação das paradas'],
+  ['ind.voltar', 'Industrializado', 'Voltar etapa da viagem (com motivo)'],
+  ['ind.cancelar', 'Industrializado', 'Cancelar viagem (com motivo)'],
+  ['ind.emissao', 'Industrializado', 'Atender a Emissão do Industrializado (CT-e, MDF-e e NF)'],
+  ['ind.ocorrencias', 'Industrializado', 'Abrir ocorrências de descarga'],
+  ['ind.ocorrencias_aprovar', 'Industrializado', 'Aprovar valores de ocorrências e marcar pagamento ao motorista'],
+  ['ind.pos_entrega', 'Industrializado', 'Registrar canhotos, conferir comprovante e encerrar viagens'],
+  ['ind.financeiro', 'Industrializado', 'Ver e lançar valores da viagem e a margem final'],
+  ['ind.clientes', 'Industrializado', 'Gerenciar a lista de clientes do Industrializado'],
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
 
 /** Mesma matriz inicial de supabase/migrations/20261026000200_permissoes.sql */
@@ -81,7 +92,8 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
     'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver',
-    'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote'],
+    'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote',
+    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
@@ -99,8 +111,12 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'embarques.editar_lote', 'embarques.editar_cadastro', 'embarques.editar_capacidade', 'embarques.corrigir_lote_pc_tabela',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
     'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar',
-    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila'],
+    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila',
+    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes'],
   consulta: ['embarques.ver'],
+  // Industrializado: só o módulo, sem Lista de Fretes nem outros centros de custo.
+  ind_embarque: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.financeiro', 'ind.clientes'],
+  ind_pos_embarque: ['ind.pagina', 'ind.avancar', 'ind.ocorrencias', 'ind.pos_entrega'],
 };
 
 interface Banco {
@@ -258,6 +274,10 @@ const EQUIPE_PREVIA: Array<{ id: string; nome: string; papel: Papel; filiais: st
   { id: 'perfil-18', nome: 'Lucas Teixeira', papel: 'comercial', filiais: [], carteira: 2 },
   { id: 'perfil-19', nome: 'Beatriz Nunes', papel: 'consulta', filiais: ['Montividiu'] },
   { id: 'perfil-20', nome: 'Rafael Souza', papel: 'consulta', filiais: ['Goiânia'] },
+  { id: 'perfil-21', nome: 'Vanessa Duarte', papel: 'ind_embarque', filiais: ['Goiânia'] },
+  { id: 'perfil-22', nome: 'Paulo Henrique Reis', papel: 'ind_embarque', filiais: ['Goiânia'] },
+  { id: 'perfil-23', nome: 'Simone Araújo', papel: 'ind_pos_embarque', filiais: ['Goiânia'] },
+  { id: 'perfil-24', nome: 'Renato Cunha', papel: 'ind_pos_embarque', filiais: ['Goiânia'] },
 ];
 const emailEquipe = (nome: string) => `${normalizar(nome).toLowerCase().replace(/[^a-z]+/g, '.')}@previa.local`;
 
@@ -427,7 +447,8 @@ export function criarLocalApi(): Api {
   }
   if (!db.perfilCentros) { migrarCentros(db); gravarStorage(CHAVE, JSON.stringify(db)); }
   // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
-  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote', 'embarques.corrigir_lote_pc_tabela'] as Permissao[]) {
+  for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote', 'embarques.corrigir_lote_pc_tabela',
+    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes'] as Permissao[]) {
     if (db.papelPermissoes.some((x) => x.chave === nova)) continue;
     for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) if (ps.includes(nova)) db.papelPermissoes.push({ papel: papel as Papel, chave: nova });
     // Migração 2800: o Coordenador Comercial passa a editar o lote inteiro.
@@ -1293,11 +1314,13 @@ const PERFIS_DEMO = [
   { email: 'apoio@previa.local', papel: 'apoio', rotulo: 'Apoio Operacional', descricao: 'Centro Gerencial (todas as filiais): fila de lote e emissão, contadores e observação operacional' },
   { email: 'comercial@previa.local', papel: 'comercial', rotulo: 'Coordenador Comercial', descricao: 'Centro Gerencial (todas as filiais): cadastra embarques e suspende fretes' },
   { email: 'consulta@previa.local', papel: 'consulta', rotulo: 'Consulta interna', descricao: 'Somente leitura nos centros de custo das filiais Rio Verde e Jataí' },
+  { email: 'vanessa.duarte@previa.local', papel: 'ind_embarque', rotulo: 'Equipe de embarque', descricao: 'Industrializado (Goiânia): lança viagens, tracking, emissão e ocorrências' },
+  { email: 'simone.araujo@previa.local', papel: 'ind_pos_embarque', rotulo: 'Equipe de pós-embarque', descricao: 'Industrializado (Goiânia): entregas, ocorrências, canhotos e encerramento' },
 ] as const;
 const ESCOPO_EQUIPE = (x: (typeof EQUIPE_PREVIA)[number]) =>
   PAPEIS_GERENCIAL.includes(x.papel) ? 'Centro Gerencial (todas as filiais)' : `Centro de custo da filial ${(x.filiais as string[]).join(' e ')}`;
 /** Perfis para simular na prévia, agrupados pela função (3 por função). */
 export const PERFIS_PREVIA: Array<{ email: string; papel: Papel; rotulo: string; descricao: string }> = PERFIS_DEMO.flatMap((d) => [
   { email: d.email, papel: d.papel as Papel, rotulo: `${d.rotulo} (demonstração)`, descricao: d.descricao },
-  ...EQUIPE_PREVIA.filter((x) => x.papel === d.papel).map((x) => ({ email: emailEquipe(x.nome), papel: x.papel, rotulo: x.nome, descricao: ESCOPO_EQUIPE(x) })),
+  ...EQUIPE_PREVIA.filter((x) => x.papel === d.papel && emailEquipe(x.nome) !== d.email).map((x) => ({ email: emailEquipe(x.nome), papel: x.papel, rotulo: x.nome, descricao: ESCOPO_EQUIPE(x) })),
 ]);

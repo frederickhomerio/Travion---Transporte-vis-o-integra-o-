@@ -27,11 +27,21 @@ function useGrupos(admin: boolean): GrupoMenu[] {
   const se = (ok: boolean, i: ItemMenu) => (ok ? [i] : []);
   return [
     { id: 'embarques', rotulo: 'Embarques', icone: 'caminhao', itens: [
-      { to: '/', end: true, icone: 'lista', rotulo: 'Lista de Fretes' },
+      ...se(pode('embarques.ver'), { to: '/', end: true, icone: 'lista', rotulo: 'Lista de Fretes' }),
       ...se(pode('posicoes.pagina'), { to: '/posicoes', icone: 'caminhao', rotulo: 'Posições de Embarque' }),
       ...se(pode('cadastro.solicitar') || pode('cadastro.ver'), { to: '/cadastro', icone: 'cadastro', rotulo: 'Cadastro' }),
       ...se(pode('estadia.solicitar') || pode('estadia.ver'), { to: '/estadia', icone: 'relogio', rotulo: 'Estadia' }),
-      { to: '/analise', end: true, icone: 'painel', rotulo: 'Dashboard Embarques' },
+      ...se(pode('embarques.ver'), { to: '/analise', end: true, icone: 'painel', rotulo: 'Dashboard Embarques' }),
+    ] },
+    // Módulo exclusivo do centro de custo Industrializado (filial Goiânia).
+    { id: 'industrializado', rotulo: 'Industrializado', icone: 'caixa', itens: !pode('ind.pagina') ? [] : [
+      { to: '/industrializado', end: true, icone: 'painel', rotulo: 'Painel' },
+      { to: '/industrializado/viagens', icone: 'lista', rotulo: 'Viagens' },
+      { to: '/industrializado/controle', icone: 'caminhao', rotulo: 'Controle diário' },
+      ...se(pode('ind.emissao'), { to: '/industrializado/emissao', icone: 'documento', rotulo: 'Emissão' }),
+      { to: '/industrializado/ocorrencias', icone: 'alerta', rotulo: 'Ocorrências' },
+      { to: '/industrializado/pos-entrega', icone: 'relogio', rotulo: 'Pós-entrega' },
+      { to: '/industrializado/clientes', icone: 'cliente', rotulo: 'Clientes' },
     ] },
     { id: 'apoio', rotulo: 'Apoio Operacional', icone: 'analise', itens: [
       ...se(pode('apoio.pagina'), { to: '/apoio', icone: 'lista', rotulo: 'Apoio Operacional' }),

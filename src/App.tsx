@@ -18,6 +18,15 @@ const ApoioOperacional = lazy(() => import('./pages/ApoioOperacional').then((m) 
 const AtendimentoDoc = lazy(() => import('./pages/AtendimentoDoc').then((m) => ({ default: m.AtendimentoDoc })));
 const Estadia = lazy(() => import('./pages/Estadia').then((m) => ({ default: m.Estadia })));
 const Cadastro = lazy(() => import('./pages/Cadastro').then((m) => ({ default: m.Cadastro })));
+const Ind = {
+  Painel: lazy(() => import('./industrializado/paginas').then((m) => ({ default: m.PainelInd }))),
+  Viagens: lazy(() => import('./industrializado/paginas').then((m) => ({ default: m.ViagensInd }))),
+  Controle: lazy(() => import('./industrializado/paginas').then((m) => ({ default: m.ControleInd }))),
+  Emissao: lazy(() => import('./industrializado/paginas').then((m) => ({ default: m.EmissaoInd }))),
+  Ocorrencias: lazy(() => import('./industrializado/paginas').then((m) => ({ default: m.OcorrenciasInd }))),
+  PosEntrega: lazy(() => import('./industrializado/paginas').then((m) => ({ default: m.PosEntregaInd }))),
+  Clientes: lazy(() => import('./industrializado/paginas').then((m) => ({ default: m.ClientesInd }))),
+};
 const ConsultaPublica = lazy(() => import('./pages/ConsultaPublica').then((m) => ({ default: m.ConsultaPublica })));
 
 function Protegido({ children }: { children: ReactNode }) {
@@ -26,6 +35,13 @@ function Protegido({ children }: { children: ReactNode }) {
   if (!estado.sessao) return <Navigate to="/login" replace />;
   if (estado.sessao.perfil.status !== 'ativo') return <AguardandoAprovacao />;
   return <Suspense fallback={<Carregando />}>{children}</Suspense>;
+}
+
+/** Quem só tem o Industrializado (sem acesso aos embarques) abre direto no módulo. */
+function Inicio() {
+  const { pode } = useApp();
+  if (!pode('embarques.ver') && pode('ind.pagina')) return <Navigate to="/industrializado" replace />;
+  return <ListaFretes />;
 }
 
 function OuvinteRecuperacao() {
@@ -52,7 +68,14 @@ export function App({ api }: { api: Api }) {
               <Route path="/consulta/:token" element={<Suspense fallback={<Carregando />}><ConsultaPublica /></Suspense>} />
               <Route path="/login" element={<Login />} />
               <Route path="/nova-senha" element={<NovaSenha />} />
-              <Route path="/" element={<Protegido><ListaFretes /></Protegido>} />
+              <Route path="/" element={<Protegido><Inicio /></Protegido>} />
+              <Route path="/industrializado" element={<Protegido><Ind.Painel /></Protegido>} />
+              <Route path="/industrializado/viagens" element={<Protegido><Ind.Viagens /></Protegido>} />
+              <Route path="/industrializado/controle" element={<Protegido><Ind.Controle /></Protegido>} />
+              <Route path="/industrializado/emissao" element={<Protegido><Ind.Emissao /></Protegido>} />
+              <Route path="/industrializado/ocorrencias" element={<Protegido><Ind.Ocorrencias /></Protegido>} />
+              <Route path="/industrializado/pos-entrega" element={<Protegido><Ind.PosEntrega /></Protegido>} />
+              <Route path="/industrializado/clientes" element={<Protegido><Ind.Clientes /></Protegido>} />
               <Route path="/analise" element={<Protegido><DashboardEmbarques /></Protegido>} />
               <Route path="/gestao/painel-embarques" element={<Protegido><PainelEmbarques /></Protegido>} />
               <Route path="/gestao/painel-operacional" element={<Protegido><PainelOperacional /></Protegido>} />

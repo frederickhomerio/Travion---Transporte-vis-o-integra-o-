@@ -6,7 +6,7 @@ import { nome } from '../../lib/cadastros';
 import { fmtDataHora, ROTULO_PAPEL } from '../../lib/formato';
 import type { CentroCusto, Papel, Permissao, StatusUsuario } from '../../types';
 
-const PAPEIS: Papel[] = ['administrador', 'gestor', 'supervisor', 'embarcador', 'apoio', 'comercial', 'consulta'];
+const PAPEIS: Papel[] = ['administrador', 'gestor', 'supervisor', 'embarcador', 'apoio', 'comercial', 'consulta', 'ind_embarque', 'ind_pos_embarque'];
 /** Papéis que entram no centro de custo Gerencial (acesso a todas as filiais) por padrão. */
 const PAPEIS_GERENCIAL: Papel[] = ['apoio', 'comercial', 'gestor', 'administrador'];
 const ROTULO_SITUACAO: Record<StatusUsuario, string> = { pendente: 'Aguardando aprovação', ativo: 'Ativo', bloqueado: 'Inativo' };

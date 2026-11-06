@@ -27,6 +27,9 @@ const caminhos: Record<string, string> = {
   cadastro: 'M3 5h18v14H3zM9 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM5.5 16.5c.6-1.8 1.9-2.6 3.5-2.6s2.9.8 3.5 2.6M14.5 9.5h4M14.5 13h4',
   relogio: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2',
   caminhao: 'M3 7h11v9H3zM14 10h4l3 3v3h-7M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm10 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
+  caixa: 'M3 8l9-5 9 5v8l-9 5-9-5V8Zm0 0 9 5 9-5M12 13v8',
+  documento: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7',
+  alerta: 'M12 4 2.5 20h19L12 4Zm0 6v5m0 3v.5',
 };
 
 export function Icone({ nome, tam = 20 }: { nome: keyof typeof caminhos | string; tam?: number }) {

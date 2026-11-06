@@ -7,7 +7,7 @@ import { ABAS_APP, abasDaPermissao } from '../../lib/permissoesAbas';
 import { normalizar } from '../../lib/texto';
 import type { Papel, Permissao } from '../../types';
 
-const PAPEIS: Papel[] = ['gestor', 'supervisor', 'embarcador', 'apoio', 'comercial', 'consulta'];
+const PAPEIS: Papel[] = ['gestor', 'supervisor', 'embarcador', 'apoio', 'comercial', 'consulta', 'ind_embarque', 'ind_pos_embarque'];
 const SO_ADMIN: Permissao[] = ['usuarios.gerenciar', 'permissoes.gerenciar'];
 type Escolha = 'padrao' | 'permitir' | 'negar';
 

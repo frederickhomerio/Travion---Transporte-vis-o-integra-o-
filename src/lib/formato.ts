@@ -88,6 +88,8 @@ export const ROTULO_PAPEL: Record<string, string> = {
   operacao: 'Apoio Operacional',
   comercial: 'Coordenador Comercial',
   consulta: 'Consulta interna',
+  ind_embarque: 'Equipe de embarque (Industrializado)',
+  ind_pos_embarque: 'Equipe de pós-embarque (Industrializado)',
 };
 
 export const ROTULO_UNIDADE_FRETE: Record<string, string> = {
