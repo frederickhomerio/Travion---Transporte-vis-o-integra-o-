@@ -1,7 +1,7 @@
 // Regras de apresentação da documentação (Apoio Operacional). Funções puras; quem decide é o servidor.
 
 import type {
-  CategoriaAnexo, FormaPagamento, LoteErp, TitularPix, MotivoDevolucao, Pedagio, SolicitacaoDoc, StatusDoc, TipoOperacao, TipoSolicitacaoDoc, UnidadeFreteDoc,
+  AnexoDoc, CategoriaAnexo, FormaPagamento, LoteErp, TitularPix, MotivoDevolucao, MotivoDevolucaoDoc, Pedagio, SolicitacaoDoc, StatusDoc, TipoOperacao, TipoSolicitacaoDoc, UnidadeFreteDoc,
 } from '../types';
 import { cidadeAnuncio } from './anuncio';
 import { normalizar } from './texto';
@@ -37,6 +37,17 @@ export const MOTIVO_DEVOLUCAO: Record<MotivoDevolucao, string> = {
   informacao_incompleta: 'Informação incompleta', outro: 'Outro', sem_registro: 'Sem registro',
 };
 export const MOTIVOS_ESCOLHA: MotivoDevolucao[] = ['documento_ausente', 'documento_ilegivel', 'divergencia_dados', 'informacao_incompleta', 'outro'];
+/** Motivos do embarcador ao devolver a documentação liberada (mesma lista do servidor). */
+export const MOTIVO_DEVOLUCAO_DOC: Record<MotivoDevolucaoDoc, string> = {
+  cte_errado: 'CT-e com dados errados', mdfe_errado: 'MDF-e com dados errados', documento_faltando: 'Documento faltando',
+  arquivo_errado: 'Arquivo errado ou de outro veículo', outro: 'Outro',
+};
+/** Documentos emitidos que valem: os devolvidos ficam só no histórico. */
+export const emitidosValidos = (anexos: AnexoDoc[]) => anexos.filter((a) => CATEGORIAS_SAIDA.includes(a.categoria) && !a.devolvido_em);
+/** Documentação devolvida pelo embarcador e ainda não liberada de novo (retrabalho em aberto). */
+export const devolucaoAberta = (s: SolicitacaoDoc) => (s.devolucoes ?? 0) > 0 && ABERTOS.includes(s.status);
+/** Devolução pode ser feita na emissão liberada (Lote e Emissão ou Emissão). */
+export const podeDevolverDoc = (s: SolicitacaoDoc) => (s.tipo === 'lote_emissao' || s.tipo === 'emissao') && s.status === 'documentacao_disponivel';
 export const TIPOS_ARQUIVO = 'application/pdf,image/png,image/jpeg,image/webp';
 export const LIMITE_ARQUIVO = 15 * 1024 * 1024;
 export const PLACA_RE = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;

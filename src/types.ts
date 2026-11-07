@@ -17,7 +17,7 @@ export type Permissao =
   | 'financeiro.ver' | 'financeiro.editar' | 'historico.ver'
   | 'compartilhamento.preparar' | 'compartilhamento.links'
   | 'importacao.executar' | 'cadastros.gerenciar' | 'usuarios.gerenciar' | 'configuracoes.gerenciar'
-  | 'documentacao.ver' | 'documentacao.solicitar' | 'documentacao.cancelar' | 'apoio.pagina' | 'apoio.atender' | 'apoio.reassumir'
+  | 'documentacao.ver' | 'documentacao.solicitar' | 'documentacao.cancelar' | 'documentacao.devolver' | 'apoio.pagina' | 'apoio.atender' | 'apoio.reassumir'
   | 'cadastro.solicitar' | 'cadastro.ver' | 'permissoes.gerenciar' | 'analise.operacional' | 'analise.fila'
   | 'estadia.solicitar' | 'estadia.ver' | 'estadia.reabrir' | 'usuarios.inativar' | 'usuarios.excluir';
 
@@ -192,6 +192,7 @@ export type StatusDoc = 'enviado' | 'em_atendimento' | 'aguardando_informacao' |
   | 'aguardando_cliente' | 'pago_pendencia' | 'aprovada' | 'aprovada_parcial' | 'encerrado'
   | 'cancelado';
 /** Motivo da devolução (pedir ajuste); 'sem_registro' só em pendências anteriores à migração 1900. */
+export type MotivoDevolucaoDoc = 'cte_errado' | 'mdfe_errado' | 'documento_faltando' | 'arquivo_errado' | 'outro';
 export type MotivoDevolucao = 'documento_ausente' | 'documento_ilegivel' | 'divergencia_dados' | 'informacao_incompleta' | 'outro' | 'sem_registro';
 export type UnidadeFreteDoc = 'rs_tonelada' | 'rs_viagem' | 'rs_m3';
 export type TipoOperacao = 'exportacao' | 'mi_tributado' | 'mi_isento';
@@ -240,6 +241,8 @@ export interface SolicitacaoDoc {
   enviado_em: string; assumido_em: string | null; concluido_em: string | null; concluido_por_nome: string | null;
   cancelado_em: string | null; cancelado_por_nome: string | null; cancelado_motivo: string | null;
   versao: number; atualizado_em: string;
+  /** Devolução da documentação liberada pelo embarcador (migração 3900): quantas vezes, a última e o motivo. */
+  devolucoes?: number; devolvida_em?: string | null; devolvida_por_nome?: string | null; devolvida_motivo?: string | null;
   /** Nomes dos arquivos de NF (para a busca da fila); preenchido na listagem. */
   nomes_nf?: string[];
 }
@@ -258,6 +261,8 @@ export interface MensagemDoc {
 export interface AnexoDoc {
   id: string; solicitacao_id: string; categoria: CategoriaAnexo; caminho: string; nome: string; tipo_mime: string; tamanho: number;
   mensagem_id: string | null; enviado_por_nome: string; enviado_em: string;
+  /** Documento emitido devolvido pelo embarcador (fica no histórico, não vale mais). */
+  devolvido_em?: string | null;
 }
 
 /** Conferência automática de participantes NF-e × CT-e (migração 3600, feita pelo n8n). */
@@ -273,7 +278,7 @@ export interface ConferenciaParticipantes {
 }
 
 export interface NotificacaoApp {
-  id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada' | 'cadastro_concluido' | 'estadia_atualizada'; titulo: string; texto: string;
+  id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada' | 'cadastro_concluido' | 'estadia_atualizada' | 'documentacao_devolvida'; titulo: string; texto: string;
   solicitacao_id: string; embarque_id: string | null; destino: 'embarque' | 'apoio' | 'cadastro' | 'estadia'; criada_em: string; lida_em: string | null;
 }
 

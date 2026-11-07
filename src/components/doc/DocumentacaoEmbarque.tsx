@@ -6,10 +6,10 @@ import { mensagemErro } from '../../data/api';
 import { useDetalheDoc, useDoc } from '../../data/documentacao';
 import { useApp } from '../../data/store';
 import {
-  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, OPERACAO, textoPagamento, PEDAGIO, TIPO_DOC, acaoDocumentacao, fmtFrete, fmtPlaca, rotaDoc, tempoDoc, vezDe,
+  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, MOTIVO_DEVOLUCAO_DOC, OPERACAO, devolucaoAberta, emitidosValidos, podeDevolverDoc, textoPagamento, PEDAGIO, TIPO_DOC, acaoDocumentacao, fmtFrete, fmtPlaca, rotaDoc, tempoDoc, vezDe,
 } from '../../lib/documentacao';
 import { fmtDataAsHora } from '../../lib/formato';
-import type { Embarque, SolicitacaoDoc } from '../../types';
+import type { Embarque, MotivoDevolucaoDoc, SolicitacaoDoc } from '../../types';
 import { Alerta, Carregando, EstadoVazio, Modal, useAviso } from '../ui';
 import { type ArquivoLocal, Historico, JanelaAnexos, LinhaInfo, SeletorArquivos, StatusDocPill, TipoNumero, enviarArquivos, useAgora, useArquivo } from './Comum';
 import { FormSolicitacaoDoc } from './FormSolicitacaoDoc';
@@ -140,11 +140,14 @@ function SolicitacaoComercial({ s, aoVoltar }: { s: SolicitacaoDoc; aoVoltar: ()
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [cancelar, setCancelar] = useState(false);
+  const [devolver, setDevolver] = useState(false);
   const t = tempoDoc(s, agora);
   const anexos = detalhe?.anexos ?? [];
   const entrada = anexos.filter((a) => !CATEGORIAS_SAIDA.includes(a.categoria));
   // Documentos de saída só aparecem ao comercial depois da confirmação do apoio.
-  const emitidos = s.status === 'documentacao_disponivel' ? anexos.filter((a) => CATEGORIAS_SAIDA.includes(a.categoria)) : [];
+  const emitidos = s.status === 'documentacao_disponivel' ? emitidosValidos(anexos) : [];
+  const devolvidos = anexos.filter((a) => CATEGORIAS_SAIDA.includes(a.categoria) && a.devolvido_em);
+  const ultimaDevolucao = [...(detalhe?.mensagens ?? [])].reverse().find((m) => m.referencia === 'devolucao');
   const pendencia = [...(detalhe?.mensagens ?? [])].reverse().find((m) => m.tipo === 'pendencia');
   const eu = app.sessao?.perfil.id;
   const podeCancelar = ABERTOS.includes(s.status) && (pode('documentacao.cancelar') || (s.solicitante_id === eu && s.status === 'enviado'));
@@ -181,7 +184,13 @@ function SolicitacaoComercial({ s, aoVoltar }: { s: SolicitacaoDoc; aoVoltar: ()
         </div>
       </div>
 
-      {s.status === 'correcao_recebida' && <Alerta tipo="info">Sua correção foi enviada. {s.responsavel_nome} vai retomar o atendimento.</Alerta>}
+      {devolucaoAberta(s) ? (
+        <div className="cartao cartao-corpo de-devolvida">
+          <strong>Documentação devolvida ao apoio</strong>
+          <p>{ultimaDevolucao?.texto ?? `Devolvida por ${s.devolvida_por_nome ?? '—'}. Motivo: ${s.devolvida_motivo ?? '—'}.`}</p>
+          <span className="pequeno suave">{s.devolvida_por_nome} em {fmtDataAsHora(s.devolvida_em ?? null)}. {s.responsavel_nome ?? 'O apoio'} vai corrigir e liberar de novo; você recebe um aviso no sino.</span>
+        </div>
+      ) : s.status === 'correcao_recebida' && <Alerta tipo="info">Sua correção foi enviada. {s.responsavel_nome} vai retomar o atendimento.</Alerta>}
       {s.status === 'aguardando_informacao' && (
         <div className="cartao cartao-corpo de-pendencia">
           <strong>O apoio precisa de uma informação</strong>
@@ -203,13 +212,30 @@ function SolicitacaoComercial({ s, aoVoltar }: { s: SolicitacaoDoc; aoVoltar: ()
 
       {s.status === 'documentacao_disponivel' && (
         <div className="cartao cartao-corpo">
-          <strong>Documentos emitidos</strong>
+          <strong>Documentos emitidos{(s.devolucoes ?? 0) > 0 ? ' (corrigidos)' : ''}</strong>
           <ul className="de-arqs">
             {emitidos.map((a) => (
               <li key={a.id}>
                 <span><span className="badge info">{CATEGORIA[a.categoria]}</span> {a.nome}</span>
                 <span className="grupo-btn"><button className="btn peq" onClick={() => setVer(a.id)}>Ver</button><button className="btn peq" onClick={() => void arquivo(a, 'baixar')}>Baixar</button></span>
               </li>
+            ))}
+          </ul>
+          {podeDevolverDoc(s) && pode('documentacao.devolver') && (
+            <div className="de-dev-acao">
+              <span className="pequeno suave">Algum documento veio errado?</span>
+              <button className="btn perigo peq" onClick={() => setDevolver(true)}>Devolver documentação</button>
+            </div>
+          )}
+        </div>
+      )}
+      {devolvidos.length > 0 && (
+        <div className="cartao cartao-corpo">
+          <strong>Documentos devolvidos (não valem mais)</strong>
+          <ul className="de-arqs">
+            {devolvidos.map((a) => (
+              <li key={a.id}><span className="dev-riscado"><span className="badge">{CATEGORIA[a.categoria]}</span> {a.nome}</span>
+                <span className="pequeno suave">devolvido em {fmtDataAsHora(a.devolvido_em ?? null)}</span></li>
             ))}
           </ul>
         </div>
@@ -248,7 +274,55 @@ function SolicitacaoComercial({ s, aoVoltar }: { s: SolicitacaoDoc; aoVoltar: ()
 
       {ver && <JanelaAnexos titulo={`${TIPO_DOC[s.tipo]} nº ${s.numero}`} anexos={[...entrada, ...emitidos]} inicial={ver} aoFechar={() => setVer(null)} />}
       {cancelar && <CancelarDoc s={s} aoFechar={() => setCancelar(false)} />}
+      {devolver && <DevolverDocumentacao s={s} aoFechar={() => setDevolver(false)} />}
     </div>
+  );
+}
+
+/** Embarcador devolve a documentação liberada que chegou errada: motivo, o que está errado e prints (opcional).
+ *  A solicitação volta para a fila de quem liberou, os documentos atuais ficam marcados como devolvidos e tudo vai para o histórico. */
+export function DevolverDocumentacao({ s, aoFechar }: { s: SolicitacaoDoc; aoFechar: () => void }) {
+  const { api } = useApp();
+  const { aplicar, carregarDetalhe } = useDoc();
+  const avisar = useAviso();
+  const [motivo, setMotivo] = useState<MotivoDevolucaoDoc | ''>('');
+  const [texto, setTexto] = useState('');
+  const [arqs, setArqs] = useState<ArquivoLocal[]>([]);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const enviar = async () => {
+    setErro(null);
+    if (!motivo) { setErro('Escolha o motivo da devolução.'); return; }
+    if (!texto.trim()) { setErro('Descreva o que está errado (ex.: CT-e com o tomador errado, peso diferente da NF).'); return; }
+    setEnviando(true);
+    try {
+      const enviados = await enviarArquivos(arqs, (f) => api.doc.enviarArquivo(f), setArqs);
+      aplicar(await api.doc.devolverDocumentacao(s.id, motivo, texto.trim(), enviados));
+      await carregarDetalhe(s.id).catch(() => undefined);
+      avisar('ok', `Documentação devolvida a ${s.responsavel_nome ?? 'o apoio'} para correção.`);
+      aoFechar();
+    } catch (e) { setErro(mensagemErro(e)); } finally { setEnviando(false); }
+  };
+  return (
+    <Modal titulo={`Devolver documentação · ${TIPO_DOC[s.tipo]} nº ${s.numero}`} aoFechar={aoFechar} rodape={<>
+      <button className="btn" onClick={aoFechar} disabled={enviando}>Voltar</button>
+      <button className="btn perigo" disabled={enviando} onClick={() => void enviar()}>{enviando ? 'Devolvendo…' : 'Devolver ao apoio'}</button>
+    </>}>
+      <p className="pequeno">{fmtPlaca(s.placa)} · {rotaDoc(s)} · {s.retrato.cliente}</p>
+      <p>A solicitação volta para <strong>{s.responsavel_nome ?? 'o apoio'}</strong>, que liberou os documentos. Os documentos atuais deixam de valer e ficam guardados no histórico; você recebe um aviso quando os corrigidos forem liberados.</p>
+      <label className="campo"><span>Motivo *</span>
+        <select className="entrada" value={motivo} onChange={(e) => setMotivo(e.target.value as MotivoDevolucaoDoc)}>
+          <option value="">Escolha…</option>
+          {(Object.keys(MOTIVO_DEVOLUCAO_DOC) as MotivoDevolucaoDoc[]).map((m) => <option key={m} value={m}>{MOTIVO_DEVOLUCAO_DOC[m]}</option>)}
+        </select>
+      </label>
+      <label className="campo"><span>O que está errado *</span>
+        <textarea className="entrada" rows={3} value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={2000}
+          placeholder="Ex.: CT-e saiu com o destinatário da NF anterior; o certo é a filial de Rio Verde." />
+      </label>
+      <SeletorArquivos rotulo="Print ou foto do erro (opcional)" categoria="correcao" categorias={['correcao']} itens={arqs} aoMudar={setArqs} />
+      {erro && <Alerta tipo="erro">{erro}</Alerta>}
+    </Modal>
   );
 }
 

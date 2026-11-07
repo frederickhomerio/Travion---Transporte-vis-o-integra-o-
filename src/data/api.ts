@@ -6,7 +6,7 @@ import type { Cadastros } from '../lib/cadastros';
 import type { DadosPainel } from '../lib/painelOperacional';
 import type {
   AnexoDoc, CategoriaAnexo, ConferenciaEstadia, ConferenciaParticipantes, DadosCadastroDoc, DadosEstadia, DuplicadaEstadia, PagamentoEstadia, ParametrosConferencia,
-  ResultadoEstadia, RetornoEstadia, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
+  ResultadoEstadia, RetornoEstadia, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, MotivoDevolucaoDoc, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
   Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, ItemVitrine, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
@@ -108,6 +108,8 @@ export interface ApiDoc {
   filaApoio(): Promise<Pick<DadosPainel, 'agora' | 'solicitacoes' | 'eventos'>>;
   responder(id: string, texto: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   anexarEmitidos(id: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
+  /** Embarcador devolve a documentação liberada que chegou errada: volta para a fila de quem liberou. */
+  devolverDocumentacao(id: string, motivo: MotivoDevolucaoDoc, texto: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   /** Pede de novo a conferência automática NF × CT-e (id da conferência). */
   reconferirParticipantes(id: string): Promise<void>;
   /** motivo: obrigatório quando a conferência NF × CT-e está em divergência (fica no registro permanente). */
