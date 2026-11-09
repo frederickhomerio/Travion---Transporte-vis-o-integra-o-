@@ -109,6 +109,8 @@ export function criarDocSupabase(sb: SupabaseClient, rpc: <T>(fn: string, args: 
     painel: (desde, ate, alteradosDesde) => rpc<DadosPainel>('painel_operacional', { p_desde: desde, p_ate: ate, p_alterados_desde: alteradosDesde }),
     responder: (id, texto, anexos) => rpc<ResultadoDoc>('responder_ajuste_doc', { p_id: id, p_texto: texto, p_anexos: anexos }),
     anexarEmitidos: (id, anexos) => rpc<ResultadoDoc>('anexar_documentos_doc', { p_id: id, p_anexos: anexos }),
+    devolverDocumentacao: (id, motivo, texto, anexos) => rpc<ResultadoDoc>('devolver_documentacao_doc',
+      { p_id: id, p_motivo: motivo, p_texto: texto, p_anexos: anexos }),
     async reconferirParticipantes(id) { await rpc('reconferir_participantes', { p_id: id }); },
     concluir: (id, motivo) => motivo?.trim()
       ? rpc<ResultadoDoc>('concluir_solicitacao_doc_motivo', { p_id: id, p_motivo: motivo.trim() })

@@ -1,10 +1,14 @@
 // Compara os participantes da NF-e com os do CT-e e monta o resultado para o Travion.
 // Regras (sempre por CNPJ/CPF e município; o nome só ajuda quando o documento não foi lido):
-//  Remetente      NF: emitente (saída) ou bloco destinatário/remetente (entrada)   x  CT-e: remetente
-//  Destinatário   NF: destinatário (saída) ou emitente (entrada)                    x  CT-e: destinatário
+//  Remetente      NF: emitente                                                      x  CT-e: remetente
+//  Destinatário   NF: bloco destinatário/remetente                                  x  CT-e: destinatário
+//  (regra do Frederick, 05/11/2026, para NF de saída. NF de entrada: dest/rem da NF = remetente e emitente = destinatário;
+//   remetente = destinatário no CT-e é erro)
+//  Entrega com término diferente mas destinatário certo = atenção (trecho até terminal/transbordo)
 //  Local coleta   NF: local de retirada (bloco ou observações), senão remetente x  CT-e: expedidor, senão remetente + início da prestação
 //  Local entrega  NF: local de entrega (bloco ou observações), senão destinatário x  CT-e: recebedor, senão destinatário + término da prestação
-//  Pagador        Travion: cliente do embarque                                      x  CT-e: tomador do serviço
+//  Pagador        campo Frete da NF: 0 = emitente paga, 1 = destinatário paga, 2 terceiros = amarelo  x  CT-e: tomador
+//  NF de trânsito (natureza OUTRAS ENTRADAS... ou NOTA FISCAL DE TRÂNSITO): inverte remetente/destinatário, coleta/entrega e pagador
 //  NF no CT-e     chave da NF                                                       x  chaves citadas no CT-e
 const bruto = $('Buscar dados da conferência').first().json;
 const dados = Array.isArray(bruto) ? bruto[0] : bruto;
@@ -20,6 +24,33 @@ function parecido(a, b) {
   if (!ta.length || !tb.length) return false;
   const comum = ta.filter(t => tb.includes(t)).length;
   return comum / Math.min(ta.length, tb.length) >= 0.6;
+}
+// CNPJ/CPF lidos por IA: completa zero à esquerda perdido e confere os dígitos verificadores.
+function cnpjValido(c) {
+  if (!/^\d{14}$/.test(c) || /^(\d)\1+$/.test(c)) return false;
+  const dv = (base, pesos) => { const s = base.split('').reduce((a, n, i) => a + Number(n) * pesos[i], 0) % 11; return s < 2 ? 0 : 11 - s; };
+  const p1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], p2 = [6].concat(p1);
+  return dv(c.slice(0, 12), p1) === Number(c[12]) && dv(c.slice(0, 13), p2) === Number(c[13]);
+}
+function cpfValido(c) {
+  if (!/^\d{11}$/.test(c) || /^(\d)\1+$/.test(c)) return false;
+  const dv = (n) => { let s = 0; for (let i = 0; i < n; i++) s += Number(c[i]) * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+  return dv(9) === Number(c[9]) && dv(10) === Number(c[10]);
+}
+function docNormal(v) {
+  let d = dig(v);
+  if (d.length === 13 && cnpjValido('0' + d)) d = '0' + d;
+  if (d.length === 10 && cpfValido('0' + d)) d = '0' + d;
+  return d;
+}
+const docValido = d => cnpjValido(d) || cpfValido(d);
+function distancia(a, b) {
+  const m = a.length, n = b.length, t = [];
+  for (let i = 0; i <= m; i++) { t[i] = [i]; }
+  for (let j = 1; j <= n; j++) t[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    t[i][j] = Math.min(t[i - 1][j] + 1, t[i][j - 1] + 1, t[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return t[m][n];
 }
 const temParte = p => !!(p && (dig(p.cnpj_cpf) || norm(p.nome) || norm(p.municipio)));
 const cidade = p => (p && (norm(p.municipio) || norm(p.uf))) ? (p.municipio || '?') + '/' + (p.uf || '?') : '';
@@ -42,14 +73,26 @@ function chaveValida(c) {
 }
 const docDaChave = c => dig(c).slice(6, 20);
 
+function ehTransito(nf) {
+  const nat = norm(nf && nf.natureza_operacao), obs = norm(nf && nf.dados_adicionais);
+  return /OUTRAS ENTRADAS/.test(nat) || /TRANSITO/.test(nat) || /(EFEITO DE|NOTA FISCAL DE|NF DE) TRANSITO/.test(obs);
+}
+
 const ORDEM = { ok: 0, nao_lido: 1, alerta: 2, divergente: 3 };
 const pior = (a, b) => (ORDEM[b] > ORDEM[a] ? b : a);
 
 function compararParte(nf, cte) {
   if (!temParte(nf) || !temParte(cte)) return { resultado: 'nao_lido', observacao: 'Não foi possível ler ' + (!temParte(nf) ? 'na NF' : 'no CT-e') };
-  const a = dig(nf.cnpj_cpf), b = dig(cte.cnpj_cpf);
+  const a = docNormal(nf.cnpj_cpf), b = docNormal(cte.cnpj_cpf);
   if (a && b) {
     if (a === b) return { resultado: 'ok', observacao: '' };
+    const va = docValido(a), vb = docValido(b);
+    // Leitura imperfeita (dígito verificador não fecha) de um lado: confere por aproximação + nome.
+    if (!(va && vb)) {
+      const perto = distancia(a, b) <= 3;
+      if (perto && parecido(nf.nome, cte.nome)) return { resultado: 'ok', observacao: 'CNPJ/CPF mal lido (' + (va ? 'CT-e' : 'NF') + '), mas confere pelo nome e pelos números' };
+      return { resultado: 'alerta', observacao: 'CNPJ/CPF ilegível ' + (va ? 'no CT-e' : 'na NF') + ' (NF ' + a + ', CT-e ' + b + '): conferir no documento' };
+    }
     if (a.length === 14 && b.length === 14 && a.slice(0, 8) === b.slice(0, 8)) {
       return { resultado: 'alerta', observacao: 'Mesma empresa, filial diferente: NF ' + a + ', CT-e ' + b };
     }
@@ -58,15 +101,24 @@ function compararParte(nf, cte) {
   if (parecido(nf.nome, cte.nome)) return { resultado: 'alerta', observacao: 'CNPJ/CPF não legível; o nome confere' };
   return { resultado: 'alerta', observacao: 'CNPJ/CPF não legível; conferir manualmente' };
 }
+// Município lido pela IA: tira "ÁREA/ZONA RURAL DE" e a UF grudada no fim ("MONTIVIDIUGO" com UF vazia).
+function chaveMun(p) {
+  let m = norm(p && p.municipio).replace(/^(AREA|ZONA) RURAL (DE |DO |DA )?/, '').replace(/ /g, '');
+  const uf = norm(p && p.uf);
+  if (!uf && /(GO|MT|MS|MG|SP|PR|BA|TO|DF)$/.test(m) && m.length > 6) return { m, uf, m2: m.slice(0, -2), uf2: m.slice(-2) };
+  return { m, uf, m2: m, uf2: uf };
+}
 function compararCidade(a, b) {
   if (!norm(a && a.municipio) || !norm(b && b.municipio)) return 'nao_lido';
-  const ok = norm(a.municipio) === norm(b.municipio) && (!norm(a.uf) || !norm(b.uf) || norm(a.uf) === norm(b.uf));
+  const x = chaveMun(a), y = chaveMun(b);
+  const ufOk = (u, v) => !u || !v || u === v;
+  const ok = (x.m === y.m && ufOk(x.uf, y.uf)) || (x.m2 === y.m2 && ufOk(x.uf2, y.uf2));
   return ok ? 'ok' : 'divergente';
 }
 function compararLocal(nfLocal, cteLocal, cteCidade, nomeCidade) {
   const obs = [];
   let res = 'ok';
-  if (dig(nfLocal.cnpj_cpf) && dig(cteLocal.cnpj_cpf)) {
+  if (docNormal(nfLocal.cnpj_cpf) && docNormal(cteLocal.cnpj_cpf)) {
     const p = compararParte(nfLocal, cteLocal);
     res = pior(res, p.resultado);
     if (p.observacao) obs.push(p.observacao);
@@ -83,12 +135,47 @@ function compararLocal(nfLocal, cteLocal, cteCidade, nomeCidade) {
   return { resultado: res, observacao: obs.join('; ') };
 }
 
+// Regra do Frederick (05/11/2026): quando coleta/entrega não confere, procurar nas observações da NF um trecho
+// rotulado como local de retirada/coleta/carregamento (ou entrega/descarga) e conferir o município do CT-e nele.
+// Vale mesmo quando a NF tem o bloco de retirada/entrega (ex.: bloco diz Montividiu, obs diz "LOCAL DE RETIRADA ... IVOLANDIA GO").
+const ROTULOS = {
+  coleta: /\b(LOCAL (DE )?(RETIRADA|COLETA|CARREGAMENTO|EMBARQUE|CARGA)|RETIRADA|COLETA|CARREGAMENTO|EMBARQUE|RETIRAR EM|CARREGAR EM)\b/g,
+  entrega: /\b(LOCAL (DE )?(ENTREGA|DESCARGA|DESCARREGAMENTO|DESEMBARQUE|DESTINO)|ENTREGA|DESCARGA|DESCARREGAMENTO|DESEMBARQUE|ENTREGAR EM)\b/g
+};
+function trechosRotulados(texto, tipo) {
+  const t = norm(texto), out = [];
+  if (!t) return out;
+  const re = new RegExp(ROTULOS[tipo].source, 'g');
+  let m;
+  const oposto = new RegExp(ROTULOS[tipo === 'coleta' ? 'entrega' : 'coleta'].source);
+  while ((m = re.exec(t))) {
+    let tr = t.slice(m.index, m.index + 220);
+    // Corta no rótulo do outro local (ex.: "LOCAL DE RETIRADA ... LOCAL DE ENTREGA ..."), salvo "COLETA E ENTREGA" colados.
+    const resto = tr.slice(25), k = resto.search(oposto);
+    if (k >= 0) tr = tr.slice(0, 25 + k);
+    out.push(tr);
+  }
+  return out;
+}
+function nasObservacoesRotulado(texto, tipo, cteLocal, cteCidade) {
+  const mun = norm(cteCidade && cteCidade.municipio) || norm(cteLocal && cteLocal.municipio);
+  if (!mun) return '';
+  const uf = norm(cteCidade && cteCidade.uf) || norm(cteLocal && cteLocal.uf);
+  for (const tr of trechosRotulados(texto, tipo)) {
+    if ((' ' + tr + ' ').includes(' ' + mun + ' ')) {
+      const rot = tr.split(' ').slice(0, 3).join(' ');
+      return (rot.startsWith('LOCAL') ? rot : tr.split(' ')[0]).toLowerCase() + ' em ' + mun + (uf ? '/' + uf : '');
+    }
+  }
+  return '';
+}
+
 // Alguns modelos de NF só trazem coleta/entrega nas observações (Dados Adicionais): se o local do CT-e
 // (CNPJ/CPF ou município) aparecer escrito lá, confere.
 function nasObservacoes(texto, cteLocal, cteCidade) {
   const t = norm(texto), d = dig(texto);
   if (!t) return '';
-  const doc = dig(cteLocal && cteLocal.cnpj_cpf);
+  const doc = docNormal(cteLocal && cteLocal.cnpj_cpf);
   if (doc.length >= 11 && d.includes(doc)) return 'CNPJ/CPF';
   const mun = norm(cteLocal && cteLocal.municipio) || norm(cteCidade && cteCidade.municipio);
   if (mun && (' ' + t + ' ').includes(' ' + mun + ' ')) return 'município';
@@ -107,9 +194,10 @@ const origem = leituras.length && leituras.every(l => l.origem === 'xml') ? 'xml
 for (const d of docs) {
   d._chave_ok = chaveValida(d.chave_acesso);
   if (d.tipo === 'nfe' && d._chave_ok) {
-    const doc = docDaChave(d.chave_acesso);
-    const ehCpf = doc.startsWith('000') && !dig(d.emitente && d.emitente.cnpj_cpf).startsWith('000');
-    if (!ehCpf && dig(d.emitente && d.emitente.cnpj_cpf) !== doc) {
+    // Na chave vem o CNPJ (14) ou, para produtor, '000' + CPF (11). Só corrige com um documento válido.
+    const k = docDaChave(d.chave_acesso);
+    const doc = cnpjValido(k) ? k : (k.startsWith('000') && cpfValido(k.slice(3)) ? k.slice(3) : '');
+    if (doc && docNormal(d.emitente && d.emitente.cnpj_cpf) !== doc) {
       d.emitente = Object.assign({}, d.emitente, { cnpj_cpf: doc });
       d._corrigido = true;
     }
@@ -129,7 +217,7 @@ const ctes = docs.filter(d => d.tipo === 'cte' && d._papel === 'cte');
 const leitura = {
   arquivos: leituras.map(l => ({ papel: l.papel, nome: l.nome, origem: l.origem, erro: l.erro || '',
     documentos: (l.documentos || []).length, tokens: l.tokens || null })),
-  nfs: nfs.map(d => ({ chave: d.chave_acesso, chave_valida: d._chave_ok, numero: d.numero, tipo_operacao: d.nf_tipo_operacao,
+  nfs: nfs.map(d => ({ chave: d.chave_acesso, chave_valida: d._chave_ok, numero: d.numero, tipo_operacao: d.nf_tipo_operacao, natureza: d.natureza_operacao || '',
     modalidade_frete: d.modalidade_frete, emitente: d.emitente, destinatario: d.destinatario,
     local_retirada: d.local_retirada, local_entrega: d.local_entrega, dados_adicionais: d.dados_adicionais || '', legibilidade: d.legibilidade, arquivo: d._arquivo })),
   ctes: ctes.map(d => ({ chave: d.chave_acesso, chave_valida: d._chave_ok, numero: d.numero, remetente: d.remetente,
@@ -145,50 +233,135 @@ function registrar(status, mensagem, resultado) {
 if (!ctes.length) return registrar('erro', 'Não consegui ler o CT-e anexado' + (errosLeitura.length ? ' (' + errosLeitura.join('; ') + ')' : ''));
 if (!nfs.length) return registrar('erro', 'Não consegui ler a NF da solicitação' + (errosLeitura.length ? ' (' + errosLeitura.join('; ') + ')' : ''));
 
-const MODALIDADE = { '0': 'CIF (por conta do remetente)', '1': 'FOB (por conta do destinatário)', '2': 'Por conta de terceiros',
-  '3': 'Próprio, por conta do remetente', '4': 'Próprio, por conta do destinatário', '9': 'Sem frete' };
+const MODALIDADE = { '0': 'Por conta do emitente/remetente (CIF)', '1': 'Por conta do destinatário (FOB)', '2': 'Por conta de terceiros',
+  '3': 'Transporte próprio do remetente', '4': 'Transporte próprio do destinatário', '9': 'Sem frete' };
 const linhasTodas = [];
 const resumoPorCte = [];
 for (const cte of ctes) {
   const citadas = (cte.chaves_nfe_citadas || []).map(dig).filter(Boolean);
   let alvo = nfs.filter(n => citadas.includes(dig(n.chave_acesso)));
+  // Chave da NF mal lida (dígito verificador não fecha): procura a chave citada no CT-e com o mesmo número de NF
+  // e o mesmo CNPJ/CPF do emitente (os dois estão dentro da chave).
+  let porAproximacao = false;
+  if (!alvo.length) {
+    alvo = nfs.filter(n => !n._chave_ok && citadas.some(c => {
+      const num = String(Number(c.slice(25, 34)));
+      const numNf = String(Number(dig(n.numero) || '0'));
+      const emit = docNormal(n.emitente && n.emitente.cnpj_cpf);
+      const doc = c.slice(6, 20);
+      return chaveValida(c) && numNf !== '0' && num === numNf && (!emit || doc.endsWith(emit) || distancia(doc, emit.padStart(14, '0')) <= 2);
+    }));
+    porAproximacao = alvo.length > 0;
+  }
   const linhaChave = { campo: 'nf_no_cte', rotulo: 'NF citada no CT-e' };
   if (alvo.length) {
     linhaChave.nf = alvo.map(n => 'NF ' + (n.numero || '') + ' · chave ' + dig(n.chave_acesso)).join('\n');
     linhaChave.cte = citadas.length + ' chave(s) citada(s)';
     linhaChave.resultado = 'ok';
-    linhaChave.observacao = '';
+    linhaChave.observacao = porAproximacao ? 'Chave da NF mal lida; confere pelo número da NF e pelo CNPJ do emitente na chave do CT-e' : '';
   } else {
     alvo = nfs;
     linhaChave.nf = nfs.map(n => 'NF ' + (n.numero || '?') + (dig(n.chave_acesso) ? ' · chave ' + dig(n.chave_acesso) : ' · chave não lida')).join('\n');
     linhaChave.cte = citadas.length ? citadas.join('\n') : 'Nenhuma chave lida';
-    const nfSemChave = nfs.some(n => !dig(n.chave_acesso));
+    const nfSemChave = nfs.some(n => !n._chave_ok);
     linhaChave.resultado = (!citadas.length || nfSemChave) ? 'nao_lido' : 'divergente';
-    linhaChave.observacao = linhaChave.resultado === 'divergente' ? 'O CT-e cita outra NF' : 'Chave não lida em um dos documentos';
+    linhaChave.observacao = linhaChave.resultado === 'divergente' ? 'O CT-e cita outra NF' : 'Chave da NF ilegível na imagem: conferir o número da NF no CT-e';
   }
   const linhas = [linhaChave];
   const porCampo = {};
   for (const nf of alvo) {
-    const entrada = nf.nf_tipo_operacao === 'entrada';
-    const rem = entrada ? nf.destinatario : nf.emitente;
-    const dest = entrada ? nf.emitente : nf.destinatario;
+    // NF de trânsito (regra do Frederick, 05/11/2026): natureza "OUTRAS ENTRADAS DE MERCADORIAS OU SERVIÇOS NÃO
+    // ESPECIFICADAS" ou "NOTA FISCAL DE TRÂNSITO" -> o cliente (emitente) manda buscar a carga no fornecedor.
+    // Inverte: quadro destinatário/remetente = remetente e coleta; emitente = destinatário e entrega.
+    const transito = ehTransito(nf);
+    const rem = transito ? nf.destinatario : nf.emitente;
+    const dest = transito ? nf.emitente : nf.destinatario;
     const coletaNf = temParte(nf.local_retirada) ? nf.local_retirada : rem;
     const entregaNf = temParte(nf.local_entrega) ? nf.local_entrega : dest;
     const coletaCte = temParte(cte.expedidor) ? cte.expedidor : cte.remetente;
     const entregaCte = temParte(cte.recebedor) ? cte.recebedor : cte.destinatario;
     const obsNf = String(nf.dados_adicionais || '');
-    const viaObs = (r, temBloco, cteLocal, cteCidade) => {
-      if (r.resultado === 'ok' || temBloco || !obsNf) return r;
+    const viaObs = (r, temBloco, cteLocal, cteCidade, tipo) => {
+      if (r.resultado === 'ok' || !obsNf) return r;
+      // 1º: trecho rotulado (local de retirada/coleta/entrega...) nas observações, mesmo com bloco na NF.
+      const rot = nasObservacoesRotulado(obsNf, tipo, cteLocal, cteCidade);
+      if (rot) return { resultado: 'ok', observacao: 'Confere com as observações da NF (' + rot + ')' + (temBloco ? '; o bloco de ' + (tipo === 'coleta' ? 'retirada' : 'entrega') + ' da NF indica outro local' : ''), _obs: true };
+      if (temBloco) return r;
       const achou = nasObservacoes(obsNf, cteLocal, cteCidade);
       return achou ? { resultado: 'ok', observacao: 'Confere com as observações da NF (' + achou + ')', _obs: true } : r;
     };
+    let cRem = compararParte(rem, cte.remetente), cDest = compararParte(dest, cte.destinatario);
+    // NF de entrada (tpNF=0, ex.: usina emitindo nota do produtor): o quadro destinatário/remetente da NF é o REMETENTE
+    // (quem promove a saída da carga) e o emitente é o destinatário. Em NF de saída, a ordem invertida é atenção.
+    if (!transito && (cRem.resultado === 'divergente' || cDest.resultado === 'divergente')) {
+      const iRem = compararParte(dest, cte.remetente), iDest = compararParte(rem, cte.destinatario);
+      if (iRem.resultado === 'ok' && iDest.resultado === 'ok') {
+        if (nf.nf_tipo_operacao === 'entrada') {
+          cRem = { resultado: 'ok', observacao: 'NF de entrada: remetente = quadro destinatário/remetente da NF (produtor/fornecedor)' };
+          cDest = { resultado: 'ok', observacao: 'NF de entrada: destinatário = emitente da NF' };
+        } else {
+          const txt = 'Remetente e destinatário invertidos em relação à NF (emitente = remetente). Só é correto em NF de entrada: confirmar o tipo da NF.';
+          cRem = { resultado: 'alerta', observacao: txt }; cDest = { resultado: 'alerta', observacao: txt };
+        }
+      }
+    }
+    // NF de entrada com só um dos lados lido na ordem da entrada.
+    if (!transito && nf.nf_tipo_operacao === 'entrada' && cDest.resultado === 'divergente' && compararParte(rem, cte.destinatario).resultado === 'ok') {
+      cDest = { resultado: 'ok', observacao: 'NF de entrada: destinatário = emitente da NF' };
+    }
+    if (!transito && nf.nf_tipo_operacao === 'entrada' && cRem.resultado === 'divergente' && compararParte(dest, cte.remetente).resultado === 'ok') {
+      cRem = { resultado: 'ok', observacao: 'NF de entrada: remetente = quadro destinatário/remetente da NF (produtor/fornecedor)' };
+    }
+    // Remetente e destinatário do CT-e com o mesmo CNPJ/CPF: a carga não "sai" de ninguém. A lei define remetente como
+    // quem promove a saída inicial; isso é erro de emissão, mesmo em NF de entrada (aí o produtor deveria ser o remetente).
+    const docRemCte = docNormal(cte.remetente && cte.remetente.cnpj_cpf);
+    // Exceção: a própria NF tem o mesmo CNPJ como emitente e destinatário (ex.: trading remetendo para formação de lote).
+    const nfMesmaParte = docNormal(rem && rem.cnpj_cpf) && docNormal(rem && rem.cnpj_cpf) === docNormal(dest && dest.cnpj_cpf);
+    if (docRemCte && !nfMesmaParte && docRemCte === docNormal(cte.destinatario && cte.destinatario.cnpj_cpf)) {
+      const txt = 'O CT-e tem o mesmo CNPJ/CPF como remetente e destinatário (' + mostrar(cte.remetente).split(' · ')[0] + '). '
+        + (transito || nf.nf_tipo_operacao === 'entrada' ? 'Na NF de trânsito/entrada o remetente deve ser o fornecedor do quadro destinatário/remetente da NF (' + mostrar(transito ? rem : dest).split(' · ')[0] + ').' : 'O remetente deve ser o emitente da NF.');
+      cRem = { resultado: 'divergente', observacao: txt };
+      if (!transito && nf.nf_tipo_operacao === 'entrada' && compararParte(rem, cte.destinatario).resultado === 'ok') cDest = { resultado: 'ok', observacao: 'NF de entrada: destinatário = emitente da NF' };
+    }
+    // Trecho intermediário (transbordo, terminal, armazém): término do CT-e diferente do destino da NF é atenção, não erro,
+    // quando o destinatário confere e não há CNPJ de recebedor contrariando.
+    const trecho = (r) => {
+      if (r.resultado !== 'divergente' || cDest.resultado === 'divergente') return r;
+      if (/CNPJ\/CPF diferente/.test(r.observacao || '')) return r;
+      return { resultado: 'alerta', observacao: (r.observacao ? r.observacao + '. ' : '') + 'Pode ser trecho até terminal, armazém ou transbordo: confirmar com a programação.' };
+    };
+    // NF de entrada sem bloco de retirada/entrega: a carga sai de quem está no quadro destinatário/remetente
+    // (produtor) e chega ao emitente. Se a regra padrão não fechar, tenta essa leitura.
+    const entrada = !transito && nf.nf_tipo_operacao === 'entrada';
+    const local = (tipo, padrao, alternativo, cteLocal, cteCidade, nomeCidade, temBloco) => {
+      const r = viaObs(compararLocal(padrao, cteLocal, cteCidade, nomeCidade), temBloco, cteLocal, cteCidade, tipo);
+      if (r.resultado === 'ok' || temBloco || !entrada || !temParte(alternativo)) return { r, parte: padrao };
+      const r2 = compararLocal(alternativo, cteLocal, cteCidade, nomeCidade);
+      if (r2.resultado !== 'ok') return { r, parte: padrao };
+      return { r: { resultado: 'ok', observacao: 'NF de entrada: ' + tipo + ' em ' + mostrar(alternativo).split(' · ')[0] }, parte: alternativo };
+    };
+    // CT-e com expedidor/recebedor (armazém, silo, terminal) que a NF não cita: se a parte da NF (remetente/destinatário)
+    // confere no CT-e, é atenção para conferir o local, não divergência.
+    const terceiro = (x, tipo, temBloco, parteCte, cteTerceiro, cParte) => {
+      if (x.r.resultado !== 'divergente' || temBloco || !temParte(cteTerceiro) || cParte.resultado !== 'ok') return x;
+      return { parte: x.parte, r: { resultado: 'alerta', observacao: 'O CT-e tem ' + (tipo === 'coleta' ? 'expedidor' : 'recebedor') + ' ('
+        + mostrar(cteTerceiro).split(' · ')[0] + ') que a NF não cita como local de ' + (tipo === 'coleta' ? 'retirada' : 'entrega')
+        + ': conferir se a carga ' + (tipo === 'coleta' ? 'saiu' : 'foi entregue') + ' nesse local. ' + (x.r.observacao || '') } };
+    };
+    const lc = terceiro(local('coleta', coletaNf, dest, coletaCte, cte.municipio_inicio, 'Início da prestação', temParte(nf.local_retirada)),
+      'coleta', temParte(nf.local_retirada), cte.remetente, cte.expedidor, cRem);
+    const le = terceiro(local('entrega', entregaNf, rem, entregaCte, cte.municipio_fim, 'Término da prestação', temParte(nf.local_entrega)),
+      'entrega', temParte(nf.local_entrega), cte.destinatario, cte.recebedor, cDest);
+    if (transito) {
+      const nota = 'NF de trânsito (' + (norm(nf.natureza_operacao) ? nf.natureza_operacao : 'efeito de trânsito') + '): regra invertida';
+      if (cRem.resultado === 'ok' && !cRem.observacao) cRem = { resultado: 'ok', observacao: nota + ', remetente = quadro destinatário/remetente' };
+      if (cDest.resultado === 'ok' && !cDest.observacao) cDest = { resultado: 'ok', observacao: nota + ', destinatário = emitente' };
+    }
     const itens = [
-      ['remetente', 'Remetente', rem, cte.remetente, compararParte(rem, cte.remetente)],
-      ['destinatario', 'Destinatário', dest, cte.destinatario, compararParte(dest, cte.destinatario)],
-      ['local_coleta', 'Local de coleta', coletaNf, coletaCte, viaObs(
-        compararLocal(coletaNf, coletaCte, cte.municipio_inicio, 'Início da prestação'), temParte(nf.local_retirada), coletaCte, cte.municipio_inicio)],
-      ['local_entrega', 'Local de entrega', entregaNf, entregaCte, viaObs(
-        compararLocal(entregaNf, entregaCte, cte.municipio_fim, 'Término da prestação'), temParte(nf.local_entrega), entregaCte, cte.municipio_fim)]
+      ['remetente', 'Remetente', rem, cte.remetente, cRem],
+      ['destinatario', 'Destinatário', dest, cte.destinatario, cDest],
+      ['local_coleta', 'Local de coleta', lc.parte, coletaCte, lc.r],
+      ['local_entrega', 'Local de entrega', le.parte, entregaCte, trecho(le.r)]
     ];
     for (const it of itens) {
       const atual = porCampo[it[0]];
@@ -197,11 +370,11 @@ for (const cte of ctes) {
         : it[0] === 'local_entrega'
           ? [mostrar(it[3]), norm(cte.municipio_fim && cte.municipio_fim.municipio) ? 'Término: ' + cidade(cte.municipio_fim) : ''].filter(Boolean).join('\n')
           : mostrar(it[3]);
-      const local = it[0] === 'local_coleta' || it[0] === 'local_entrega';
+      const ehLocal = it[0] === 'local_coleta' || it[0] === 'local_entrega';
       const textoNf = it[4]._obs ? 'Obs. da NF: "' + obsNf.slice(0, 300) + '"'
         : (it[0] === 'local_coleta' && temParte(nf.local_retirada) ? 'Local de retirada: ' : '')
           + (it[0] === 'local_entrega' && temParte(nf.local_entrega) ? 'Local de entrega: ' : '') + mostrar(it[2])
-          + (local && !temParte(it[0] === 'local_coleta' ? nf.local_retirada : nf.local_entrega) && obsNf ? '\nObs. da NF: "' + obsNf.slice(0, 200) + '"' : '');
+          + (ehLocal && !temParte(it[0] === 'local_coleta' ? nf.local_retirada : nf.local_entrega) && obsNf ? '\nObs. da NF: "' + obsNf.slice(0, 200) + '"' : '');
       if (!atual) {
         porCampo[it[0]] = { campo: it[0], rotulo: it[1], nf: textoNf, cte: textoCte, resultado: it[4].resultado, observacao: it[4].observacao };
       } else if (ORDEM[it[4].resultado] > ORDEM[atual.resultado]) {
@@ -211,17 +384,54 @@ for (const cte of ctes) {
   }
   for (const k of ['remetente', 'destinatario', 'local_coleta', 'local_entrega']) linhas.push(porCampo[k]);
 
-  // Cliente pagador: tomador do CT-e x cliente do embarque no Travion.
+  // Cliente pagador (regra do Frederick, 05/11/2026): sai do campo FRETE / MODALIDADE DO FRETE da NF.
+  //  0 = por conta do emitente/remetente -> o EMITENTE da NF paga
+  //  1 = por conta do destinatário       -> o DESTINATÁRIO da NF paga
+  //  2 = por conta de terceiros          -> amarelo, conferência manual
+  //  3/4 = transporte próprio, 9 = sem frete -> amarelo (não deveria haver CT-e de terceiro)
+  // O tomador do CT-e tem de ser essa empresa (CNPJ). O cliente do embarque no Travion aparece só como informação.
   const cli = dados.cliente || {};
   const cliente = { nome: cli.razao_social || cli.nome, cnpj_cpf: cli.documento, ie: '', municipio: cli.municipio, uf: cli.uf };
-  const tom = compararParte(cliente, cte.tomador);
-  const mods = Array.from(new Set(alvo.map(n => String(n.modalidade_frete || '').trim()).filter(Boolean)));
+  const mods = Array.from(new Set(alvo.map(n => String(n.modalidade_frete || '').replace(/\D/g, '').slice(0, 1)).filter(Boolean)));
+  const nf0 = alvo[0] || {};
+  const pag = { campo: 'pagador', rotulo: 'Cliente pagador', cte: mostrar(cte.tomador) };
   const notas = [];
-  if (tom.observacao) notas.push(tom.observacao);
+  if (mods.length > 1) {
+    pag.nf = 'Frete nas NFs: ' + mods.map(m => MODALIDADE[m] || m).join(' / ');
+    pag.resultado = 'alerta';
+    notas.push('As NFs têm modalidades de frete diferentes: conferir manualmente');
+  } else if (!mods.length) {
+    // Campo não lido: confere com o cliente do embarque, como antes.
+    const tom = compararParte(cliente, cte.tomador);
+    pag.nf = 'Campo Frete da NF não lido · Cliente do embarque: ' + (mostrar(cliente) || 'sem CNPJ no cadastro');
+    pag.resultado = pior(dig(cliente.cnpj_cpf) ? tom.resultado : (parecido(cliente.nome, cte.tomador && cte.tomador.nome) ? 'ok' : 'alerta'), 'nao_lido');
+    notas.push('Não foi possível ler o campo Frete da NF: conferir quem paga');
+  } else {
+    const m = mods[0];
+    // Na NF de trânsito a regra inverte: remetente da carga = quadro destinatário/remetente; destinatário = emitente.
+    const tr = ehTransito(nf0);
+    const remCarga = tr ? nf0.destinatario : nf0.emitente, destCarga = tr ? nf0.emitente : nf0.destinatario;
+    const esperado = m === '0' ? remCarga : (m === '1' ? destCarga : null);
+    pag.nf = 'Frete na NF: ' + m + ' - ' + (MODALIDADE[m] || '') + (esperado ? '\nQuem paga: ' + mostrar(esperado) : '');
+    if (esperado) {
+      const r = compararParte(esperado, cte.tomador);
+      pag.resultado = r.resultado;
+      if (tr) notas.push('NF de trânsito: ' + (m === '0' ? 'remetente da carga = quadro destinatário/remetente' : 'destinatário da carga = emitente'));
+      if (r.resultado === 'divergente') notas.push('Pela NF quem paga é ' + mostrar(esperado).split(' · ')[0] + ' (' + (m === '0' ? (tr ? 'remetente da carga' : 'emitente') : (tr ? 'emitente, destinatário da carga' : 'destinatário'))
+        + '), mas o tomador do CT-e é ' + mostrar(cte.tomador).split(' · ')[0]);
+      else if (r.observacao) notas.push(r.observacao);
+    } else {
+      pag.resultado = 'alerta';
+      notas.push(m === '2' ? 'Frete por conta de terceiros: conferência manual de quem paga'
+        : m === '9' ? 'NF diz "sem frete", mas há CT-e emitido: conferir'
+        : 'NF indica transporte próprio, mas há CT-e emitido: conferir');
+    }
+  }
   if (cte.tomador_papel) notas.push('Tomador no CT-e: ' + cte.tomador_papel);
-  if (mods.length) notas.push('Frete na NF: ' + mods.map(m => MODALIDADE[m] || m).join(', '));
-  linhas.push({ campo: 'pagador', rotulo: 'Cliente pagador', nf: 'Cliente do embarque: ' + (mostrar(cliente) || 'sem CNPJ no cadastro'),
-    cte: mostrar(cte.tomador), resultado: dig(cliente.cnpj_cpf) ? tom.resultado : 'nao_lido', observacao: notas.join('; ') });
+  const dc = docNormal(cliente.cnpj_cpf), dtm = docNormal(cte.tomador && cte.tomador.cnpj_cpf);
+  if (dc && dtm && dc !== dtm) notas.push('Obs.: o tomador é diferente do cliente do embarque no Travion (' + (cliente.nome || dc) + ')');
+  pag.observacao = notas.join('; ');
+  linhas.push(pag);
 
   const prefixo = ctes.length > 1 ? 'CT-e ' + (cte.numero || '') + ' · ' : '';
   for (const l of linhas) linhasTodas.push(Object.assign({}, l, { rotulo: prefixo + l.rotulo, cte_numero: cte.numero || '' }));

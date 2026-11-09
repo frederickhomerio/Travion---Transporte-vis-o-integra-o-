@@ -73,7 +73,8 @@ export function VisualizadorAnexo({ anexos, selecionado, aoSelecionar, ampliado,
     ['Correções', anexos.filter((a) => a.categoria === 'correcao')],
   ] : [
     ['Entrada', anexos.filter((a) => !CATEGORIAS_SAIDA.includes(a.categoria))],
-    ['Emitidos', anexos.filter((a) => CATEGORIAS_SAIDA.includes(a.categoria))],
+    ['Emitidos', anexos.filter((a) => CATEGORIAS_SAIDA.includes(a.categoria) && !a.devolvido_em)],
+    ['Devolvidos', anexos.filter((a) => CATEGORIAS_SAIDA.includes(a.categoria) && a.devolvido_em)],
   ];
   return (
     <div className="va">
@@ -84,7 +85,7 @@ export function VisualizadorAnexo({ anexos, selecionado, aoSelecionar, ampliado,
             {as.map((a) => (
               <button key={a.id} role="tab" aria-selected={a.id === atual?.id} className={`va-arq${a.id === atual?.id ? ' ativo' : ''}`}
                 onClick={() => aoSelecionar(a.id)} title={`${a.nome} · ${fmtTamanho(a.tamanho)} · ${a.enviado_por_nome}, ${fmtDataHora(a.enviado_em)}`}>
-                <span className="va-cat">{CATEGORIA[a.categoria]}</span><span className="va-nome">{a.nome}</span>
+                <span className="va-cat">{CATEGORIA[a.categoria]}</span><span className={`va-nome${a.devolvido_em ? ' dev-riscado' : ''}`}>{a.nome}</span>
               </button>
             ))}
           </div>

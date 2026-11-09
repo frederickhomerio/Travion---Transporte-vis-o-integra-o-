@@ -7,13 +7,14 @@ import { useDoc } from '../../data/documentacao';
 import { useApp, useIndices } from '../../data/store';
 import { nome } from '../../lib/cadastros';
 import {
-  CATEGORIA, CATEGORIAS_SAIDA, TIPO_DOC, type TempoAtendimento, docsDoEscopo, docsParaBaixar, filialDaSolicitacao, filtrarAcompanhamento, fmtHMS, fmtPlaca,
+  CATEGORIA, TIPO_DOC, emitidosValidos, podeDevolverDoc, type TempoAtendimento, docsDoEscopo, docsParaBaixar, filialDaSolicitacao, filtrarAcompanhamento, fmtHMS, fmtPlaca,
   rotaDoc, solicitacoesAcompanhamento, tempoAtendimento,
 } from '../../lib/documentacao';
 import { mensagemErro } from '../../data/api';
 import type { SolicitacaoDoc } from '../../types';
 import { Icone, Modal } from '../ui';
 import { JanelaAnexos, StatusDocPill, useAgora, useArquivo } from './Comum';
+import { DevolverDocumentacao } from './DocumentacaoEmbarque';
 
 const LIMITE = 15;
 
@@ -30,7 +31,9 @@ function DocsEmitidos({ s }: { s: SolicitacaoDoc }) {
   useEffect(() => {
     if (!atual) carregarDetalhe(s.id).then(() => setErro(null), (e) => setErro(mensagemErro(e)));
   }, [s.id, atual, carregarDetalhe]);
-  const emitidos = (d?.anexos ?? []).filter((a) => a.solicitacao_id === s.id && CATEGORIAS_SAIDA.includes(a.categoria));
+  const { pode } = useApp();
+  const [devolver, setDevolver] = useState(false);
+  const emitidos = emitidosValidos((d?.anexos ?? []).filter((a) => a.solicitacao_id === s.id));
   if (erro && !d) return <p className="ms-docs-msg">Não foi possível carregar os documentos: {erro}</p>;
   if (!d) return <p className="ms-docs-msg">Carregando os documentos…</p>;
   if (!emitidos.length) return <p className="ms-docs-msg">Nenhum documento emitido anexado.</p>;
@@ -45,7 +48,11 @@ function DocsEmitidos({ s }: { s: SolicitacaoDoc }) {
           </li>
         ))}
       </ul>
-      {emitidos.length > 1 && <button className="btn primario peq" onClick={() => void todos()}><Icone nome="baixar" tam={16} />Baixar todos ({emitidos.length})</button>}
+      <div className="grupo-btn">
+        {emitidos.length > 1 && <button className="btn primario peq" onClick={() => void todos()}><Icone nome="baixar" tam={16} />Baixar todos ({emitidos.length})</button>}
+        {podeDevolverDoc(s) && pode('documentacao.devolver') && <button className="btn perigo peq" onClick={() => setDevolver(true)}>Devolver documentação</button>}
+      </div>
+      {devolver && <DevolverDocumentacao s={s} aoFechar={() => setDevolver(false)} />}
       {ver && <JanelaAnexos titulo={`${TIPO_DOC[s.tipo]} nº ${s.numero}`} anexos={emitidos} inicial={ver} aoFechar={() => setVer(null)} />}
     </div>
   );

@@ -6,7 +6,7 @@ import type {
   Perfil, Permissao, RetornoEstadia, RetratoDoc, SolicitacaoDoc, StatusDoc,
 } from '../types';
 import type { ApiDoc, ArquivoDoc, EventoDoc, ResultadoDoc } from './api';
-import { LIMITE_CADASTRO, MAX_MOTORISTA, MAX_VEICULO, TIPOS_CADASTRO, telefoneValido, tipoCadastro } from '../lib/documentacao';
+import { LIMITE_CADASTRO, MAX_MOTORISTA, MOTIVO_DEVOLUCAO_DOC, MAX_VEICULO, TIPOS_CADASTRO, telefoneValido, tipoCadastro } from '../lib/documentacao';
 import { LIMITES_ESTADIA, MOTIVOS_ESTADIA, NUMERO_DOC_RE, RESULTADO_ESTADIA, calcularEstadia, fmtNumeroH, fmtReais, fmtToneladas, pesoToneladas } from '../lib/estadia';
 import { type EventoFluxo, type EventoPainel, type SolPainel, dataSP, diaHoraSP, inicioDiaSP } from '../lib/painelOperacional';
 
@@ -876,10 +876,24 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       offline();
       const s = carregar(id);
       if (s.status === 'em_atendimento' && s.responsavel_id === ctx.perfil()?.id) return { status: 'ok', registro: clone(s) };
-      responsavel(s, ['correcao_recebida']);
-      tocar(s, { status: 'em_atendimento' });
-      evento(s, 'evento', `Atendimento retomado por ${eu().nome}`);
-      return fim(s);
+      if (s.responsavel_id === ctx.perfil()?.id) {
+        responsavel(s, ['correcao_recebida']);
+        tocar(s, { status: 'em_atendimento' });
+        evento(s, 'evento', `Atendimento retomado por ${eu().nome}`);
+        return fim(s);
+      }
+      // Outra pessoa do apoio reassume o chamado devolvido e já corrigido (quem estava saiu, por exemplo).
+      exigir('apoio.atender');
+      exigir('apoio.reassumir');
+      if (s.status !== 'correcao_recebida') {
+        erro(s.status === 'em_atendimento' ? `Este chamado já foi retomado por ${s.responsavel_nome ?? 'outra pessoa'}.` : 'Só dá para reassumir um chamado com correção recebida.');
+      }
+      const antes = { id: s.responsavel_id, nome: s.responsavel_nome };
+      const p = eu();
+      tocar(s, { status: 'em_atendimento', responsavel_id: p.id, responsavel_nome: p.nome });
+      evento(s, 'evento', `Atendimento reassumido por ${p.nome}${antes.nome ? ` (estava com ${antes.nome})` : ''}`);
+      notificar(antes.id, 'resposta_enviada', `Chamado reassumido por ${p.nome}`, `${rotulo(s)}: a correção foi retomada por ${p.nome}.`, s, 'apoio', `reassumido:${s.id}:${s.versao}`);
+      return fim(s, { reassumido: true });
     }),
     async filaApoio() {
       await pronto;
@@ -963,17 +977,42 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       responsavel(s, ['em_atendimento']);
       if (s.tipo === 'cadastro') erro('Use "Confirmar cadastro concluído" para cadastros.');
       if (s.tipo === 'estadia') erro('Estadia termina pelo retorno do cliente ou por Encerrar.');
-      if (!db.anexos.some((a) => a.solicitacao_id === s.id && SAIDA.includes(a.categoria))) erro('Anexe ao menos um documento emitido (CT-e, MDF-e ou outro) antes de liberar.');
+      if (!db.anexos.some((a) => a.solicitacao_id === s.id && SAIDA.includes(a.categoria) && !a.devolvido_em)) {
+        erro((s.devolucoes ?? 0) > 0 ? 'A documentação anterior foi devolvida: anexe os documentos corrigidos (CT-e, MDF-e ou outro) antes de liberar.'
+          : 'Anexe ao menos um documento emitido (CT-e, MDF-e ou outro) antes de liberar.');
+      }
       if (s.tipo === 'lote_emissao' && !s.lote_id) erro('Registre o número do lote gerado no ERP antes de liberar a documentação.');
       if (s.tipo === 'emissao' && !s.lote_id) erro('Esta emissão está na fila do lote em geração: registre o lote na solicitação de lote e emissão antes de liberar.');
-      const cs = (db.auditorias ?? []).filter((c) => c.solicitacao_id === s.id);
+      const devolvidos = new Set(db.anexos.filter((a) => a.devolvido_em).map((a) => a.id));
+      const cs = (db.auditorias ?? []).filter((c) => c.solicitacao_id === s.id && !devolvidos.has(c.anexo_id));
       if (!(cs.length && cs.every((c) => c.status === 'conferido')) && !motivo?.trim()) {
         erro('A conferência automática não está toda verde. Para liberar assim, escreva o motivo.');
       }
       tocar(s, { status: 'documentacao_disponivel', concluido_em: agora(), concluido_por_nome: eu().nome });
       if (motivo?.trim()) evento(s, 'evento', `Liberada com a conferência fora do verde. Motivo: ${motivo.trim().slice(0, 500)}`);
-      evento(s, 'evento', `Documentação disponível, conferida e liberada por ${eu().nome}`);
-      notificar(s.solicitante_id, 'documentacao_disponivel', 'Documentação disponível', `${rotulo(s)} · ${s.retrato.cliente ?? ''}`, s, 'embarque', `disponivel:${s.id}`);
+      const dev = s.devolucoes ?? 0;
+      evento(s, 'evento', dev ? `Documentação corrigida, conferida e liberada de novo por ${eu().nome}` : `Documentação disponível, conferida e liberada por ${eu().nome}`);
+      notificar(s.solicitante_id, 'documentacao_disponivel', dev ? 'Documentação corrigida disponível' : 'Documentação disponível',
+        `${rotulo(s)} · ${s.retrato.cliente ?? ''}`, s, 'embarque', `disponivel:${s.id}${dev ? `:${dev}` : ''}`);
+      return fim(s);
+    },
+    async devolverDocumentacao(id, motivo, texto, anexos) {
+      offline();
+      exigir('documentacao.devolver');
+      const s = carregar(id);
+      if (s.tipo !== 'lote_emissao' && s.tipo !== 'emissao') erro('Só dá para devolver documentação de Lote e Emissão ou Emissão.');
+      if (s.status !== 'documentacao_disponivel') erro('Só dá para devolver documentação já liberada (esta solicitação está em outra etapa).');
+      const rot = MOTIVO_DEVOLUCAO_DOC[motivo];
+      if (!rot) erro('Escolha o motivo da devolução.');
+      const t = texto.trim().slice(0, 2000);
+      if (!t) erro('Descreva o que está errado na documentação.');
+      const m = evento(s, 'evento', `Documentação devolvida por ${eu().nome}. Motivo: ${rot}. ${t}`, 'devolucao');
+      try { vincular(s, anexos, ['correcao'], m.id); } catch (x) { db.mensagens.pop(); throw x; }
+      for (const a of db.anexos) if (a.solicitacao_id === s.id && SAIDA.includes(a.categoria) && !a.devolvido_em) a.devolvido_em = agora();
+      tocar(s, { status: s.responsavel_id ? 'correcao_recebida' : 'enviado', concluido_em: null, concluido_por_nome: null,
+        devolucoes: (s.devolucoes ?? 0) + 1, devolvida_em: agora(), devolvida_por_nome: eu().nome, devolvida_motivo: rot });
+      notificar(s.responsavel_id, 'documentacao_devolvida', 'Documentação devolvida: corrija e libere de novo', `${rotulo(s)} · ${rot}: ${t.slice(0, 120)}`,
+        s, 'apoio', `devolvida:${s.id}:${s.devolucoes}`);
       return fim(s);
     },
     async cancelar(id, motivo) {

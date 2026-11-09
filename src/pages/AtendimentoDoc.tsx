@@ -15,7 +15,7 @@ import { useDetalheDoc, useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
 import { cidadeAnuncio } from '../lib/anuncio';
 import {
-  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, MOTIVOS_ESCOLHA, MOTIVO_DEVOLUCAO, OPERACAO, textoPagamento, PEDAGIO, REF_CADASTRO, TIPO_DOC, fmtFrete, fmtPlaca, fmtReais2, resumoDoc, tempoDoc, vezDe,
+  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, MOTIVOS_ESCOLHA, devolucaoAberta, MOTIVO_DEVOLUCAO, OPERACAO, textoPagamento, PEDAGIO, REF_CADASTRO, TIPO_DOC, fmtFrete, fmtPlaca, fmtReais2, resumoDoc, tempoDoc, vezDe,
 } from '../lib/documentacao';
 import { fmtDataAsHora } from '../lib/formato';
 import type { CategoriaAnexo, MotivoDevolucao, SolicitacaoDoc } from '../types';
@@ -61,6 +61,8 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
   const editavel = pode('apoio.atender') && s.responsavel_id === eu && (s.status === 'em_atendimento' || s.status === 'aguardando_informacao' || s.status === 'correcao_recebida');
   // Correção recebida: as ações voltam depois de retomar o atendimento.
   const retomar = editavel && s.status === 'correcao_recebida';
+  // Quem estava com o chamado saiu: outra pessoa do apoio pode reassumir a correção recebida.
+  const reassumir = !editavel && s.status === 'correcao_recebida' && pode('apoio.atender') && pode('apoio.reassumir') && s.responsavel_id !== eu;
   const [divisao, setDivisao] = useState(() => { const n = Number(localStorage.getItem(CHAVE_DIVISAO)); return n >= 22 && n <= 60 ? n : 35; });
   const [ampliado, setAmpliado] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
@@ -68,7 +70,13 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
   useEffect(() => { try { localStorage.setItem(CHAVE_DIVISAO, String(divisao)); } catch { /* preferência local */ } }, [divisao]);
 
   const anexos = detalhe?.anexos ?? [];
-  const saida = anexos.filter((a) => CATEGORIAS_SAIDA.includes(a.categoria));
+  const saidaTodos = anexos.filter((a) => CATEGORIAS_SAIDA.includes(a.categoria));
+  // Documentos devolvidos pelo embarcador ficam só como registro: não contam para liberar.
+  const saida = saidaTodos.filter((a) => !a.devolvido_em);
+  const devolvidos = saidaTodos.filter((a) => a.devolvido_em);
+  const ultimaDevolucao = [...(detalhe?.mensagens ?? [])].reverse().find((m) => m.referencia === 'devolucao');
+  const idsDevolvidos = new Set(devolvidos.map((a) => a.id));
+  const conferencias = detalhe?.conferencias?.filter((c) => !idsDevolvidos.has(c.anexo_id));
   const r = s.retrato;
   const t = tempoDoc(s, agora);
   const ajustar = (d: number) => setDivisao((x) => Math.min(60, Math.max(22, x + d)));
@@ -103,7 +111,7 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
       <div className="at-topo">
         <button className="btn sutil peq" onClick={() => nav('/apoio')}>← Fila de demandas</button>
         <span className="at-status-cel"><StatusDocPill status={s.status} /></span>
-        {!cad && detalhe?.conferencias && <FaixaConferencia conferencias={detalhe.conferencias} anexos={anexos} />}
+        {!cad && conferencias && <FaixaConferencia conferencias={conferencias} anexos={anexos} />}
         <span className="pequeno">{editavel ? 'Você é o responsável por este atendimento.' : s.responsavel_nome ? `Responsável: ${s.responsavel_nome} · somente consulta` : 'Ainda não assumida · somente consulta'}</span>
       </div>
       <div className={`at${ampliado ? ' at-ampliado' : ''}`} ref={caixa} style={{ ['--at-esq' as string]: `${divisao}%` }}>
@@ -169,7 +177,15 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
             )}
             {s.status === 'cancelado' && <Alerta tipo="aviso">Cancelada por {s.cancelado_por_nome}: {s.cancelado_motivo}</Alerta>}
 
-            {s.status === 'correcao_recebida' && !retomar && (
+            {devolucaoAberta(s) && (
+              <div className="cartao cartao-corpo de-devolvida">
+                <strong>Documentação devolvida pelo embarcador{(s.devolucoes ?? 0) > 1 ? ` (${s.devolucoes}ª vez)` : ''}</strong>
+                <p>{ultimaDevolucao?.texto ?? `Motivo: ${s.devolvida_motivo ?? '—'}`}</p>
+                <span className="pequeno suave">{s.devolvida_por_nome} em {fmtDataAsHora(s.devolvida_em ?? null)}. Os documentos anteriores não valem mais: {retomar || reassumir ? 'retome, ' : ''}anexe os corrigidos e libere de novo.</span>
+              </div>
+            )}
+            {reassumir && <Retomar s={s} executar={executar} outro />}
+            {s.status === 'correcao_recebida' && !retomar && !reassumir && !devolucaoAberta(s) && (
               <Alerta tipo="info">Correção recebida de {s.solicitante_nome}. Aguardando {s.responsavel_nome ?? 'o responsável'} retomar o atendimento.</Alerta>
             )}
             {retomar && <Retomar s={s} executar={executar} />}
@@ -181,12 +197,18 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
               </div>
             ))}
             {editavel && s.status === 'em_atendimento' && <PedirAjuste s={s} executar={executar} referencias={cad ? REFERENCIAS_CADASTRO : REFERENCIAS} />}
-            {editavel && !retomar && !cad && <Concluir s={s} executar={executar} emitidos={saida.length} aviso={avisoConferencia(detalhe?.conferencias)} />}
+            {editavel && !retomar && !cad && <Concluir s={s} executar={executar} emitidos={saida.length} aviso={avisoConferencia(conferencias)} />}
             {editavel && !retomar && cad && <ConcluirCadastro s={s} executar={executar} />}
             {saida.length > 0 && (
               <div className="cartao cartao-corpo at-bloco">
                 <strong>Documentos emitidos {s.status === 'documentacao_disponivel' ? '(liberados)' : '(em conferência)'}</strong>
                 <ul className="de-arqs">{saida.map((a) => <li key={a.id}><button className="btn sutil peq" onClick={() => setSel(a.id)}>{CATEGORIA[a.categoria]} · {a.nome}</button></li>)}</ul>
+              </div>
+            )}
+            {devolvidos.length > 0 && (
+              <div className="cartao cartao-corpo at-bloco">
+                <strong>Documentos devolvidos pelo embarcador (não valem mais)</strong>
+                <ul className="de-arqs">{devolvidos.map((a) => <li key={a.id}><button className="btn sutil peq dev-riscado" onClick={() => setSel(a.id)}>{CATEGORIA[a.categoria]} · {a.nome}</button></li>)}</ul>
               </div>
             )}
             <div className="cartao cartao-corpo at-bloco">
@@ -337,18 +359,22 @@ export function PedirAjuste({ s, executar, referencias }: { s: SolicitacaoDoc; e
   );
 }
 
-export function Retomar({ s, executar }: { s: SolicitacaoDoc; executar: Executar }) {
+export function Retomar({ s, executar, outro = false }: { s: SolicitacaoDoc; executar: Executar; outro?: boolean }) {
   const { api } = useApp();
   const [gravando, setGravando] = useState(false);
   return (
     <div className="cartao cartao-corpo at-bloco at-retomar">
-      <strong>Correção recebida de {s.solicitante_nome}</strong>
-      <span className="pequeno suave">Confira a resposta no histórico e retome o atendimento para continuar. O tempo até retomar conta como espera na fila.</span>
+      <strong>{devolucaoAberta(s) ? 'Corrigir a documentação devolvida' : `Correção recebida de ${s.solicitante_nome}`}</strong>
+      {outro ? (
+        <span className="pequeno suave">O chamado está com <strong>{s.responsavel_nome ?? 'outra pessoa'}</strong>, que ainda não retomou. Se a pessoa saiu (almoço, fim do expediente), reassuma: o chamado passa para você, {s.responsavel_nome ?? 'quem estava com ele'} recebe um aviso e tudo fica registrado no histórico.</span>
+      ) : (
+        <span className="pequeno suave">{devolucaoAberta(s) ? 'Retome para anexar os documentos corrigidos e liberar de novo.' : 'Confira a resposta no histórico e retome o atendimento para continuar.'} O tempo até retomar conta como espera na fila.</span>
+      )}
       <div><button className="btn primario" disabled={gravando} onClick={async () => {
         setGravando(true);
-        await executar(() => api.doc.retomar(s.id), 'Atendimento retomado.');
+        await executar(() => api.doc.retomar(s.id), outro ? 'Atendimento reassumido: o chamado agora está com você.' : 'Atendimento retomado.');
         setGravando(false);
-      }}>{gravando ? 'Retomando…' : 'Retomar atendimento'}</button></div>
+      }}>{gravando ? (outro ? 'Reassumindo…' : 'Retomando…') : (outro ? 'Reassumir atendimento' : 'Retomar atendimento')}</button></div>
     </div>
   );
 }

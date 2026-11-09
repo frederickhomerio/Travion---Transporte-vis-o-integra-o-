@@ -6,7 +6,7 @@ import type { Cadastros } from '../lib/cadastros';
 import type { DadosPainel } from '../lib/painelOperacional';
 import type {
   AnexoDoc, CategoriaAnexo, ConferenciaEstadia, ConferenciaParticipantes, DadosCadastroDoc, DadosEstadia, DuplicadaEstadia, PagamentoEstadia, ParametrosConferencia,
-  ResultadoEstadia, RetornoEstadia, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
+  ResultadoEstadia, RetornoEstadia, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, MotivoDevolucaoDoc, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
   Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, ItemVitrine, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
@@ -64,6 +64,8 @@ export interface ArquivoDoc { caminho: string; nome: string; categoria: Categori
 export interface ResultadoDoc {
   status: 'ok' | 'inicial_aberta' | 'ja_assumida' | 'indisponivel' | 'sem_alteracao' | 'cadastro_aberto' | 'possivel_duplicidade';
   registro: SolicitacaoDoc; lote?: LoteErp; repetido?: boolean;
+  /** Retomar: o chamado estava com outra pessoa e passou para quem clicou. */
+  reassumido?: boolean;
   /** Em 'possivel_duplicidade' (Estadia): o que parece repetido; nada foi gravado. */
   duplicadas?: DuplicadaEstadia[];
   conferencia?: ConferenciaEstadia;
@@ -106,6 +108,8 @@ export interface ApiDoc {
   filaApoio(): Promise<Pick<DadosPainel, 'agora' | 'solicitacoes' | 'eventos'>>;
   responder(id: string, texto: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   anexarEmitidos(id: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
+  /** Embarcador devolve a documentação liberada que chegou errada: volta para a fila de quem liberou. */
+  devolverDocumentacao(id: string, motivo: MotivoDevolucaoDoc, texto: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   /** Pede de novo a conferência automática NF × CT-e (id da conferência). */
   reconferirParticipantes(id: string): Promise<void>;
   /** motivo: obrigatório quando a conferência NF × CT-e está em divergência (fica no registro permanente). */

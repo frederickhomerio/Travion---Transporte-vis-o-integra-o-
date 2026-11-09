@@ -29,7 +29,7 @@ function lerNfe(xml) {
   return {
     tipo: 'nfe', chave_acesso: id, numero: val(ide, 'nNF'), serie: val(ide, 'serie'),
     nf_tipo_operacao: val(ide, 'tpNF') === '0' ? 'entrada' : (val(ide, 'tpNF') === '1' ? 'saida' : ''),
-    modalidade_frete: val(bloco(xml, 'transp'), 'modFrete'),
+    modalidade_frete: val(bloco(xml, 'transp'), 'modFrete'), natureza_operacao: val(ide, 'natOp'),
     emitente: parte(bloco(xml, 'emit')), destinatario: parte(bloco(xml, 'dest')),
     local_retirada: parte(bloco(xml, 'retirada')), local_entrega: parte(bloco(xml, 'entrega')),
     remetente: VAZIA, expedidor: VAZIA, recebedor: VAZIA, tomador: VAZIA, tomador_papel: '',
@@ -45,7 +45,7 @@ function lerCte(xml) {
   const papeis = ['remetente', 'expedidor', 'recebedor', 'destinatario'];
   const doc = {
     tipo: 'cte', chave_acesso: id, numero: val(ide, 'nCT'), serie: val(ide, 'serie'),
-    nf_tipo_operacao: '', modalidade_frete: '',
+    nf_tipo_operacao: '', modalidade_frete: '', natureza_operacao: val(ide, 'natOp'),
     emitente: parte(bloco(xml, 'emit')), destinatario: parte(bloco(xml, 'dest')),
     local_retirada: VAZIA, local_entrega: VAZIA,
     remetente: parte(bloco(xml, 'rem')), expedidor: parte(bloco(xml, 'exped')), recebedor: parte(bloco(xml, 'receb')),
