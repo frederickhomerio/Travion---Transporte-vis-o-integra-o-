@@ -135,6 +135,17 @@ export function contaNaMeta(l: LinhaFrete, data: string): boolean {
   return cortes.every((c) => data < c);
 }
 
+/** Estado do embarque no FIM do dia `data` (horário de Brasília) pelo histórico; null quando não há registro até lá. */
+export function estadoNoFimDoDia(hist: Array<{ estado: string; desde: string }> | undefined, data: string): string | null {
+  let r: { estado: string; t: number } | null = null;
+  for (const h of hist ?? []) {
+    if (hojeSP(new Date(h.desde)) > data) continue;
+    const t = Date.parse(h.desde);
+    if (!r || t >= r.t) r = { estado: h.estado, t };
+  }
+  return r?.estado ?? null;
+}
+
 /** Recorte do quadro: um cliente, a data, todas as filiais autorizadas ou uma. Só embarques com posição na data. */
 export function recorteCliente(linhas: LinhaFrete[], clienteId: string, filialId: string, idx: Indices): LinhaFrete[] {
   const n = (id: string | null) => nome(idx.local, id, '');

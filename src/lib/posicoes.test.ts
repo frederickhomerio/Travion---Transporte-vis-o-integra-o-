@@ -178,3 +178,19 @@ describe('Painel: suspensão vale a partir do dia', async () => {
     expect(contaNaMeta(l({}), '2026-11-09')).toBe(true);
   });
 });
+
+describe('estado no fim do dia (histórico)', async () => {
+  const { estadoNoFimDoDia } = await import('./posicoes');
+  const h = [
+    { estado: 'liberado', desde: '2026-10-28T12:00:00Z' },
+    { estado: 'suspenso', desde: '2026-11-01T13:00:00Z' },
+    { estado: 'liberado', desde: '2026-11-03T13:00:00Z' },
+  ];
+  it('suspenso de 01/11 a 02/11, liberado de novo em 03/11', () => {
+    expect(estadoNoFimDoDia(h, '2026-10-31')).toBe('liberado');
+    expect(estadoNoFimDoDia(h, '2026-11-01')).toBe('suspenso');
+    expect(estadoNoFimDoDia(h, '2026-11-02')).toBe('suspenso');
+    expect(estadoNoFimDoDia(h, '2026-11-03')).toBe('liberado');
+    expect(estadoNoFimDoDia(h, '2026-10-27')).toBeNull();
+  });
+});

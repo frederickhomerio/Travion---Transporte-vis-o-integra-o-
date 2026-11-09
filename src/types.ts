@@ -106,6 +106,9 @@ export interface Posicao {
   confirmado_em?: string | null; confirmado_por_nome?: string | null;
 }
 
+/** Mudança de estado do embarque (tabela embarques_estados, migração 4000): vale a partir de `desde`. */
+export interface EstadoEmbarque { embarque_id: string; estado: 'liberado' | 'suspenso' | 'encerrado'; desde: string }
+
 export interface Historico {
   id: number; entidade: string; registro_id: string | null; embarque_id: string | null; posicao_id: string | null;
   cliente_id: string | null; data_operacional: string | null; campo: string;

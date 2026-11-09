@@ -671,6 +671,10 @@ export function criarLocalApi(): Api {
       if (!tem('historico.ver')) return [];
       return clone(db.historico.filter((h) => h.embarque_id === embarqueId && (!h.sensivel || tem('financeiro.ver'))));
     },
+    async carregarEstados() {
+      // Prévia local: sem histórico gravado; o Painel usa a data de suspensão/encerramento atual.
+      return [];
+    },
     async carregarMeta(demo, data) {
       if (!tem('financeiro.ver')) return null;
       return clone(db.metas.find((m) => m.is_demo === demo && m.data_operacional === data) ?? null);

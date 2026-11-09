@@ -7,9 +7,9 @@ import { linhasDaData, useApp, useIndices } from '../../data/store';
 import { nome } from '../../lib/cadastros';
 import { type Indicadores, type TipoPeriodo, diasDoIntervalo, indicadores, faixaBarra, indicadoresPorGrupo, intervaloPeriodo, pendenciasFinanceiras } from '../../lib/dashboard';
 import { FILTROS_VAZIOS, aplicarFiltros } from '../../lib/filtros';
-import { contaNaMeta } from '../../lib/posicoes';
+import { contaNaMeta, estadoNoFimDoDia } from '../../lib/posicoes';
 import { fmtDataCurta, fmtNum, fmtPct, fmtReais, fmtT, hojeSP } from '../../lib/formato';
-import type { LinhaFrete } from '../../types';
+import type { EstadoEmbarque, LinhaFrete } from '../../types';
 
 type Visao = 'geral' | 'filiais' | 'centros';
 
@@ -27,7 +27,7 @@ function mil(v: number | null | undefined): string {
 // Gestão → Painel de embarques (02/11/2026): os indicadores que ficavam no Dashboard Embarques, sem mudar cálculos,
 // bases, filtros de período, agrupamentos nem o Modo TV. Valores em R$ continuam só para quem tem financeiro.ver.
 export function PainelEmbarques() {
-  const { estado, pode, garantirPeriodo } = useApp();
+  const { api, estado, pode, garantirPeriodo } = useApp();
   const idx = useIndices();
   const fin = pode('financeiro.ver');
   const hoje = hojeSP();
@@ -39,6 +39,25 @@ export function PainelEmbarques() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [tv, setTv] = useState(false);
+
+  // Histórico de estados (Liberado/Suspenso/Encerrado) para a meta de cada dia ficar fiel ao que valia naquele dia.
+  const [estados, setEstados] = useState<Map<string, EstadoEmbarque[]>>(new Map());
+  const assinaturaStatus = Object.values(estado.embarques).map((e) => `${e.id}:${e.status_liberacao}:${e.situacao}`).join('|');
+  useEffect(() => {
+    let vivo = true;
+    api.carregarEstados().then((rs) => {
+      if (!vivo) return;
+      const m = new Map<string, EstadoEmbarque[]>();
+      for (const r of rs) m.set(r.embarque_id, [...(m.get(r.embarque_id) ?? []), r]);
+      setEstados(m);
+    }).catch(() => { /* sem histórico: usa as datas atuais de suspensão/encerramento */ });
+    return () => { vivo = false; };
+  }, [api, assinaturaStatus]);
+  const naMeta = (l: LinhaFrete, d: string) => {
+    const h = estados.get(l.embarque.id);
+    const noDia = h ? estadoNoFimDoDia(h, d) : null;
+    return (noDia === null || noDia === 'liberado') && contaNaMeta(l, d);
+  };
 
   const { inicio, fim } = intervaloPeriodo(hoje, tipo);
   const dias = useMemo(() => diasDoIntervalo(inicio, fim, hoje), [inicio, fim, hoje]);
@@ -61,8 +80,8 @@ export function PainelEmbarques() {
   const porDia = useMemo(
     // Suspensos e encerrados saem da meta e da projeção a partir do dia da suspensão/encerramento;
     // os dias anteriores mantêm a meta gravada (pedido de 09/11/2026).
-    () => dias.map((d) => aplicarFiltros(linhasDaData(estado, d), { ...FILTROS_VAZIOS, incluirArquivados: true }, idx).filter((l) => contaNaMeta(l, d) && noEscopo(l))),
-    [dias, estado, idx, visao, alvo], // eslint-disable-line react-hooks/exhaustive-deps
+    () => dias.map((d) => aplicarFiltros(linhasDaData(estado, d), { ...FILTROS_VAZIOS, incluirArquivados: true }, idx).filter((l) => naMeta(l, d) && noEscopo(l))),
+    [dias, estado, idx, visao, alvo, estados], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const r = useMemo(() => indicadores(porDia, estado.config, fin), [porDia, estado.config, fin]);
   const filiaisEscopo = filiaisAtivas.filter((f) => noEscopo({ embarque: { filial_id: f.id } } as LinhaFrete)).map((f) => f.id);

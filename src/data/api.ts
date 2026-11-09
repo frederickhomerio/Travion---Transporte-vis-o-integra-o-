@@ -7,7 +7,7 @@ import type { DadosPainel } from '../lib/painelOperacional';
 import type {
   AnexoDoc, CategoriaAnexo, ConferenciaEstadia, ConferenciaParticipantes, DadosCadastroDoc, DadosEstadia, DuplicadaEstadia, PagamentoEstadia, ParametrosConferencia,
   ResultadoEstadia, RetornoEstadia, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, MotivoDevolucaoDoc, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
-  Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, ItemVitrine, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
+  Configuracoes, DadosCnpj, Embarque, EstadoEmbarque, Financeiro, Historico, ItemVitrine, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
 
@@ -157,6 +157,8 @@ export interface Api {
   carregarPosicoes(demo: boolean, inicio: string, fim: string): Promise<Posicao[]>;
   carregarFinanceiro(demo: boolean): Promise<Financeiro[]>;
   carregarHistorico(embarqueId: string): Promise<Historico[]>;
+  /** Histórico de estados (Liberado/Suspenso/Encerrado) dos embarques visíveis, para metas fiéis dia a dia. */
+  carregarEstados(): Promise<EstadoEmbarque[]>;
   carregarMeta(demo: boolean, data: string): Promise<MetaDiaria | null>;
   ultimaDataComPosicao(demo: boolean, antesDe: string): Promise<string | null>;
   dadosOrigem(embarqueId: string): Promise<Record<string, unknown> | null>;
