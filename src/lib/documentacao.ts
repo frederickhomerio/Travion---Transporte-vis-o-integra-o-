@@ -178,13 +178,18 @@ const tipoFila = (t: TipoSolicitacaoDoc): TipoFila => (t === 'lote_emissao' || t
 export interface FiltrosFila { atalho: Atalho; busca: string; filial: string; centro: string; responsavel: string; tipo: TipoFila | '' }
 export const FILTROS_FILA: FiltrosFila = { atalho: 'abertas', busca: '', filial: '', centro: '', responsavel: '', tipo: '' };
 
+/** Aguardando retorno do cliente (ou pago em pendência): não depende do apoio nem do embarcador, tem filtro próprio. */
+const COM_CLIENTE: StatusDoc[] = ['aguardando_cliente', 'pago_pendencia'];
+/** "Em aberto" da fila do apoio: só o que depende do apoio operacional ou do embarcador. */
+const emAbertoApoio = (s: SolicitacaoDoc) => ABERTOS.includes(s.status) && !COM_CLIENTE.includes(s.status);
+
 export function noAtalho(s: SolicitacaoDoc, atalho: Atalho, eu: string): boolean {
   switch (atalho) {
-    case 'abertas': return ABERTOS.includes(s.status);
+    case 'abertas': return emAbertoApoio(s);
     case 'novas': return s.status === 'enviado';
-    case 'minhas': return s.responsavel_id === eu && ABERTOS.includes(s.status) && s.status !== 'enviado';
+    case 'minhas': return s.responsavel_id === eu && emAbertoApoio(s) && s.status !== 'enviado';
     case 'aguardando': return s.status === 'aguardando_informacao';
-    case 'cliente': return s.status === 'aguardando_cliente' || s.status === 'pago_pendencia';
+    case 'cliente': return COM_CLIENTE.includes(s.status);
     case 'concluidas': return CONCLUIDOS.includes(s.status) || s.status === 'cancelado';
   }
 }

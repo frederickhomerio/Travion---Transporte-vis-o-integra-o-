@@ -59,6 +59,20 @@ describe('documentação', () => {
     expect(ids({ busca: 'amaggi' })).toEqual(['c']);
     expect(normalizarPlaca('abc-1d23')).toBe('ABC1D23');
   });
+
+  it('em aberto e minhas não contam o que aguarda retorno do cliente', () => {
+    const ss = [
+      sol({ id: 'a', numero: 1 }),
+      sol({ id: 'b', numero: 2, status: 'em_atendimento', responsavel_id: 'eu' }),
+      sol({ id: 'c', numero: 3, tipo: 'estadia', status: 'aguardando_cliente', responsavel_id: 'eu' }),
+      sol({ id: 'd', numero: 4, tipo: 'estadia', status: 'pago_pendencia', responsavel_id: 'eu' }),
+      sol({ id: 'e', numero: 5, status: 'correcao_recebida', responsavel_id: 'outro' }),
+    ];
+    const ids = (f: Partial<typeof FILTROS_FILA>) => filtrarFila(ss, { ...FILTROS_FILA, ...f }, 'eu').map((s) => s.id).sort();
+    expect(ids({})).toEqual(['a', 'b', 'e']);
+    expect(ids({ atalho: 'minhas' })).toEqual(['b']);
+    expect(ids({ atalho: 'cliente' })).toEqual(['c', 'd']);
+  });
 });
 
 describe('Cadastro', () => {
