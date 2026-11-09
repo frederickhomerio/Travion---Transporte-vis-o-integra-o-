@@ -117,6 +117,24 @@ export interface InfoMesa { status: StatusLiberacao; confirmado_em: string | nul
 export const ativoParaCliente = (l: LinhaFrete): boolean =>
   l.embarque.situacao === 'ativo' && l.embarque.status_liberacao === 'liberado' && !l.embarque.encerrado_em;
 
+/**
+ * Lote que entra na meta/projeção do Painel de embarques numa data (pedido de 09/11/2026).
+ * A suspensão e o encerramento valem a partir do dia em que aconteceram: os dias anteriores
+ * continuam com a meta gravada (histórico preservado). Suspenso sem data cai fora em qualquer dia.
+ */
+export function contaNaMeta(l: LinhaFrete, data: string): boolean {
+  const e = l.embarque;
+  const dia = (t: string | null | undefined) => (t ? hojeSP(new Date(t)) : null);
+  const cortes: string[] = [];
+  const susp = dia(e.suspenso_em);
+  const enc = dia(e.encerrado_em);
+  if (susp) cortes.push(susp);
+  else if (e.status_liberacao === 'suspenso') return false;
+  if (enc) cortes.push(enc);
+  else if (e.situacao === 'arquivado') return false;
+  return cortes.every((c) => data < c);
+}
+
 /** Recorte do quadro: um cliente, a data, todas as filiais autorizadas ou uma. Só embarques com posição na data. */
 export function recorteCliente(linhas: LinhaFrete[], clienteId: string, filialId: string, idx: Indices): LinhaFrete[] {
   const n = (id: string | null) => nome(idx.local, id, '');

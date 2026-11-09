@@ -161,3 +161,20 @@ describe('Posição do Cliente: só fretes ativos', async () => {
     expect(ativoParaCliente(l({ situacao: 'arquivado' }))).toBe(false);
   });
 });
+
+describe('Painel: suspensão vale a partir do dia', async () => {
+  const { contaNaMeta } = await import('./posicoes');
+  const l = (e: Partial<Embarque>) => ({ embarque: { situacao: 'ativo', status_liberacao: 'liberado', suspenso_em: null, encerrado_em: null, ...e } } as unknown as LinhaFrete);
+  it('suspenso em 09/11 conta até 08/11 e sai a partir de 09/11', () => {
+    const s = l({ status_liberacao: 'suspenso', suspenso_em: '2026-11-09T13:00:00Z' });
+    expect(contaNaMeta(s, '2026-11-08')).toBe(true);
+    expect(contaNaMeta(s, '2026-11-09')).toBe(false);
+    expect(contaNaMeta(s, '2026-11-10')).toBe(false);
+  });
+  it('encerrado mantém o histórico antes do encerramento; liberado sempre conta', () => {
+    const e = l({ situacao: 'arquivado', status_liberacao: 'suspenso', suspenso_em: '2026-11-02T12:00:00Z', encerrado_em: '2026-11-09T12:00:00Z' });
+    expect(contaNaMeta(e, '2026-11-01')).toBe(true);
+    expect(contaNaMeta(e, '2026-11-03')).toBe(false);
+    expect(contaNaMeta(l({}), '2026-11-09')).toBe(true);
+  });
+});

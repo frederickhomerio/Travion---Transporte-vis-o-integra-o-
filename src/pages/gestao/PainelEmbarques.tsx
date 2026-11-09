@@ -7,7 +7,7 @@ import { linhasDaData, useApp, useIndices } from '../../data/store';
 import { nome } from '../../lib/cadastros';
 import { type Indicadores, type TipoPeriodo, diasDoIntervalo, indicadores, faixaBarra, indicadoresPorGrupo, intervaloPeriodo, pendenciasFinanceiras } from '../../lib/dashboard';
 import { FILTROS_VAZIOS, aplicarFiltros } from '../../lib/filtros';
-import { ativoParaCliente } from '../../lib/posicoes';
+import { contaNaMeta } from '../../lib/posicoes';
 import { fmtDataCurta, fmtNum, fmtPct, fmtReais, fmtT, hojeSP } from '../../lib/formato';
 import type { LinhaFrete } from '../../types';
 
@@ -59,8 +59,9 @@ export function PainelEmbarques() {
     return true;
   };
   const porDia = useMemo(
-    // Só lotes Liberados: suspensos e encerrados não entram na meta nem na projeção (pedido de 09/11/2026).
-    () => dias.map((d) => aplicarFiltros(linhasDaData(estado, d), FILTROS_VAZIOS, idx).filter((l) => ativoParaCliente(l) && noEscopo(l))),
+    // Suspensos e encerrados saem da meta e da projeção a partir do dia da suspensão/encerramento;
+    // os dias anteriores mantêm a meta gravada (pedido de 09/11/2026).
+    () => dias.map((d) => aplicarFiltros(linhasDaData(estado, d), { ...FILTROS_VAZIOS, incluirArquivados: true }, idx).filter((l) => contaNaMeta(l, d) && noEscopo(l))),
     [dias, estado, idx, visao, alvo], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const r = useMemo(() => indicadores(porDia, estado.config, fin), [porDia, estado.config, fin]);
