@@ -49,7 +49,7 @@ create trigger imutavel before update or delete on public.embarques_estados
 create or replace function private.embarque_registrar_estado()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 declare
-  v_novo text := private.estado_embarque(new.situacao, new.status_liberacao, new.encerrado_em);
+  v_novo text := private.estado_embarque(new.situacao::text, new.status_liberacao::text, new.encerrado_em);
   v_ultimo text;
 begin
   select estado into v_ultimo from public.embarques_estados
@@ -88,10 +88,10 @@ begin
 
   -- 3) Conferência: se o último estado montado não bate com o atual, registra o atual na última alteração do embarque.
   insert into public.embarques_estados (embarque_id, estado, desde, origem, usuario_nome)
-  select e.id, private.estado_embarque(e.situacao, e.status_liberacao, e.encerrado_em),
+  select e.id, private.estado_embarque(e.situacao::text, e.status_liberacao::text, e.encerrado_em),
          greatest(coalesce(e.encerrado_em, e.suspenso_em, e.atualizado_em, now()), u.desde), 'carga_inicial_ajuste', null
     from public.embarques e
     left join lateral (select x.estado, x.desde from public.embarques_estados x where x.embarque_id = e.id
                        order by x.desde desc, x.id desc limit 1) u on true
-   where u.estado is distinct from private.estado_embarque(e.situacao, e.status_liberacao, e.encerrado_em);
+   where u.estado is distinct from private.estado_embarque(e.situacao::text, e.status_liberacao::text, e.encerrado_em);
 end $$;
