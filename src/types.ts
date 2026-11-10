@@ -353,5 +353,12 @@ const PAPEIS_AMBOS: Papel[] = ['administrador', 'gestor', 'comercial'];
 /** A permissão faz sentido para a função? Industrializado e demais operações não se misturam. */
 export function permissaoCabeNoPapel(papel: Papel, chave: Permissao): boolean {
   if (PAPEIS_AMBOS.includes(papel)) return true;
+  if (PAPEIS_IND.includes(papel) && PERMISSOES_EMBARQUES_IND.includes(chave)) return true;
   return PAPEIS_IND.includes(papel) === chave.startsWith('ind.');
 }
+/**
+ * Do módulo Embarques, o que as funções do Industrializado podem receber (10/11, pedido do Frederick):
+ * Lista de Fretes só para ver e divulgar (sem editar lote e sem pedir emissão), Cadastro e Estadia.
+ * O escopo continua o do centro de custo da pessoa, como nos outros centros.
+ */
+export const PERMISSOES_EMBARQUES_IND: Permissao[] = ['embarques.ver', 'financeiro.ver', 'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver'];

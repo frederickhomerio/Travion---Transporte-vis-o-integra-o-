@@ -6,6 +6,7 @@ import { ROTULO_PAPEL } from '../lib/formato';
 import { NovaVersao } from './NovaVersao';
 import { Sino } from './doc/Sino';
 import { Icone, Logo } from './ui';
+import { PAPEIS_IND, type Papel } from '../types';
 
 const CHAVE_MENU = 'travion-menu-recolhido';
 const CHAVE_GRUPOS = 'travion-menu-grupos-abertos';
@@ -29,7 +30,9 @@ interface GrupoMenu { id: string; rotulo: string; icone: string; itens: ItemMenu
 
 /** Módulos em 3 blocos (menu lateral e barra do celular), só com o que a pessoa pode abrir. */
 function useGrupos(admin: boolean): GrupoMenu[] {
-  const { pode } = useApp();
+  const { pode, estado } = useApp();
+  // Funções do Industrializado: do módulo Embarques só Lista de Fretes, Cadastro e Estadia (10/11).
+  const soInd = PAPEIS_IND.includes(estado.sessao?.perfil.papel as Papel);
   const se = (ok: boolean, i: ItemMenu) => (ok ? [i] : []);
   return [
     { id: 'embarques', rotulo: 'Embarques', icone: 'caminhao', itens: [
@@ -37,7 +40,7 @@ function useGrupos(admin: boolean): GrupoMenu[] {
       ...se(pode('posicoes.pagina'), { to: '/posicoes', icone: 'caminhao', rotulo: 'Posições de Embarque' }),
       ...se(pode('cadastro.solicitar') || pode('cadastro.ver'), { to: '/cadastro', icone: 'cadastro', rotulo: 'Cadastro' }),
       ...se(pode('estadia.solicitar') || pode('estadia.ver'), { to: '/estadia', icone: 'relogio', rotulo: 'Estadia' }),
-      ...se(pode('embarques.ver'), { to: '/analise', end: true, icone: 'painel', rotulo: 'Dashboard Embarques' }),
+      ...se(pode('embarques.ver') && !soInd, { to: '/analise', end: true, icone: 'painel', rotulo: 'Dashboard Embarques' }),
     ] },
     // Módulo exclusivo do centro de custo Industrializado (filial Goiânia).
     { id: 'industrializado', rotulo: 'Industrializado', icone: 'caixa', itens: !pode('ind.pagina') ? [] : [
@@ -54,7 +57,7 @@ function useGrupos(admin: boolean): GrupoMenu[] {
       ...se(pode('apoio.pagina'), { to: '/apoio', icone: 'lista', rotulo: 'Apoio Operacional' }),
     ] },
     { id: 'gestao', rotulo: 'Gestão', icone: 'config', itens: [
-      ...se(pode('embarques.ver'), { to: '/gestao/painel-embarques', icone: 'painel', rotulo: 'Painel de embarques' }),
+      ...se(pode('embarques.ver') && !soInd, { to: '/gestao/painel-embarques', icone: 'painel', rotulo: 'Painel de embarques' }),
       ...se(pode('analise.operacional'), { to: '/gestao/painel-operacional', icone: 'analise', rotulo: 'Painel Operacional' }),
       ...se(pode('compartilhamento.preparar'), { to: '/posicao-cliente', icone: 'cliente', rotulo: 'Posição do Cliente' }),
       ...se(admin, { to: '/admin', icone: 'config', rotulo: 'Administração' }),

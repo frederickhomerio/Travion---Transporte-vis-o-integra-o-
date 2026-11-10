@@ -12,6 +12,7 @@ import {
   CONFIG_PADRAO, PAPEIS_IND, type CentroCusto, type Cidade, type Cliente, type Comercial, type Configuracoes, type Conflito, type Embarque, type Filial,
   type Financeiro, type Historico, type LinkCliente, type Local, type MetaDiaria, type Papel, type Perfil,
   type Permissao, type Posicao, type PosicaoPublica, type Produto, type Sessao,
+  PERMISSOES_EMBARQUES_IND,
 } from '../types';
 import { criarDocLocal } from './docLocal';
 import type { Api, Convite, EventoTempoReal, MatrizPermissoes, RelatorioImportacao, UsuarioAdmin } from './api';
@@ -88,6 +89,7 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
 
 /** Mesma matriz inicial de supabase/migrations/20261026000200_permissoes.sql */
+const EMB_IND = PERMISSOES_EMBARQUES_IND;
 export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]> = {
   gestor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
@@ -116,12 +118,12 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila',
     'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
   consulta: ['embarques.ver'],
-  // Industrializado: só o módulo, sem Lista de Fretes nem outros centros de custo.
+  // Industrializado: o módulo, mais Lista de Fretes (ver e divulgar), Cadastro e Estadia do módulo Embarques (10/11).
   // Industrializado (10/11): as mesmas funções do Travion, com regras só do módulo. Emissão liberada para toda a equipe.
   ind_supervisor: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias',
-    'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
-  ind_embarcador: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.pos_entrega', 'ind.financeiro'],
-  ind_apoio: ['ind.pagina', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.pos_entrega', 'ind.financeiro'],
+    'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta', ...EMB_IND],
+  ind_embarcador: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.pos_entrega', 'ind.financeiro', ...EMB_IND],
+  ind_apoio: ['ind.pagina', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.pos_entrega', 'ind.financeiro', ...EMB_IND],
 };
 
 interface Banco {
