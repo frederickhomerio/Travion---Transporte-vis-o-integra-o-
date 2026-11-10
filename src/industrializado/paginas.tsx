@@ -237,7 +237,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
     contratados: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Conferências', 'Retirada prevista', 'Horário do combinado', 'Situação'],
     emissao: ['Pedido / veículo', 'Cliente', 'Rota', 'Conferências', 'Carregada há', 'PO'],
     transito: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Descarga', 'Previsão', 'Situação', 'Combinado de trânsito'],
-    marcados: ['Pedido / veículo', 'Cliente', 'Local da descarga', 'Chegou', 'No local há'],
+    marcados: ['Pedido / veículo', 'Cliente', 'Local da descarga', 'Horário agendado', 'Chegou', 'No local há'],
     comOcorrencia: ['Pedido / veículo', 'Cliente', 'Etapa', 'Ocorrências pendentes'],
   };
   const min = (iso: string | null) => (iso ? Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000)) : null);
@@ -285,6 +285,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
         ); }
         if (k === 'marcados') { const p = v.paradas.find((x) => x.tipo === 'entrega' && (x.situacao === 'chegou' || x.situacao === 'em_operacao')); return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td><td>{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}<div className="suave pequeno">{p?.situacao === 'em_operacao' ? 'Descarregando' : 'Aguardando descarga'}</div></td>
+            <td className="ind-nowrap">{p?.agendado_para ? <>{fmtDataHora(p.agendado_para)}{p.protocolo && <div className="suave pequeno">protocolo {p.protocolo}</div>}</> : <span className="suave">{p?.exige_agendamento ? 'não informado' : 'sem agendamento'}</span>}</td>
             <td>{p?.chegada_em ? fmtDataHora(p.chegada_em) : '—'}</td><td>{tempo(min(p?.chegada_em ?? null))}</td>
             <td><div className="ind-acoes">
               {pode('ind.avancar') && <button className="btn primario peq" onClick={() => acao('finalizar', v)}>Finalizado</button>}
