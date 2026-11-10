@@ -234,7 +234,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
 }) {
   const cab: Record<ChaveQuadro, string[]> = {
     disponiveis: ['Pedido / veículo', 'Cliente', 'Rota', 'Retirada prevista', 'Lançada'],
-    contratados: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Conferências', 'Combinado', 'Horário', 'Situação'],
+    contratados: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Conferências', 'Retirada prevista', 'Horário do combinado', 'Situação'],
     emissao: ['Pedido / veículo', 'Cliente', 'Rota', 'Conferências', 'Carregada há', 'PO'],
     transito: ['Pedido / veículo', 'Cliente', 'Motorista / placa', 'Descarga', 'Previsão', 'Situação', 'Combinado de trânsito'],
     marcados: ['Pedido / veículo', 'Cliente', 'Local da descarga', 'Chegou', 'No local há'],
@@ -260,8 +260,8 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
               {pode('ind.lancar') && <button className="btn primario peq" onClick={() => abrir(v.id)}>Vincular placa</button>}</div></td></tr>
         );
         if (k === 'contratados') { const a = alertaCombinado(v); return (
-          <tr key={v.id}>{via}<td>{cli?.nome}</td>{mot}<td><Checagens v={v} podeMarcar={pode('ind.avancar')} checar={checar} /></td><td>{v.combinado?.o_que ?? '—'}<div className="suave pequeno">{ROTULO_ETAPA[v.etapa]}</div></td>
-            <td>{v.combinado ? fmtDataHora(v.combinado.para) : '—'}{v.combinado?.marcou_em && <div className="suave pequeno">marcou {fmtDataHora(v.combinado.marcou_em)}</div>}</td>
+          <tr key={v.id}>{via}<td>{cli?.nome}</td>{mot}<td><Checagens v={v} podeMarcar={pode('ind.avancar')} checar={checar} /></td><td className="ind-nowrap">{v.coleta_prevista ? fmtData(v.coleta_prevista) : '—'}<div className="suave pequeno">{ROTULO_ETAPA[v.etapa]}</div></td>
+            <td>{v.combinado ? fmtDataHora(v.combinado.para) : '—'}{v.combinado?.o_que && <div className="suave pequeno">{v.combinado.o_que}</div>}{v.combinado?.marcou_em && <div className="suave pequeno">marcou {fmtDataHora(v.combinado.marcou_em)}</div>}</td>
             <td><ChipNivel nivel={a.nivel}>{a.texto}</ChipNivel>{marcadoSemConferencia(v) && <div className="ind-falta pequeno">sem conferência</div>}</td>
             <td style={{ whiteSpace: 'nowrap' }}>{pode('ind.avancar') && <>
               {v.combinado && !v.combinado.marcou_em && <button className="btn primario peq" onClick={() => marcou(v)}>Marcou</button>}
