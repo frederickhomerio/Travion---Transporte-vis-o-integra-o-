@@ -1,5 +1,6 @@
 // Peças comuns das telas do Industrializado: chips, formulário de viagem, detalhes, ocorrência e motivo.
 
+import { cpfValido, mascaraCpf, soDigitosCpf } from '../lib/cpf';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Alerta, Gaveta, Modal, useAviso } from '../components/ui';
 import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
@@ -230,7 +231,7 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
   const ativos = clientes.filter((c) => c.ativo);
   const [d, setD] = useState<NovaViagem>(() => v ? {
     cliente_id: v.cliente_id, tipo_carga: v.tipo_carga, pedido: v.pedido ?? '', po: v.po ?? '', coleta_prevista: v.coleta_prevista ?? '', frota: v.frota, tipo_veiculo: v.tipo_veiculo, carroceria: v.carroceria ?? '', peso_t: v.peso_t ? String(v.peso_t).replace('.', ',') : '',
-    placa_cavalo: v.placa_cavalo ?? '', placa_carreta: v.placa_carreta ?? '', motorista: v.motorista ?? '', motorista_cpf: v.motorista_cpf ?? '',
+    placa_cavalo: v.placa_cavalo ?? '', placa_carreta: v.placa_carreta ?? '', motorista: v.motorista ?? '', motorista_cpf: mascaraCpf(v.motorista_cpf ?? ''),
     motorista_telefone: v.motorista_telefone ?? '', contratado_por: v.contratado_por ?? '', paradas: v.paradas.map((p) => ({ ...p, agendado_para: p.agendado_para ? localInput(new Date(p.agendado_para)) : null })),
     valores: { ...v.valores }, observacao: v.observacao ?? '',
   } : {
@@ -251,6 +252,7 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
     const ps = [...a.paradas]; const j = i + dir; if (j < 0 || j >= ps.length) return a;
     [ps[i], ps[j]] = [ps[j], ps[i]]; return { ...a, paradas: ps };
   });
+  const cpfRuim = !!d.motorista_cpf.trim() && !cpfValido(d.motorista_cpf);
   const salvar = () => {
     const dados = { ...d, paradas: d.paradas.map((p) => ({ ...p, agendado_para: p.agendado_para ? new Date(p.agendado_para).toISOString() : null })) };
     exec(() => {
@@ -310,7 +312,8 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
           <label className="campo"><span>Placa cavalo</span><input className="entrada" value={d.placa_cavalo} onChange={(e) => { const x = e.target.value.toUpperCase(); setD((p) => ({ ...p, placa_cavalo: x, contratado_por: p.contratado_por || (x.trim() && colaboradores.includes(eu) ? eu : '') })); }} maxLength={8} /></label>
           <label className="campo"><span>Placa carreta</span><input className="entrada" value={d.placa_carreta} onChange={(e) => set('placa_carreta', e.target.value.toUpperCase())} maxLength={8} /></label>
           <label className="campo"><span>Motorista</span><input className="entrada" value={d.motorista} onChange={(e) => set('motorista', e.target.value)} /></label>
-          <label className="campo"><span>CPF</span><input className="entrada" value={d.motorista_cpf} onChange={(e) => set('motorista_cpf', e.target.value)} maxLength={14} /></label>
+          <label className="campo"><span>CPF</span><input className={`entrada${cpfRuim ? ' ind-vazio' : ''}`} inputMode="numeric" placeholder="000.000.000-00" value={d.motorista_cpf} onChange={(e) => set('motorista_cpf', mascaraCpf(e.target.value))} maxLength={14} aria-invalid={cpfRuim} />
+            {cpfRuim && <span className="ind-falta pequeno">{soDigitosCpf(d.motorista_cpf).length < 11 ? 'CPF incompleto: são 11 dígitos.' : 'CPF inválido: confira os números.'}</span>}</label>
           <label className="campo"><span>Telefone</span><input className="entrada" value={d.motorista_telefone} onChange={(e) => set('motorista_telefone', e.target.value)} maxLength={20} /></label>
           <label className="campo ind-campo-dourado"><span>Contratado por (colaborador do Industrializado)</span>
             <select className="entrada" value={d.contratado_por} onChange={(e) => set('contratado_por', e.target.value)}>

@@ -8,6 +8,7 @@ import { useApp } from '../data/store';
 import { hojeSP, somarDias } from '../lib/formato';
 import type { Permissao } from '../types';
 import { avisoConferencia, codigoOcorrencia, ETAPAS_TRANSITO, valoresConfirmados, type ValoresEmissao, etapaAnterior, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, proximaEtapa } from './regras';
+import { completarCpf, cpfValido, mascaraCpf } from '../lib/cpf';
 import {
   PAR_CHECAGEM, ROTULO_CHECAGEM, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_PARADA, VALORES_ZERO, normalizarChecagens,
   type CargaOcorrencia, type ChecagemInd, type ClienteInd, type OcorrenciaInd, type ParadaInd, type SituacaoParada, type Carroceria, type TipoCarga, type TipoOcorrencia, type ValoresInd, type ViagemInd,
@@ -59,7 +60,7 @@ function semear(): EstadoInd {
   const comPo = (x: ViagemInd, ...pos: string[]): ViagemInd => { let i = 0; return { ...x, po: null, paradas: x.paradas.map((p) => (p.tipo === 'entrega' && pos[i] ? { ...p, po: pos[i++] } : p)) }; };
   const mot = (i: number) => ({
     motorista: ['João Batista Lima', 'Carlos Henrique Souza', 'Marcos Vinícius Rocha', 'Edson Pereira', 'Rogério Alves', 'Antônio Carlos Dias', 'Wellington Santos', 'Luiz Fernando Melo'][i],
-    motorista_cpf: `${100 + i}.${200 + i}.${300 + i}-${10 + i}`, motorista_telefone: `(62) 9 9${100 + i}-${4000 + i}`,
+    motorista_cpf: completarCpf(`${100 + i}${200 + i}${300 + i}`), motorista_telefone: `(62) 9 9${100 + i}-${4000 + i}`,
     contratado_por: ['Vanessa Duarte', 'Paulo Henrique Reis'][i % 2],
     placa_cavalo: `RTA${i}B${10 + i}`, placa_carreta: `QWE${i}C${20 + i}`,
   });
@@ -362,6 +363,7 @@ export function useInd() {
     });
     const validarNova = (d: NovaViagem) => {
       if (!d.cliente_id) falha('Escolha o cliente.');
+      if (d.motorista_cpf.trim() && !cpfValido(d.motorista_cpf)) falha('CPF do motorista inválido: confira os 11 dígitos.');
       if (!d.paradas.some((p) => p.tipo === 'coleta')) falha('Inclua ao menos uma coleta.');
       if (!d.paradas.some((p) => p.tipo === 'entrega')) falha('Inclua ao menos uma entrega.');
       for (const p of d.paradas) {
@@ -392,7 +394,7 @@ export function useInd() {
         const v: ViagemInd = {
           id: uid(), codigo: estado.seq + 1, cliente_id: d.cliente_id, tipo_carga: d.tipo_carga, pedido: t(d.pedido), po: t(d.po), etapa: 'lancada', coleta_prevista: d.coleta_prevista || null,
           frota: d.frota, tipo_veiculo: d.tipo_veiculo, placa_cavalo: t(d.placa_cavalo)?.toUpperCase() ?? null, placa_carreta: t(d.placa_carreta)?.toUpperCase() ?? null,
-          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone), contratado_por: t(d.contratado_por), carroceria: d.carroceria || null, peso_t: numPeso(d.peso_t),
+          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf) && mascaraCpf(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone), contratado_por: t(d.contratado_por), carroceria: d.carroceria || null, peso_t: numPeso(d.peso_t),
           paradas: paradasNovas(d.paradas), valores: pode('ind.financeiro') ? d.valores : { ...VALORES_ZERO }, combinado: null,
           emissao_assumida_por: null, emissao_assumida_em: null, cte: null, mdfe: null, nfs: null, entregue_em: null,
           canhoto_digital_em: null, canhoto_fisico_em: null, comprovante_ok_em: null, reversa_de: null, observacao: t(d.observacao),
@@ -413,7 +415,7 @@ export function useInd() {
         mudar(id, 'Viagem editada', () => ({
           cliente_id: d.cliente_id, tipo_carga: d.tipo_carga, pedido: t(d.pedido), po: t(d.po), coleta_prevista: d.coleta_prevista || null, frota: d.frota, tipo_veiculo: d.tipo_veiculo,
           placa_cavalo: t(d.placa_cavalo)?.toUpperCase() ?? null, placa_carreta: t(d.placa_carreta)?.toUpperCase() ?? null,
-          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone), contratado_por: t(d.contratado_por), carroceria: d.carroceria || null, peso_t: numPeso(d.peso_t),
+          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf) && mascaraCpf(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone), contratado_por: t(d.contratado_por), carroceria: d.carroceria || null, peso_t: numPeso(d.peso_t),
           paradas: paradasNovas(d.paradas, v.paradas), valores, observacao: t(d.observacao),
         }), [mudouValor.length ? `Valores alterados: ${mudouValor.join(', ')}` : null,
           (t(d.contratado_por) ?? null) !== (v.contratado_por ?? null) ? `Contratado por: ${v.contratado_por ?? '—'} → ${t(d.contratado_por) ?? '—'}` : null].filter(Boolean).join('. ') || null, t(motivo));
