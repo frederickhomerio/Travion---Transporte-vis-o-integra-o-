@@ -1,5 +1,5 @@
 // Divulgação das cargas disponíveis do Industrializado (individual e em lista), para motoristas.
-// Leva só o que é do motorista: frete motorista por viagem, reembolso de descarga e pedágio. Nunca o frete da empresa nem o cliente.
+// Leva só o que é do motorista: frete motorista por viagem e, quando houver, "+ pedágio + descarga" (sem valores). Nunca o frete da empresa nem o cliente.
 
 import { cidadeAnuncio, semDemo } from '../lib/anuncio';
 import { ROTULO_CARROCERIA, ROTULO_TIPO_CARGA, type ViagemInd } from './tipos';
@@ -15,7 +15,6 @@ export interface DivulgacaoInd {
 const dm = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
 const dia = (ymd: string) => ymd.split('-').reverse().slice(0, 2).join('/');
 export const reais = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).replace(/\s/g, ' ');
-const reaisCurto = (n: number) => reais(n).replace(',00', '');
 
 export function dadosDivulgacao(v: ViagemInd): DivulgacaoInd {
   const coletas = v.paradas.filter((p) => p.tipo === 'coleta').sort((a, b) => a.ordem - b.ordem);
@@ -37,7 +36,8 @@ export function dadosDivulgacao(v: ViagemInd): DivulgacaoInd {
   };
 }
 
-const extra = (n: number) => (n > 0 ? reais(n) : 'não tem');
+/** "+ pedágio + descarga": só o que a carga paga, sem valores (10/11). */
+export const adicionais = (d: DivulgacaoInd) => [d.pedagio > 0 && '+ pedágio', d.descarga > 0 && '+ descarga'].filter(Boolean).join(' ');
 
 /** Mensagem do WhatsApp de uma carga. */
 export function textoInd(d: DivulgacaoInd): string {
@@ -46,8 +46,7 @@ export function textoInd(d: DivulgacaoInd): string {
     `🏭 Coleta: ${d.coleta ?? 'a informar'} | Entrega: ${d.entrega ?? 'a informar'}`,
     `🚛 ${d.veiculo}${d.carroceria ? ` ${d.carroceria}` : ''}${d.peso ? ` · ${d.peso}` : ''} · ${d.tipoCarga}`,
     `📅 Retirada: ${d.retirada} | Descarga: ${d.descargaAgenda}`,
-    `💵 Frete: ${d.frete > 0 ? `${reais(d.frete)} por viagem` : 'a combinar'}`,
-    `➕ Reembolso de descarga: ${extra(d.descarga)} | Pedágio: ${extra(d.pedagio)}`,
+    `💵 Frete: ${d.frete > 0 ? `${reais(d.frete)} por viagem${adicionais(d) ? ` ${adicionais(d)}` : ''}` : 'a combinar'}`,
   ].join('\n');
 }
 
@@ -113,8 +112,7 @@ export async function desenharInd(c: HTMLCanvasElement, d: DivulgacaoInd) {
   linha(ctx, `${d.entregas} ${d.entregas > 1 ? 'ENTREGAS' : 'ENTREGA'} · DESCARGA ${d.descargaAgenda.toUpperCase()}`, H * 0.715, W * 0.042, maxL, '#ffffff');
   linha(ctx, d.frete > 0 ? reais(d.frete) : 'A COMBINAR', H * 0.792, W * 0.14, W * 0.84, '#ffffff', true);
   linha(ctx, 'POR VIAGEM', H * 0.851, W * 0.042, maxL, '#ffffff');
-  const extras = [d.descarga > 0 ? `+ DESCARGA ${reaisCurto(d.descarga)}` : 'SEM REEMBOLSO DE DESCARGA', d.pedagio > 0 ? `+ PEDÁGIO ${reaisCurto(d.pedagio)}` : 'SEM PEDÁGIO'].join('  ·  ');
-  linha(ctx, extras, H * 0.884, W * 0.04, W * 0.8, AMARELO);
+  if (adicionais(d)) linha(ctx, adicionais(d).toUpperCase(), H * 0.884, W * 0.045, W * 0.8, AMARELO);
 }
 
 function caber(ctx: CanvasRenderingContext2D, t: string, larg: number) {
@@ -124,7 +122,7 @@ function caber(ctx: CanvasRenderingContext2D, t: string, larg: number) {
   return `${s}…`;
 }
 
-/** Lista de cargas disponíveis: rota, veículo/carroceria/peso, agenda e frete motorista com descarga e pedágio. */
+/** Lista de cargas disponíveis: rota, veículo/carroceria/peso, agenda e frete motorista (+ pedágio + descarga quando houver). */
 export async function desenharListaInd(c: HTMLCanvasElement, ds: DivulgacaoInd[]) {
   const banner = await carregar(BANNER);
   try { await document.fonts.load('700 28px Sora'); } catch { /* fonte reserva */ }
@@ -168,8 +166,7 @@ export async function desenharListaInd(c: HTMLCanvasElement, ds: DivulgacaoInd[]
     ctx.fillText(d.frete > 0 ? reais(d.frete) : 'A COMBINAR', col[2], y + 36);
     ctx.fillStyle = '#4a4446'; ctx.font = '500 19px Inter, Arial, sans-serif';
     ctx.fillText('por viagem', col[2], y + 66);
-    ctx.fillText(d.descarga > 0 ? `+ descarga ${reaisCurto(d.descarga)}` : 'sem reembolso de descarga', col[2], y + 94);
-    ctx.fillText(d.pedagio > 0 ? `+ pedágio ${reaisCurto(d.pedagio)}` : 'sem pedágio', col[2], y + 120);
+    if (adicionais(d)) { ctx.fillStyle = '#9e7b24'; ctx.font = '700 20px Inter, Arial, sans-serif'; ctx.fillText(adicionais(d), col[2], y + 96); }
     ctx.fillStyle = '#e9e4e0'; ctx.fillRect(0, y + L - 1, W, 1);
     y += L;
   });

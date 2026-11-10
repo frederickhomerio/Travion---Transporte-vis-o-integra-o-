@@ -1,7 +1,7 @@
 // Regras do módulo Industrializado (puras, testadas em regras.test.ts).
 
 import {
-  CHECAGENS, ETAPAS_FLUXO, ROTULO_CHECAGEM, ROTULO_ETAPA, type ChecagemInd, type ClienteInd, type EtapaInd, type OcorrenciaInd, type ValoresInd, type ViagemInd,
+  CHECAGENS, ETAPAS_FLUXO, ROTULO_CHECAGEM, ROTULO_ETAPA, type ChecagemInd, type ClienteInd, type EtapaInd, type OcorrenciaInd, type ParadaInd, type ValoresInd, type ViagemInd,
 } from './tipos';
 
 export const META_MARGEM_PCT = 12;
@@ -168,7 +168,7 @@ export function pendenciasAvanco(v: ViagemInd, cliente: ClienteInd | undefined, 
       for (const x of v.paradas) if (x.tipo === 'coleta' && x.exige_agendamento && !x.agendado_para) p.push(`Informe o horário agendado da coleta em ${x.local}`);
       break;
     case 'carregada':
-      if (cliente?.exige_po && !v.po) p.push(`${cliente.nome} exige PO depois de carregado`);
+      if (cliente?.exige_po) { const f = faltaPoEntregas(v); if (f.length) p.push(`${msgPo(v, cliente.nome, f)} (depois de carregado)`); }
       p.push(...avisoConferencia(v, 'emitir os documentos'));
       p.push('A documentação sai pela Emissão do Industrializado');
       break;
@@ -223,12 +223,28 @@ export function valoresConfirmados(base: ValoresInd, d: ValoresEmissao): Valores
   return { ...base, frete_empresa: n(d.frete_empresa), pedagio: n(d.pedagio_empresa), custo_extra: n(d.custo_extra), adicional_frete: n(d.adicional_frete), frete_motorista: n(d.frete_motorista), pedagio_motorista: n(d.pedagio_motorista) };
 }
 
-export function pendenciasEmissao(v: ViagemInd, cliente: ClienteInd | undefined, d: { cte: string; nfs: string; po: string }, valores?: ValoresEmissao): string[] {
+/** Número da entrega contando só as entregas (1ª, 2ª…), não as coletas. */
+export function numeroEntrega(v: ViagemInd, p: ParadaInd): number {
+  return v.paradas.filter((x) => x.tipo === 'entrega').sort((a, b) => a.ordem - b.ordem).findIndex((x) => x.id === p.id) + 1;
+}
+/** Entregas sem PO (clientes que exigem PO, como a Cargill: uma PO por entrega). */
+export function faltaPoEntregas(v: ViagemInd, pos: Record<string, string> = {}) {
+  return v.paradas.filter((x) => x.tipo === 'entrega' && !(pos[x.id] ?? x.po ?? '').trim()).sort((a, b) => a.ordem - b.ordem);
+}
+/** "4500123 (Entrega 1) · 4500124 (Entrega 2)" ou só a PO quando há uma entrega. */
+export function posCarga(v: ViagemInd): string | null {
+  const es = v.paradas.filter((x) => x.tipo === 'entrega' && x.po).sort((a, b) => a.ordem - b.ordem);
+  if (!es.length) return v.po ?? null;
+  return es.length === 1 && v.paradas.filter((x) => x.tipo === 'entrega').length === 1 ? es[0].po! : es.map((x) => `${x.po} (entrega ${numeroEntrega(v, x)})`).join(' · ');
+}
+const msgPo = (v: ViagemInd, nome: string, falta: ParadaInd[]) => `${nome} exige uma PO por entrega: falta na${falta.length > 1 ? 's' : ''} entrega${falta.length > 1 ? 's' : ''} ${falta.map((x) => numeroEntrega(v, x)).join(', ')}`;
+
+export function pendenciasEmissao(v: ViagemInd, cliente: ClienteInd | undefined, d: { cte: string; nfs: string; pos?: Record<string, string> }, valores?: ValoresEmissao): string[] {
   const p: string[] = [];
   if (valores) p.push(...pendenciasValores(valores));
   if (!d.cte.trim()) p.push('Informe o CT-e');
   if (!d.nfs.trim()) p.push('Informe as NFs');
-  if (cliente?.exige_po && !d.po.trim() && !v.po) p.push(`${cliente.nome} exige PO`);
+  if (cliente?.exige_po) { const f = faltaPoEntregas(v, d.pos); if (f.length) p.push(msgPo(v, cliente.nome, f)); }
   p.push(...avisoConferencia(v, 'emitir os documentos'));
   return p;
 }
@@ -319,12 +335,12 @@ export function marcosCarga(v: ViagemInd): MarcoCarga[] {
   }
   out.push(m('Carregamento', 'Veículo carregado', etapa(ROTULO_ETAPA.carregada)));
   const doc = ult((a) => a.startsWith('Documentos liberados'));
-  out.push(m('Emissão', 'Documentos emitidos e valores conferidos', doc, doc ? [v.cte && `CT-e ${v.cte}`, v.mdfe && `MDF-e ${v.mdfe}`, v.nfs && `NF ${v.nfs}`, v.po && `PO ${v.po}`].filter(Boolean).join(' · ') : null));
+  out.push(m('Emissão', 'Documentos emitidos e valores conferidos', doc, doc ? [v.cte && `CT-e ${v.cte}`, v.mdfe && `MDF-e ${v.mdfe}`, v.nfs && `NF ${v.nfs}`, posCarga(v) && `PO ${posCarga(v)}`].filter(Boolean).join(' · ') : null));
   out.push(m('Trânsito', 'Saiu para trânsito', etapa(ROTULO_ETAPA.transito) ?? ult((a) => a.startsWith('Marcado na descarga') && a.includes(ROTULO_ETAPA.documentada))));
   for (const p of v.paradas.filter((x) => x.tipo === 'entrega').sort((a, b) => a.ordem - b.ordem)) {
     const lugar = `${p.local} (${p.cidade}/${p.uf})`;
     const marc = ult((a) => a.startsWith(`Marcado na descarga: Entrega ${p.ordem}`));
-    out.push({ fase: 'Descarga', rotulo: `Entrega ${p.ordem}: chegou ao cliente`, em: p.chegada_em, por: marc?.usuario ?? null, detalhe: `${lugar}${p.agendado_para ? ` · agendada ${new Date(p.agendado_para).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}${p.protocolo ? ` · protocolo ${p.protocolo}` : ''}` });
+    out.push({ fase: 'Descarga', rotulo: `Entrega ${p.ordem}: chegou ao cliente`, em: p.chegada_em, por: marc?.usuario ?? null, detalhe: `${lugar}${p.po ? ` · PO ${p.po}` : ''}${p.agendado_para ? ` · agendada ${new Date(p.agendado_para).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}${p.protocolo ? ` · protocolo ${p.protocolo}` : ''}` });
     const fim = ult((a) => a.includes(`ocorrência: Entrega ${p.ordem}`));
     out.push({ fase: 'Descarga', rotulo: `Entrega ${p.ordem}: ${p.situacao === 'recusada' ? 'recusada' : fim ? fim.acao.split(':')[0].toLowerCase() : 'finalizada'}`, em: p.situacao === 'concluida' || p.situacao === 'recusada' ? p.fim_em : null, por: fim?.usuario ?? null, detalhe: lugar });
   }

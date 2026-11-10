@@ -17,7 +17,7 @@ import { restaurarPrevia, useInd } from './dados';
 import { AnotarCorrecao, RoteiroDemo } from './demo';
 
 import {
-  alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, combinadoTransito, linkWhatsApp, valoresConfirmados, type ValoresEmissao, META_MARGEM_PCT, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
+  alertaCanhoto, alertaCombinado, faltaPoEntregas, numeroEntrega, posCarga, alertaDescarga, calcularMargem, codigoViagem, combinadoTransito, linkWhatsApp, valoresConfirmados, type ValoresEmissao, META_MARGEM_PCT, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
   PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, type NivelAlerta, type QuadrosPainel,
 } from './regras';
 import {
@@ -254,7 +254,7 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
         ); }
         if (k === 'emissao') { const ini = [...v.historico].reverse().find((h) => h.acao.includes('→ Carregada'))?.em ?? null; return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td><td><Rota v={v} /></td><td><Checagens v={v} podeMarcar={pode('ind.avancar')} checar={checar} /></td><td>{tempo(min(ini))}</td>
-            <td>{cli?.exige_po ? (v.po ?? <span className="ind-falta">exigido</span>) : <span className="suave">não exige</span>}</td>
+            <td>{cli?.exige_po ? (faltaPoEntregas(v).length ? <span className="ind-falta">falta na entrega {faltaPoEntregas(v).map((x) => numeroEntrega(v, x)).join(', ')}</span> : posCarga(v)) : <span className="suave">não exige</span>}</td>
             <td>{pode('ind.emissao') && <button className="btn primario peq" onClick={() => acao('emissao', v)}>Informar documentos</button>}</td></tr>
         ); }
         if (k === 'transito') { const a = alertaDescarga(v); const p = v.paradas.filter((x) => x.tipo === 'entrega' && x.situacao === 'pendente').sort((x, y) => x.ordem - y.ordem)[0]; return (
@@ -301,7 +301,7 @@ export function ViagensInd() {
   const lista = viagens
     .filter((v) => (vista === 'andamento' ? ativa(v) : true))
     .filter((v) => !etapa || v.etapa === etapa)
-    .filter((v) => !q || normalizar([codigoViagem(v.codigo), clientePorId[v.cliente_id]?.nome, v.pedido, v.po, v.motorista, v.placa_cavalo, v.cte, v.nfs, ...v.paradas.map((p) => `${p.local} ${p.cidade}`)].join(' ')).includes(q))
+    .filter((v) => !q || normalizar([codigoViagem(v.codigo), clientePorId[v.cliente_id]?.nome, v.pedido, v.po, ...v.paradas.map((p) => p.po), v.motorista, v.placa_cavalo, v.cte, v.nfs, ...v.paradas.map((p) => `${p.local} ${p.cidade}`)].join(' ')).includes(q))
     .sort((a, b) => b.codigo - a.codigo);
   const grupos = clientes.map((c) => ({ c, vs: lista.filter((v) => v.cliente_id === c.id) })).filter((g) => g.vs.length);
   const verValor = pode('ind.financeiro');
@@ -333,7 +333,7 @@ export function ViagensInd() {
                       <td><Rota v={v} /></td>
                       <td>{ag ? <>{fmtDataHora(ag.agendado_para)}<div className="suave pequeno">{ag.local}{ag.protocolo ? ` · ${ag.protocolo}` : ''}</div></> : <span className="suave">—</span>}</td>
                       <td>{v.motorista ?? <span className="ind-falta">a contratar</span>}<div className="suave pequeno">{v.placa_cavalo ?? ''}</div>{v.contratado_por && <span className="ind-contratou pequeno">{v.contratado_por}</span>}</td>
-                      <td className="pequeno">{v.cte ? `CT-e ${v.cte}` : '—'}{clientePorId[v.cliente_id]?.exige_po && <div>{v.po ? `PO ${v.po}` : ETAPAS_FLUXO.indexOf(v.etapa) >= ETAPAS_FLUXO.indexOf('carregada') ? <span className="ind-falta">PO pendente</span> : <span className="suave">PO após carregar</span>}</div>}</td>
+                      <td className="pequeno">{v.cte ? `CT-e ${v.cte}` : '—'}{clientePorId[v.cliente_id]?.exige_po && <div>{!faltaPoEntregas(v).length ? `PO ${posCarga(v)}` : ETAPAS_FLUXO.indexOf(v.etapa) >= ETAPAS_FLUXO.indexOf('carregada') ? <span className="ind-falta">PO pendente</span> : <span className="suave">PO após carregar</span>}</div>}</td>
                       <td><ChipCombinado v={v} /></td>
                       {verValor && <td className="n"><span className={m.abaixoMeta ? 'ind-ruim' : ''}>{fmtPct(m.pct)}</span><div className="suave pequeno">{fmtReais(m.margem, 0)}</div></td>}
                     </tr>
@@ -446,7 +446,7 @@ export function EmissaoInd() {
                   <td>{cli?.nome}</td><td><Rota v={v} /></td>
                   <td><Checagens v={v} podeMarcar={pode('ind.avancar')} checar={(x, item, m) => exec(() => acoes.marcarChecagem(x.id, item, m), m ? `${ROTULO_CHECAGEM[item]} conferido.` : `${ROTULO_CHECAGEM[item]} desmarcado.`)} /></td>
                   <td><ChipNivel nivel={min > 40 ? 'atraso' : min > 20 ? 'aviso' : 'ok'}>{min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`}</ChipNivel></td>
-                  <td>{cli?.exige_po ? (v.po ?? <span className="ind-falta">exigido</span>) : <span className="suave">—</span>}</td>
+                  <td>{cli?.exige_po ? (faltaPoEntregas(v).length ? <span className="ind-falta">falta na entrega {faltaPoEntregas(v).map((x) => numeroEntrega(v, x)).join(', ')}</span> : posCarga(v)) : <span className="suave">—</span>}</td>
                   <td>{v.emissao_assumida_por ?? <span className="suave">livre</span>}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {!v.emissao_assumida_por && <button className="btn peq" onClick={() => exec(() => acoes.assumirEmissao(v.id), 'Emissão assumida.')}>Assumir</button>}
@@ -480,7 +480,7 @@ function ModalEmissao({ v, aoFechar }: { v: ViagemInd; aoFechar: () => void }) {
   const cli = clientePorId[v.cliente_id];
   const atual = viagens.find((x) => x.id === v.id) ?? v;
   const nfsParadas = v.paradas.map((p) => p.nfs).filter(Boolean).join(', ');
-  const [d, setD] = useState({ cte: v.cte ?? '', mdfe: v.mdfe ?? '', nfs: v.nfs ?? nfsParadas, po: v.po ?? '' });
+  const [d, setD] = useState({ cte: v.cte ?? '', mdfe: v.mdfe ?? '', nfs: v.nfs ?? nfsParadas, pos: Object.fromEntries(v.paradas.filter((p) => p.tipo === 'entrega').map((p) => [p.id, p.po ?? ''])) as Record<string, string> });
   // Valores do CT-e e do contrato: vêm do lançamento quando há valor; pedágios zerados precisam ser confirmados digitando 0.
   const ini = (x: number | undefined) => (x ? String(x) : '');
   const [val, setVal] = useState<ValoresEmissao>({
@@ -512,7 +512,10 @@ function ModalEmissao({ v, aoFechar }: { v: ViagemInd; aoFechar: () => void }) {
         <label className="campo"><span>CT-e</span><input className="entrada" value={d.cte} onChange={(e) => setD({ ...d, cte: e.target.value })} /></label>
         <label className="campo"><span>MDF-e (opcional)</span><input className="entrada" value={d.mdfe} onChange={(e) => setD({ ...d, mdfe: e.target.value })} /></label>
         <label className="campo"><span>NFs</span><input className="entrada" value={d.nfs} onChange={(e) => setD({ ...d, nfs: e.target.value })} /></label>
-        {cli?.exige_po && <label className="campo"><span>PO (obrigatório para {cli.nome})</span><input className="entrada" value={d.po} onChange={(e) => setD({ ...d, po: e.target.value })} /></label>}
+        {cli?.exige_po && v.paradas.filter((p) => p.tipo === 'entrega').sort((a, b) => a.ordem - b.ordem).map((p) => (
+          <label key={p.id} className="campo"><span>PO da entrega {numeroEntrega(v, p)} <span className="suave pequeno">{p.local} · obrigatória</span></span>
+            <input className={`entrada${d.pos[p.id]?.trim() ? '' : ' ind-vazio'}`} value={d.pos[p.id] ?? ''} onChange={(e) => setD({ ...d, pos: { ...d.pos, [p.id]: e.target.value } })} /></label>
+        ))}
       </div>
       <h3 className="ind-h3">Valores do CT-e e do contrato</h3>
       <div className="ind-valores">
@@ -555,7 +558,7 @@ export function OcorrenciasInd() {
   const verValor = pode('ind.financeiro') || pode('ind.ocorrencias_aprovar');
   const tabela = (os: OcorrenciaInd[]) => os.length === 0 ? <div className="cartao-corpo suave">Nenhuma.</div> : (
     <table className="tabela">
-      <thead><tr><th>ID</th><th>Tipo</th><th>Pedido / veículo</th><th>Entrega</th><th>Descrição</th><th>Aberta</th>{verValor && <><th className="n">Motorista</th><th className="n">Cliente</th></>}<th>Situação</th><th /></tr></thead>
+      <thead><tr><th>ID</th><th>Tipo</th><th>Pedido / veículo</th><th>Entrega / PO</th><th>Descrição</th><th>Aberta</th>{verValor && <><th className="n">Motorista</th><th className="n">Cliente</th></>}<th>Situação</th><th /></tr></thead>
       <tbody>{os.map((o) => {
         const v = viagens.find((x) => x.id === o.viagem_id);
         const p = v?.paradas.find((x) => x.id === o.parada_id);
@@ -564,7 +567,7 @@ export function OcorrenciasInd() {
             <td className="mono"><strong>{o.codigo}</strong></td>
             <td>{ROTULO_OCORRENCIA[o.tipo]}{o.avaria && <div><span className="badge suspenso">Avaria</span></div>}</td>
             <td>{v && <button className="btn sutil peq" onClick={() => setAberta(v.id)}><strong>{pedidoCarga(v)}</strong></button>}{v && <BotaoInfo v={v} />}<div className="suave pequeno">{v ? `${v.tipo_veiculo} · ${clientePorId[v.cliente_id]?.nome ?? ''}` : ''}</div></td>
-            <td className="pequeno">{p ? `${p.local} (${p.cidade}/${p.uf})` : '—'}</td>
+            <td className="pequeno">{p ? `${p.ordem}. ${p.local} (${p.cidade}/${p.uf})` : '—'}{p?.po && <div><strong>PO {p.po}</strong></div>}</td>
             <td className="pequeno" style={{ maxWidth: 260 }}>{o.descricao}</td>
             <td className="pequeno">{fmtDataHora(o.aberta_em)}<div className="suave">{o.aberta_por}</div></td>
             {verValor && <><td className="n">{fmtReais(o.valor_motorista)}</td><td className="n">{fmtReais(o.valor_cliente)}</td></>}

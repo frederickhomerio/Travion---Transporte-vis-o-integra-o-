@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, combinadoAtual, marcosCarga, linkWhatsApp, pendenciasValores, valoresConfirmados, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
+import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, posCarga, combinadoAtual, marcosCarga, linkWhatsApp, pendenciasValores, valoresConfirmados, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
 import { VALORES_ZERO, type ClienteInd, type OcorrenciaInd, type ViagemInd } from './tipos';
 
 const base: ViagemInd = {
@@ -81,9 +81,13 @@ describe('avanço', () => {
     expect(pendenciasAvanco({ ...base, etapa: 'contratado', paradas: [{ ...p, agendado_para: '2026-11-07T08:00:00Z' }] }, cargill)).toHaveLength(0);
     expect(pendenciasAvanco({ ...base, etapa: 'contratado', paradas: [{ ...p, exige_agendamento: false }] }, cargill)).toHaveLength(0);
   });
-  it('Cargill exige PO depois de carregado', () => {
-    expect(pendenciasAvanco({ ...base, etapa: 'carregada' }, cargill).some((x) => x.includes('PO'))).toBe(true);
-    expect(pendenciasAvanco({ ...base, etapa: 'carregada', po: '4500123' }, cargill).some((x) => x.includes('PO'))).toBe(false);
+  it('Cargill exige uma PO por entrega depois de carregado', () => {
+    const e = (id: string, ordem: number, po: string | null = null) => ({ id, ordem, tipo: 'entrega' as const, local: `L${ordem}`, cidade: 'X', uf: 'GO', exige_agendamento: false, agendado_para: null, protocolo: null, situacao: 'pendente' as const, chegada_em: null, inicio_em: null, fim_em: null, nfs: null, po });
+    const sem = pendenciasAvanco({ ...base, etapa: 'carregada', paradas: [e('a', 1, '4500123'), e('b', 2)] }, cargill).find((x) => x.includes('PO'));
+    expect(sem).toContain('entrega 2');
+    expect(pendenciasAvanco({ ...base, etapa: 'carregada', paradas: [e('a', 1, '4500123'), e('b', 2, '4500124')] }, cargill).some((x) => x.includes('PO'))).toBe(false);
+    expect(posCarga({ ...base, paradas: [e('a', 1, '4500123'), e('b', 2, '4500124')] })).toBe('4500123 (entrega 1) · 4500124 (entrega 2)');
+    expect(pendenciasEmissao({ ...base, etapa: 'carregada', paradas: [e('a', 1)] }, cargill, { cte: '1', nfs: '2', pos: { a: '4500999' } }).some((x) => x.includes('PO'))).toBe(false);
   });
   it('encerrar exige canhoto, comprovante e nenhuma ocorrência aberta', () => {
     const v = { ...base, etapa: 'entregue' as const, entregue_em: '2026-11-01T00:00:00Z' };

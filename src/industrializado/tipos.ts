@@ -32,6 +32,8 @@ export interface ParadaInd {
   situacao: SituacaoParada;
   chegada_em: string | null; inicio_em: string | null; fim_em: string | null;
   nfs: string | null;
+  /** PO da entrega (Cargill): cada entrega tem a sua e as ocorrências da entrega ficam ligadas a ela. */
+  po?: string | null;
 }
 
 export interface ValoresInd {
@@ -65,7 +67,7 @@ export interface ViagemInd {
   pedido: string | null;
   /** Dia previsto para retirar a carga (AAAA-MM-DD), base da meta diária. */
   coleta_prevista: string | null;
-  /** PO (clientes que exigem, como a Cargill): obrigatório depois de carregado. */
+  /** PO antigo, único por carga. Agora cada entrega tem a sua (ParadaInd.po); este campo fica só para cargas antigas. */
   po: string | null;
   etapa: EtapaInd;
   frota: 'frota' | 'terceiro';

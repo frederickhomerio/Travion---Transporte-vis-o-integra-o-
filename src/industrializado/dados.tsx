@@ -52,6 +52,8 @@ function semear(): EstadoInd {
     historico: [{ em: emDias(-3), usuario: '[DEMO] Equipe de embarque', acao: 'Viagem lançada', detalhe: null, motivo: null }],
     ...p,
   });
+  /** Cargill: a PO vai em cada entrega. */
+  const comPo = (x: ViagemInd, ...pos: string[]): ViagemInd => { let i = 0; return { ...x, po: null, paradas: x.paradas.map((p) => (p.tipo === 'entrega' && pos[i] ? { ...p, po: pos[i++] } : p)) }; };
   const mot = (i: number) => ({
     motorista: ['João Batista Lima', 'Carlos Henrique Souza', 'Marcos Vinícius Rocha', 'Edson Pereira', 'Rogério Alves', 'Antônio Carlos Dias', 'Wellington Santos', 'Luiz Fernando Melo'][i],
     motorista_cpf: `${100 + i}.${200 + i}.${300 + i}-${10 + i}`, motorista_telefone: `(62) 9 9${100 + i}-${4000 + i}`,
@@ -75,7 +77,7 @@ function semear(): EstadoInd {
     v(1, 'transito', { ...mot(5), cte: '35188', nfs: '77410', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Cuiabá', 'Cuiabá', 'MT', emMin(300), 'pendente', 'AUR-2231')], valores: val(12800, 10900, { pedagio: 610 }),
       combinado: { o_que: 'Chegada no cliente', para: emMin(240), marcou_em: null, registrado_por: '[DEMO] Equipe de pós-embarque', fase: 'transito' } }),
     v(3, 'entregas', { ...mot(6), tipo_carga: 'batida', cte: '35170', nfs: '55120, 55121, 55122', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Loja 1', 'Itumbiara', 'GO', emMin(-300), 'concluida'), par(3, 'entrega', 'Loja 2', 'Uberlândia', 'MG', emMin(-30), 'em_operacao', 'PL-7781'), par(4, 'entrega', 'Loja 3', 'Uberaba', 'MG', emDias(1))], valores: val(8600, 7200, { descarga: 250 }) }),
-    v(0, 'entregue', { ...mot(7), po: '4500231987', cte: '35102', nfs: '99001', entregue_em: emDias(-33), canhoto_digital_em: emDias(-32), paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Sorriso', 'Sorriso', 'MT', emDias(-33), 'concluida', 'CG-4410')], valores: val(15200, 13300, { pedagio: 720, descarga: 400 }) }),
+    comPo(v(0, 'entregue', { ...mot(7), cte: '35102', nfs: '99001', entregue_em: emDias(-33), canhoto_digital_em: emDias(-32), paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Sorriso', 'Sorriso', 'MT', emDias(-33), 'concluida', 'CG-4410')], valores: val(15200, 13300, { pedagio: 720, descarga: 400 }) }), '4500231987'),
     v(2, 'entregue', { ...mot(1), cte: '35140', nfs: '30221', entregue_em: emDias(-6), canhoto_digital_em: emDias(-6), canhoto_fisico_em: emDias(-1), paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null, 'concluida'), par(2, 'entrega', 'Distribuidora Oeste', 'Jataí', 'GO', null, 'concluida')], valores: val(4800, 4400) }),
     v(4, 'encerrada', { ...mot(2), cte: '35090', nfs: '20110', entregue_em: emDias(-20), canhoto_digital_em: emDias(-20), canhoto_fisico_em: emDias(-12), comprovante_ok_em: emDias(-12), paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Cliente final', 'Catalão', 'GO', null, 'concluida')], valores: val(3600, 3050, { pedagio: 90 }) }),
   ];
@@ -88,7 +90,7 @@ function semear(): EstadoInd {
     v(2, 'coleta_agendada', { ...mot(6), placa_cavalo: 'HJK7L88', paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', emMin(30), 'chegou'), par(2, 'entrega', 'Distribuidora Sul', 'Itumbiara', 'GO', null)], valores: val(4100, 3600),
       checagens: { cadastro: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, monitoramento: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, oc_vinculo: { em: emMin(-90), por: '[DEMO] Equipe de embarque' } },
       combinado: { o_que: 'Chegada na fábrica', para: emMin(-10), marcou_em: emMin(-15), registrado_por: '[DEMO] Equipe de embarque' } }),
-    v(0, 'transito', { ...mot(4), placa_cavalo: 'PLM2N44', po: '4500233001', cte: '35210', nfs: '99102', paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Terminal Rondonópolis', 'Rondonópolis', 'MT', emDias(1, 1), 'pendente', 'CG-5600')], valores: val(11200, 9600, { pedagio: 480 }) }),
+    comPo(v(0, 'transito', { ...mot(4), placa_cavalo: 'PLM2N44', cte: '35210', nfs: '99102', paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Terminal Rondonópolis', 'Rondonópolis', 'MT', emDias(1, 1), 'pendente', 'CG-5600')], valores: val(11200, 9600, { pedagio: 480 }) }), '4500233001'),
     v(1, 'transito', { ...mot(0), placa_cavalo: 'QAZ5W66', cte: '35211', nfs: '77455', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Belém', 'Belém', 'PA', emDias(3), 'pendente', 'AUR-2290')], valores: val(18900, 16100, { pedagio: 900 }) }),
     v(4, 'entregas', { ...mot(5), placa_cavalo: 'WSX8E99', cte: '35199', nfs: '20155', paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Cliente final', 'Anápolis', 'GO', emMin(-60), 'chegou')], valores: val(2600, 2200) }),
   );
@@ -101,7 +103,7 @@ function semear(): EstadoInd {
     // 19 Contratado SEM combinado e sem conferências (tudo vermelho).
     v(2, 'contratado', { ...mot(7), placa_cavalo: 'OPA1Z23', tipo_veiculo: 'Truck', paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null), par(2, 'entrega', 'Mercado Bom Preço', 'Trindade', 'GO', null)], valores: val(1900, 1550) }),
     // 20 Marcou o combinado SEM as 3 conferências: gera alerta no sino e faixa no Painel.
-    v(0, 'coleta_agendada', { ...mot(2), placa_cavalo: 'BRA2E19', po: null, checagens: { cadastro: { em: emMin(-70), por: '[DEMO] Equipe de embarque' } }, paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', emMin(-30), 'chegou', 'CG-5650'), par(2, 'entrega', 'CD Uberlândia', 'Uberlândia', 'MG', emDias(1, 4))], valores: val(8900, 7700, { pedagio: 310 }),
+    v(0, 'coleta_agendada', { ...mot(2), placa_cavalo: 'BRA2E19', po: null, checagens: { cadastro: { em: emMin(-70), por: '[DEMO] Equipe de embarque' } }, paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', emMin(-30), 'chegou', 'CG-5650'), { ...par(2, 'entrega', 'CD Uberlândia', 'Uberlândia', 'MG', emDias(1, 4)), po: '4500240011' }, { ...par(3, 'entrega', 'CD Uberaba', 'Uberaba', 'MG', emDias(1, 9)), po: '4500240012' }], valores: val(8900, 7700, { pedagio: 310 }),
       combinado: { o_que: 'Chegada na fábrica', para: emMin(-40), marcou_em: emMin(-35), registrado_por: '[DEMO] Equipe de embarque', fase: 'coleta' } }),
     // 21 Carregando com combinado atrasado (vermelho).
     v(3, 'carregando', { ...mot(4), placa_cavalo: 'GYN3K45', checagens: ok3, paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', emMin(-180), 'em_operacao', 'AG-88190'), par(2, 'entrega', 'Atacado Norte', 'Araguaína', 'TO', emDias(2))], valores: val(9700, 8150, { pedagio: 260 }),
@@ -148,6 +150,7 @@ function semear(): EstadoInd {
     o(5, 26, 'deslocamento', 'carregado', 'Desvio por interdição na BR-020, chegada atrasada', 150, 0, 'aberta'),
     o(6, 30, 'reentrega', 'descarregado', 'Cliente recusou 2 paletes por divergência de NF, reentrega amanhã', 280, 350, 'aberta'),
     o(7, 27, 'diaria', 'carregado', 'Fila na doca da Loja Norte', 0, 0, 'cancelada'),
+    o(8, 15, 'reagendamento', 'carregado', 'Terminal pediu nova janela de descarga para esta PO', 0, 0, 'aberta'),
   ];
   return { versao: 1, seq: n, seqOc: ocorrencias.length, clientes, viagens, ocorrencias, metas: { [hoje]: 8 } };
 }
@@ -162,7 +165,10 @@ let estado: EstadoInd = (() => {
       const e = JSON.parse(s) as EstadoInd;
       // Tipos de carga antigos (10/11): fracionada vira batida, carga geral vira granel.
       const novo: Record<string, TipoCarga> = { fracionada: 'batida', carga_geral: 'granel' };
-      return { ...e, viagens: e.viagens.map((v) => (novo[v.tipo_carga] ? { ...v, tipo_carga: novo[v.tipo_carga] } : v)) };
+      // PO única antiga (10/11): passa para a(s) entrega(s) sem PO.
+      const poNasEntregas = (v: ViagemInd): ViagemInd => (v.po && v.paradas.every((p) => !p.po)
+        ? { ...v, po: null, paradas: v.paradas.map((p) => (p.tipo === 'entrega' ? { ...p, po: v.po } : p)) } : v);
+      return { ...e, viagens: e.viagens.map((v) => poNasEntregas(novo[v.tipo_carga] ? { ...v, tipo_carga: novo[v.tipo_carga] } : v)) };
     }
   } catch { /* sem armazenamento */ }
   return semear();
@@ -223,7 +229,7 @@ export function useInd() {
       return {
         id: a?.id ?? uid(), ordem: i + 1, tipo: p.tipo, local: p.local.trim(), cidade: p.cidade.trim(), uf: p.uf.trim().toUpperCase(),
         exige_agendamento: p.exige_agendamento, agendado_para: p.agendado_para || null, protocolo: p.protocolo?.trim() || null,
-        nfs: p.nfs?.trim() || null, situacao: a?.situacao ?? 'pendente', chegada_em: a?.chegada_em ?? null, inicio_em: a?.inicio_em ?? null, fim_em: a?.fim_em ?? null,
+        nfs: p.nfs?.trim() || null, po: p.tipo === 'entrega' ? p.po?.trim() || null : null, situacao: a?.situacao ?? 'pendente', chegada_em: a?.chegada_em ?? null, inicio_em: a?.inicio_em ?? null, fim_em: a?.fim_em ?? null,
       };
     });
     const validarNova = (d: NovaViagem) => {
@@ -400,10 +406,11 @@ export function useInd() {
         mudar(id, 'Finalizado no Painel (sai de Finalizados com Ocorrência)', () => ({ painel_finalizado_em: agora(), painel_finalizado_por: usuario }));
       },
 
-      informarPo(id: string, po: string) {
+      informarPo(id: string, paradaId: string, po: string) {
         exigir('ind.lancar');
-        if (!po.trim()) falha('Informe o PO.');
-        mudar(id, 'PO informado', () => ({ po: po.trim() }), po.trim());
+        if (!po.trim()) falha('Informe a PO.');
+        const p = viagem(id).paradas.find((x) => x.id === paradaId && x.tipo === 'entrega') ?? falha('Entrega não encontrada.');
+        mudar(id, `PO informada: entrega ${p.ordem}`, (v) => ({ paradas: v.paradas.map((x) => (x.id === paradaId ? { ...x, po: po.trim() } : x)) }), `${p.local}: PO ${po.trim()}${p.po ? ` (antes ${p.po})` : ''}`);
       },
 
       assumirEmissao(id: string) {
@@ -414,7 +421,7 @@ export function useInd() {
         mudar(id, 'Emissão assumida', () => ({ emissao_assumida_por: usuario, emissao_assumida_em: agora() }));
       },
 
-      liberarEmissao(id: string, d: { cte: string; mdfe: string; nfs: string; po: string }, valores: ValoresEmissao) {
+      liberarEmissao(id: string, d: { cte: string; mdfe: string; nfs: string; pos: Record<string, string> }, valores: ValoresEmissao) {
         exigir('ind.emissao');
         const v = viagem(id);
         if (v.etapa !== 'carregada') falha('A viagem não está aguardando emissão.');
@@ -425,7 +432,8 @@ export function useInd() {
         const brl = (x: number) => x.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         const conf = rot.map(([k, r]) => `${r} ${brl(novos[k] ?? 0)}${(v.valores[k] ?? 0) !== (novos[k] ?? 0) ? ` (lançado ${brl(v.valores[k] ?? 0)})` : ''}`).join('; ');
         mudar(id, 'Documentos liberados: Carregada → Documentada', () => ({
-          etapa: 'documentada', cte: d.cte.trim(), mdfe: t(d.mdfe), nfs: d.nfs.trim(), po: t(d.po) ?? v.po,
+          etapa: 'documentada', cte: d.cte.trim(), mdfe: t(d.mdfe), nfs: d.nfs.trim(),
+          paradas: v.paradas.map((x) => (x.tipo === 'entrega' && d.pos[x.id]?.trim() ? { ...x, po: d.pos[x.id].trim() } : x)),
           emissao_assumida_por: v.emissao_assumida_por ?? usuario, emissao_assumida_em: v.emissao_assumida_em ?? agora(),
           valores: novos, valores_conferidos_em: agora(), valores_conferidos_por: usuario,
         }), `CT-e ${d.cte.trim()}${d.mdfe.trim() ? `, MDF-e ${d.mdfe.trim()}` : ''}, NF ${d.nfs.trim()}. Valores conferidos: ${conf}`);
@@ -436,6 +444,8 @@ export function useInd() {
         const v = viagem(d.viagem_id);
         if (v.etapa === 'encerrada' || v.etapa === 'cancelada') falha('Viagem encerrada ou cancelada.');
         if (!d.descricao.trim()) falha('Descreva a ocorrência.');
+        const ent = v.paradas.find((x) => x.id === d.parada_id);
+        if (cliente(v.cliente_id)?.exige_po && v.paradas.some((x) => x.tipo === 'entrega') && !ent) falha('Escolha a entrega (PO) da ocorrência.');
         const o: OcorrenciaInd = {
           id: uid(), codigo: codigoOcorrencia(estado.seqOc + 1), ...d, descricao: d.descricao.trim(),
           valor_motorista: pode('ind.financeiro') ? d.valor_motorista : 0, valor_cliente: pode('ind.financeiro') ? d.valor_cliente : 0,
