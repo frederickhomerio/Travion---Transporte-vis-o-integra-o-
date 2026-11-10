@@ -1581,6 +1581,7 @@ button.cf-chip { cursor: pointer; }
 .ind-filtros > select.entrada { width: auto; }
 .ind-tabela tr.clicavel { cursor: pointer; }
 .ind-tabela tr.clicavel:hover td { background: var(--azul-50); }
+.ind-grupo-cli { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
 .ind-tabela tr.ind-grupo td { background: var(--azul-50); font-weight: 700; color: var(--azul-900); }
 .ind-kpi { border-top: 4px solid var(--cinza-300); }
 .ind-kpi.ok { border-top-color: var(--faixa-verde); }

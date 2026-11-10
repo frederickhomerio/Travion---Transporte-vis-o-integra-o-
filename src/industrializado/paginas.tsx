@@ -5,6 +5,12 @@ import { ModalDivulgacao } from '../components/AnuncioFrete';
 import { arquivoInd, dadosDivulgacao, desenharInd, desenharListaInd, textoInd, textoListaInd } from './divulgacao';
 import { useSearchParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
+import { EscolherLogo, LogoCliente } from '../components/LogoEmpresa';
+import { mensagemErro } from '../data/api';
+import { useApp } from '../data/store';
+import { cnpjValido, formatarCnpj, formatarTelefone, mascaraCnpj } from '../lib/cadastros';
+import { dominioDoEmail } from '../lib/cnpj';
+import type { DadosCnpj } from '../types';
 import { AcessoNegado, Alerta, EstadoVazio, Modal, Segmentado, useAviso } from '../components/ui';
 import { fmtData, fmtDataHora, fmtPct, fmtReais } from '../lib/formato';
 import { normalizar } from '../lib/texto';
@@ -326,7 +332,7 @@ export function ViagensInd() {
             <thead><tr><th>Pedido / veículo</th><th>Etapa</th><th>Rota</th><th>Próximo agendamento</th><th>Motorista / placa</th><th>Docs</th><th>Tracking</th>{verValor && <th className="n">Margem</th>}</tr></thead>
             <tbody>
               {grupos.map(({ c, vs }) => [
-                <tr key={c.id} className="ind-grupo"><td colSpan={verValor ? 8 : 7}>{c.nome} <span className="suave pequeno">· {vs.length} {vs.length === 1 ? 'viagem' : 'viagens'}</span></td></tr>,
+                <tr key={c.id} className="ind-grupo"><td colSpan={verValor ? 8 : 7}><span className="ind-grupo-cli">{c.logo_url && <LogoCliente url={c.logo_url} nome={c.nome} tam={24} />}{c.nome}</span> <span className="suave pequeno">· {vs.length} {vs.length === 1 ? 'viagem' : 'viagens'}</span></td></tr>,
                 ...vs.map((v) => {
                   const ag = proximoAgendamento(v);
                   const m = calcularMargem(v, ocorrencias);
@@ -685,10 +691,11 @@ export function ClientesInd() {
       <Alerta tipo="info">Lista própria do Industrializado, separada dos clientes dos outros centros de custo.</Alerta>
       <div className="cartao" style={{ marginTop: 12, overflowX: 'auto' }}>
         <table className="tabela">
-          <thead><tr><th>Cliente</th><th>CNPJ</th><th>Contato</th><th>Exige agendamento</th><th>Exige PO após carregar</th><th className="n">Viagens</th><th /></tr></thead>
+          <thead><tr><th style={{ width: 84 }} /><th>Cliente</th><th>CNPJ</th><th>Contato</th><th>Exige agendamento</th><th>Exige PO após carregar</th><th className="n">Viagens</th><th /></tr></thead>
           <tbody>{clientes.map((c) => (
             <tr key={c.id} style={c.ativo ? undefined : { opacity: 0.55 }}>
-              <td><strong>{c.nome}</strong>{!c.ativo && <span className="suave pequeno"> · inativo</span>}</td><td className="mono">{c.cnpj ?? '—'}</td>
+              <td><LogoCliente url={c.logo_url} nome={c.nome} /></td>
+              <td><strong>{c.nome}</strong>{!c.ativo && <span className="suave pequeno"> · inativo</span>}{c.municipio && <div className="suave pequeno">{c.municipio}{c.uf ? `-${c.uf}` : ''}{c.inscricao_estadual ? ` · IE ${c.inscricao_estadual}` : ''}</div>}</td><td className="mono" style={{ whiteSpace: 'nowrap' }}>{c.cnpj ? formatarCnpj(c.cnpj) : '—'}</td>
               <td>{c.contato ?? '—'}{c.telefone ? <div className="suave pequeno">{c.telefone}</div> : null}</td>
               <td>{c.exige_agendamento ? 'Sim' : 'Não'}</td><td>{c.exige_po ? 'Sim' : 'Não'}</td>
               <td className="n">{viagens.filter((v) => v.cliente_id === c.id).length}</td>
@@ -702,24 +709,122 @@ export function ClientesInd() {
   );
 }
 
+const CAMPOS_RECEITA_IND: Array<{ k: keyof ClienteInd; rot: string }> = [
+  { k: 'razao_social', rot: 'Razão social' }, { k: 'inscricao_estadual', rot: 'Inscrição estadual' },
+  { k: 'situacao_cadastral', rot: 'Situação cadastral' }, { k: 'atividade_principal', rot: 'Atividade principal' },
+  { k: 'logradouro', rot: 'Endereço' }, { k: 'numero', rot: 'Número' }, { k: 'complemento', rot: 'Complemento' },
+  { k: 'bairro', rot: 'Bairro' }, { k: 'municipio', rot: 'Município' }, { k: 'uf', rot: 'UF' }, { k: 'cep', rot: 'CEP' },
+  { k: 'email', rot: 'E-mail' },
+];
+
+/** Cadastro de cliente do Industrializado no mesmo modelo do Travion: CNPJ consultado na Receita (com inscrição estadual) e logo. */
 function FormCliente({ c, aoFechar }: { c?: ClienteInd; aoFechar: () => void }) {
   const { acoes } = useInd();
+  const { api } = useApp();
   const exec = useExecutar();
-  const [d, setD] = useState<Omit<ClienteInd, 'id'>>(c ?? { nome: '', cnpj: null, contato: null, telefone: null, exige_agendamento: false, exige_po: false, ativo: true });
+  const [d, setD] = useState<Omit<ClienteInd, 'id'>>(() => c ? { ...c, cnpj: c.cnpj ? formatarCnpj(c.cnpj) : null }
+    : { nome: '', cnpj: null, contato: null, telefone: null, exige_agendamento: false, exige_po: false, ativo: true });
+  const [buscando, setBuscando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [ies, setIes] = useState<DadosCnpj['inscricoes_estaduais']>([]);
+  const [site, setSite] = useState(() => dominioDoEmail(c?.email) ?? '');
+  const set = <K extends keyof ClienteInd>(k: K, v: ClienteInd[K]) => setD((x) => ({ ...x, [k]: v }));
+  const cnpj = d.cnpj ?? '';
+  const cnpjOk = cnpjValido(cnpj);
+  const cnpjMudou = !c || (c.cnpj ?? '').replace(/\D/g, '') !== cnpj.replace(/\D/g, '');
+
+  async function buscarCnpj() {
+    setErro(null); setAviso(null);
+    if (!cnpjOk) { setErro('CNPJ inválido. Confira os 14 dígitos.'); return; }
+    setBuscando(true);
+    try {
+      const r = await api.consultarCnpj(cnpj);
+      setD((x) => ({
+        ...x,
+        nome: x.nome.trim() ? x.nome : (r.nome_fantasia || r.razao_social || ''),
+        razao_social: r.razao_social, inscricao_estadual: r.inscricao_estadual, situacao_cadastral: r.situacao_cadastral,
+        atividade_principal: r.atividade_principal, logradouro: r.logradouro, numero: r.numero, complemento: r.complemento,
+        bairro: r.bairro, municipio: r.municipio, uf: r.uf, cep: r.cep, email: r.email,
+        telefone: x.telefone?.trim() ? x.telefone : (r.telefone ? formatarTelefone(r.telefone) : null),
+        dados_consultados_em: new Date().toISOString(), fonte_consulta: r.fonte,
+      }));
+      setIes(r.inscricoes_estaduais);
+      const dom = dominioDoEmail(r.email);
+      if (dom && !site) setSite(dom);
+      if (r.situacao_cadastral && !/ativa/i.test(r.situacao_cadastral)) {
+        setAviso(`Atenção: situação cadastral na Receita é "${r.situacao_cadastral}". Confirme antes de carregar para este cliente.`);
+      }
+    } catch (e) {
+      setErro(mensagemErro(e));
+    } finally {
+      setBuscando(false);
+    }
+  }
+
+  function salvar() {
+    setErro(null);
+    if (cnpjMudou && !cnpjOk) { setErro('Informe um CNPJ válido.'); return; }
+    if (!d.nome.trim()) { setErro('Informe o nome do cliente (como vai aparecer no app).'); return; }
+    const limpo = Object.fromEntries(Object.entries(d).map(([k, v]) => [k, typeof v === 'string' ? (v.trim() || null) : v])) as Omit<ClienteInd, 'id'>;
+    if (limpo.uf) limpo.uf = limpo.uf.toUpperCase();
+    if (exec(() => acoes.salvarCliente({ ...limpo, nome: d.nome.trim(), id: c?.id }), 'Cliente salvo.')) aoFechar();
+  }
+
+  const txt = (k: keyof ClienteInd, rot: string) => (
+    <label className="campo" key={k}><span>{rot}</span>
+      <input className="entrada" value={String(d[k as keyof typeof d] ?? '')} maxLength={k === 'uf' ? 2 : undefined}
+        style={k === 'uf' ? { textTransform: 'uppercase' } : undefined} onChange={(e) => set(k, (e.target.value || null) as never)} />
+    </label>
+  );
+
   return (
-    <Modal titulo={c ? `Editar ${c.nome}` : 'Novo cliente'} aoFechar={aoFechar} rodape={<>
-      <button className="btn" onClick={aoFechar}>Voltar</button>
-      <button className="btn primario" onClick={() => exec(() => acoes.salvarCliente({ ...d, id: c?.id }), 'Cliente salvo.') && aoFechar()}>Salvar</button>
+    <Modal titulo={c ? `Editar cliente — ${c.nome}` : 'Novo cliente'} aoFechar={aoFechar} rodape={<>
+      <button className="btn" onClick={aoFechar}>Cancelar</button>
+      <button className="btn primario" onClick={salvar}>Salvar cliente</button>
     </>}>
-      <div className="grade-campos">
-        <label className="campo"><span>Nome</span><input className="entrada" value={d.nome} onChange={(e) => setD({ ...d, nome: e.target.value })} /></label>
-        <label className="campo"><span>CNPJ</span><input className="entrada" value={d.cnpj ?? ''} onChange={(e) => setD({ ...d, cnpj: e.target.value || null })} /></label>
-        <label className="campo"><span>Contato</span><input className="entrada" value={d.contato ?? ''} onChange={(e) => setD({ ...d, contato: e.target.value || null })} /></label>
-        <label className="campo"><span>Telefone</span><input className="entrada" value={d.telefone ?? ''} onChange={(e) => setD({ ...d, telefone: e.target.value || null })} /></label>
+      <h3 className="titulo-secao-form">1. CNPJ</h3>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <label className="campo" style={{ flex: '1 1 220px' }}><span>CNPJ *</span>
+          <input className="entrada num" inputMode="numeric" placeholder="00.000.000/0000-00" value={cnpj}
+            onChange={(e) => set('cnpj', mascaraCnpj(e.target.value) || null)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void buscarCnpj(); } }} />
+          {cnpj.replace(/\D/g, '').length === 14 && !cnpjOk && <small style={{ color: 'var(--erro, #c52c36)' }}>CNPJ inválido (dígito verificador não confere).</small>}
+        </label>
+        <button type="button" className="btn secundario" disabled={!cnpjOk || buscando} onClick={buscarCnpj}>
+          {buscando ? 'Consultando…' : 'Buscar dados na Receita'}
+        </button>
       </div>
-      <label className="ind-check"><input type="checkbox" checked={d.exige_agendamento} onChange={(e) => setD({ ...d, exige_agendamento: e.target.checked })} /> Exige agendamento (padrão das paradas novas)</label>
-      <label className="ind-check"><input type="checkbox" checked={d.exige_po} onChange={(e) => setD({ ...d, exige_po: e.target.checked })} /> Exige PO depois que o veículo carrega</label>
-      <label className="ind-check"><input type="checkbox" checked={d.ativo} onChange={(e) => setD({ ...d, ativo: e.target.checked })} /> Ativo</label>
+      {d.dados_consultados_em && <p className="pequeno suave" style={{ margin: 0 }}>Dados preenchidos por {d.fonte_consulta ?? 'consulta de CNPJ'} em {fmtDataHora(d.dados_consultados_em)}. Confira e ajuste se necessário.</p>}
+      {ies.length > 1 && <p className="pequeno suave" style={{ margin: 0 }}>Inscrições estaduais encontradas: {ies.map((i) => `${i.ie} (${i.uf ?? '?'}${i.ativa ? '' : ', inativa'})`).join(' · ')}</p>}
+      {d.dados_consultados_em && !d.inscricao_estadual && <p className="pequeno suave" style={{ margin: 0 }}>Inscrição estadual não informada pela base pública. Preencha manualmente se houver.</p>}
+      {aviso && <Alerta tipo="aviso">{aviso}</Alerta>}
+
+      <h3 className="titulo-secao-form">2. Dados da empresa</h3>
+      <div className="grade-campos">
+        <label className="campo"><span>Nome no app *</span>
+          <input className="entrada" value={d.nome} onChange={(e) => set('nome', e.target.value)} />
+          <small>Como o cliente aparece nas listas (ex.: nome fantasia).</small>
+        </label>
+        {CAMPOS_RECEITA_IND.map((x) => txt(x.k, x.rot))}
+      </div>
+
+      <h3 className="titulo-secao-form">3. Contato e regras da operação</h3>
+      <div className="grade-campos">
+        {txt('contato', 'Contato')}
+        <label className="campo"><span>Telefone</span>
+          <input className="entrada" type="tel" inputMode="tel" placeholder="(62) 99999-0000" value={d.telefone ?? ''} onChange={(e) => set('telefone', formatarTelefone(e.target.value) || null)} />
+        </label>
+      </div>
+      <label className="ind-check"><input type="checkbox" checked={d.exige_agendamento} onChange={(e) => set('exige_agendamento', e.target.checked)} /> Exige agendamento (padrão das paradas novas)</label>
+      <label className="ind-check"><input type="checkbox" checked={d.exige_po} onChange={(e) => set('exige_po', e.target.checked)} /> Exige PO depois que o veículo carrega</label>
+      <label className="ind-check"><input type="checkbox" checked={d.ativo} onChange={(e) => set('ativo', e.target.checked)} /> Ativo</label>
+
+      <h3 className="titulo-secao-form">4. Logo</h3>
+      <EscolherLogo valor={d.logo_url ?? null} aoMudar={(v) => set('logo_url', v)} nomeEmpresa={d.nome || d.razao_social || ''}
+        site={site} aoMudarSite={setSite} aoErro={setErro} />
+
+      {erro && <Alerta tipo="erro">{erro}</Alerta>}
     </Modal>
   );
 }

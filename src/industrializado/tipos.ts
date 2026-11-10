@@ -20,6 +20,14 @@ export interface ClienteInd {
   /** Ex.: Cargill. Depois que o veículo carrega, o PO passa a ser obrigatório para seguir. */
   exige_po: boolean;
   ativo: boolean;
+  /** Dados da Receita/inscrição estadual (mesma consulta do cadastro de clientes do Travion). */
+  razao_social?: string | null; inscricao_estadual?: string | null; situacao_cadastral?: string | null; atividade_principal?: string | null;
+  logradouro?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null;
+  municipio?: string | null; uf?: string | null; cep?: string | null; email?: string | null;
+  /** Logo (imagem reduzida em data URL), como no cadastro de clientes do Travion. */
+  logo_url?: string | null;
+  dados_consultados_em?: string | null;
+  fonte_consulta?: string | null;
 }
 
 export interface ParadaInd {
