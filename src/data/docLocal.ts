@@ -1045,7 +1045,10 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       if (!d.origem_cidade?.trim() || !/^[A-Z]{2}$/.test(ouf)) erro('Informe a origem (cidade e UF).');
       if (!d.destino_cidade?.trim() || !/^[A-Z]{2}$/.test(duf)) erro('Informe o destino (cidade e UF).');
       if (typeof d.primeiro_embarque !== 'boolean') erro('Responda se é o primeiro embarque do motorista.');
-      const c = ctx.cliente(d.cliente_id);
+      // Cliente do Industrializado (prévia: o nome vem da tela) ou do Travion.
+      const c = d.ind_cliente_id
+        ? { id: '', nome: d.ind_cliente_nome ?? 'Cliente Industrializado', comercial_id: null, carteira: null }
+        : (d.cliente_id ? ctx.cliente(d.cliente_id) : null);
       if (!c) erro('Selecione um cliente autorizado.');
       if (d.filial_id && !ctx.noEscopo(d.filial_id, null)) erro('Filial fora do seu escopo.');
       if (!d.filial_id && !ctx.ehAdmin() && ctx.temFiliais()) erro('Selecione a filial.');

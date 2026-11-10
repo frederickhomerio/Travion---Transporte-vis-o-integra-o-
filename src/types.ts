@@ -301,9 +301,13 @@ export interface DadosSolicitacaoDoc {
 
 /** Formulário da aba Cadastro (solicitante vem da sessão). */
 export interface DadosCadastroDoc {
-  placa: string; telefone_motorista: string; mercadoria: string; cliente_id: string; valor_carga: number;
+  placa: string; telefone_motorista: string; mercadoria: string; cliente_id: string | null; valor_carga: number;
   origem_cidade: string; origem_uf: string; destino_cidade: string; destino_uf: string;
   observacoes: string | null; primeiro_embarque: boolean; filial_id: string | null; chave_envio: string;
+  /** Cliente do Industrializado (funções do módulo escolhem na lista do módulo; migração 4300). */
+  ind_cliente_id?: string | null;
+  /** Só na prévia local (o servidor lê o nome do cadastro do módulo). */
+  ind_cliente_nome?: string | null;
 }
 
 // ---------------------------------------------------------------------------
