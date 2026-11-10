@@ -1794,3 +1794,7 @@ dd .ind-contratou::before { content: ''; }
 .ind-cab-busca { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .ind-busca-quadro { width: 280px; max-width: 100%; }
 .ind-nowrap { white-space: nowrap; }
+/* Industrializado: flag "Veículos a contratar" ao lado do filtro de etapa */
+.ind-filtro-flag { margin-top: 0; align-self: stretch; white-space: nowrap; padding: 0 12px; border: 1px solid var(--borda, #e5ddd5); border-radius: 10px; background: var(--superficie, #fff); font-weight: 600; }
+.ind-filtro-flag.ativo { border-color: var(--vermelho-700); color: var(--vermelho-700); background: var(--vermelho-100); }
+.ind-filtro-flag input { accent-color: var(--vermelho-700); }

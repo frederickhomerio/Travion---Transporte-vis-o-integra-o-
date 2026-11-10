@@ -311,12 +311,15 @@ export function ViagensInd() {
   const [busca, setBusca] = useState('');
   const [etapa, setEtapa] = useState<'' | EtapaInd>('');
   const [vista, setVista] = useState<'andamento' | 'todas'>('andamento');
+  const [aContratar, setAContratar] = useState(false);
   const [nova, setNova] = useState(false);
   const [aberta, setAberta] = useState<string | null>(null);
   const q = normalizar(busca.trim());
   const lista = viagens
     .filter((v) => (vista === 'andamento' ? ativa(v) : true))
     .filter((v) => !etapa || v.etapa === etapa)
+    // "a contratar": carga ativa ainda sem motorista (o mesmo aviso vermelho da coluna Motorista / placa).
+    .filter((v) => !aContratar || (ativa(v) && !v.motorista))
     .filter((v) => !q || normalizar([codigoViagem(v.codigo), clientePorId[v.cliente_id]?.nome, v.pedido, v.po, ...v.paradas.map((p) => p.po), v.motorista, v.placa_cavalo, v.cte, v.nfs, ...v.paradas.map((p) => `${p.local} ${p.cidade}`)].join(' ')).includes(q))
     .sort((a, b) => b.codigo - a.codigo);
   const grupos = clientes.map((c) => ({ c, vs: lista.filter((v) => v.cliente_id === c.id) })).filter((g) => g.vs.length);
@@ -330,6 +333,7 @@ export function ViagensInd() {
           <option value="">Todas as etapas</option>
           {[...ETAPAS_FLUXO, 'cancelada' as const].map((e) => <option key={e} value={e}>{ROTULO_ETAPA[e]}</option>)}
         </select>
+        <label className={`ind-check ind-filtro-flag${aContratar ? ' ativo' : ''}`}><input type="checkbox" checked={aContratar} onChange={(e) => setAContratar(e.target.checked)} /> Veículos a contratar</label>
         <Segmentado rotulo="Mostrar" valor={vista} aoMudar={setVista} opcoes={[{ valor: 'andamento', rotulo: 'Em andamento' }, { valor: 'todas', rotulo: 'Todas' }]} />
       </div>
       {grupos.length === 0 ? <EstadoVazio titulo="Nenhuma viagem encontrada" /> : (
