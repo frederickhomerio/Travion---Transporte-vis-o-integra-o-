@@ -8,6 +8,12 @@ import { Sino } from './doc/Sino';
 import { Icone, Logo } from './ui';
 
 const CHAVE_MENU = 'travion-menu-recolhido';
+const CHAVE_GRUPOS = 'travion-menu-grupos-abertos';
+
+/** Blocos abertos à mão no menu lateral. Começam todos recolhidos; o bloco da página atual abre sozinho. */
+function lerAbertos(): string[] {
+  try { const v = JSON.parse(localStorage.getItem(CHAVE_GRUPOS) ?? '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []; } catch { return []; }
+}
 
 /** Item do menu lateral: com o menu recolhido fica só o ícone, e o nome aparece na dica. */
 function Item({ to, end, icone, rotulo, recolhido }: { to: string; end?: boolean; icone: string; rotulo: string; recolhido: boolean }) {
@@ -111,6 +117,19 @@ export function Layout({ titulo, aoLadoTitulo, aoLadoSino, acoes, children }: { 
   useEffect(() => { try { localStorage.setItem(CHAVE_MENU, recolhido ? '1' : '0'); } catch { /* preferência local */ } }, [recolhido]);
   const r = recolhido;
   const grupos = useGrupos(admin);
+  const { pathname } = useLocation();
+  const [abertos, setAbertos] = useState<string[]>(lerAbertos);
+  // Bloco da página atual: abre ao entrar, mas a pessoa pode recolher com um clique.
+  const grupoAtual = grupos.find((g) => g.itens.some((i) => matchPath({ path: i.to, end: i.end ?? false }, pathname)))?.id;
+  const [fechadoAtual, setFechadoAtual] = useState(false);
+  useEffect(() => setFechadoAtual(false), [grupoAtual]);
+  const estaAberto = (id: string) => (id === grupoAtual ? !fechadoAtual : abertos.includes(id));
+  const alternarGrupo = (id: string) => {
+    if (id === grupoAtual) { setFechadoAtual(!fechadoAtual); return; }
+    const novo = abertos.includes(id) ? abertos.filter((x) => x !== id) : [...abertos, id];
+    setAbertos(novo);
+    try { localStorage.setItem(CHAVE_GRUPOS, JSON.stringify(novo)); } catch { /* preferência local */ }
+  };
 
   return (
     <div className={`app${r ? ' menu-recolhido' : ''}`}>
@@ -123,12 +142,28 @@ export function Layout({ titulo, aoLadoTitulo, aoLadoSino, acoes, children }: { 
           </svg>
         </button>
         <nav className="nav" aria-label="Principal">
-          {grupos.map((g) => (
-            <div key={g.id} className="nav-bloco">
-              <div className="grupo"><span className="rotulo">{g.rotulo}</span></div>
-              {g.itens.map((i) => <Item key={i.to} to={i.to} end={i.end} icone={i.icone} rotulo={i.rotulo} recolhido={r} />)}
-            </div>
-          ))}
+          {grupos.map((g) => {
+            // Com o menu só de ícones, todos os ícones ficam à mostra (não há título para clicar).
+            const aberto = r || estaAberto(g.id);
+            return (
+              <div key={g.id} className={`nav-bloco${aberto ? ' aberto' : ''}`}>
+                {r ? <div className="grupo" /> : (
+                  <button type="button" className={`grupo grupo-alternar${g.id === grupoAtual ? ' atual' : ''}`} aria-expanded={aberto}
+                    aria-controls={`nav-${g.id}`} onClick={() => alternarGrupo(g.id)}>
+                    <Icone nome={g.icone} tam={16} />
+                    <span className="rotulo">{g.rotulo}</span>
+                    {!aberto && <span className="grupo-qtd" aria-label={`${g.itens.length} abas`}>{g.itens.length}</span>}
+                    <svg className="grupo-seta" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                  </button>
+                )}
+                {aberto && (
+                  <div id={`nav-${g.id}`} className="nav-itens">
+                    {g.itens.map((i) => <Item key={i.to} to={i.to} end={i.end} icone={i.icone} rotulo={i.rotulo} recolhido={r} />)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
         <div className="lateral-rodape">
           <div className="rotulo">
