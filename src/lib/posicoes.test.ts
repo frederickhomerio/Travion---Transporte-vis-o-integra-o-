@@ -138,3 +138,59 @@ describe('relatório por filial', () => {
     expect(r[0]).toMatchObject({ total: 1, atualizados: 0, pendentes: 1, nuncaConfirmadas: 1, cobertura: 0, ultima: null });
   });
 });
+
+describe('verde dos centros de custo (só ao salvar)', async () => {
+  const { atualizadaNaHora } = await import('../components/AtualizacaoCentros');
+  const agora = Date.parse('2026-11-05T13:00:00Z');
+  it('nunca confirmada não fica verde, mesmo aberta agora', () => {
+    expect(atualizadaNaHora({ confirmado_em: null }, agora)).toBe(false);
+  });
+  it('salva há 30 min fica verde; há 3 h não', () => {
+    expect(atualizadaNaHora({ confirmado_em: '2026-11-05T12:30:00Z' }, agora)).toBe(true);
+    expect(atualizadaNaHora({ confirmado_em: '2026-11-05T10:00:00Z' }, agora)).toBe(false);
+  });
+});
+
+describe('Posição do Cliente: só fretes ativos', async () => {
+  const { ativoParaCliente } = await import('./posicoes');
+  const l = (e: Partial<Embarque>) => ({ embarque: { situacao: 'ativo', status_liberacao: 'liberado', encerrado_em: null, ...e } } as unknown as LinhaFrete);
+  it('liberado aparece; suspenso, encerrado e arquivado nunca', () => {
+    expect(ativoParaCliente(l({}))).toBe(true);
+    expect(ativoParaCliente(l({ status_liberacao: 'suspenso' }))).toBe(false);
+    expect(ativoParaCliente(l({ situacao: 'arquivado', encerrado_em: '2026-11-04T10:00:00Z' }))).toBe(false);
+    expect(ativoParaCliente(l({ situacao: 'arquivado' }))).toBe(false);
+  });
+});
+
+describe('Painel: suspensão vale a partir do dia', async () => {
+  const { contaNaMeta } = await import('./posicoes');
+  const l = (e: Partial<Embarque>) => ({ embarque: { situacao: 'ativo', status_liberacao: 'liberado', suspenso_em: null, encerrado_em: null, ...e } } as unknown as LinhaFrete);
+  it('suspenso em 09/11 conta até 08/11 e sai a partir de 09/11', () => {
+    const s = l({ status_liberacao: 'suspenso', suspenso_em: '2026-11-09T13:00:00Z' });
+    expect(contaNaMeta(s, '2026-11-08')).toBe(true);
+    expect(contaNaMeta(s, '2026-11-09')).toBe(false);
+    expect(contaNaMeta(s, '2026-11-10')).toBe(false);
+  });
+  it('encerrado mantém o histórico antes do encerramento; liberado sempre conta', () => {
+    const e = l({ situacao: 'arquivado', status_liberacao: 'suspenso', suspenso_em: '2026-11-02T12:00:00Z', encerrado_em: '2026-11-09T12:00:00Z' });
+    expect(contaNaMeta(e, '2026-11-01')).toBe(true);
+    expect(contaNaMeta(e, '2026-11-03')).toBe(false);
+    expect(contaNaMeta(l({}), '2026-11-09')).toBe(true);
+  });
+});
+
+describe('estado no fim do dia (histórico)', async () => {
+  const { estadoNoFimDoDia } = await import('./posicoes');
+  const h = [
+    { estado: 'liberado', desde: '2026-10-28T12:00:00Z' },
+    { estado: 'suspenso', desde: '2026-11-01T13:00:00Z' },
+    { estado: 'liberado', desde: '2026-11-03T13:00:00Z' },
+  ];
+  it('suspenso de 01/11 a 02/11, liberado de novo em 03/11', () => {
+    expect(estadoNoFimDoDia(h, '2026-10-31')).toBe('liberado');
+    expect(estadoNoFimDoDia(h, '2026-11-01')).toBe('suspenso');
+    expect(estadoNoFimDoDia(h, '2026-11-02')).toBe('suspenso');
+    expect(estadoNoFimDoDia(h, '2026-11-03')).toBe('liberado');
+    expect(estadoNoFimDoDia(h, '2026-10-27')).toBeNull();
+  });
+});

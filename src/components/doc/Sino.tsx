@@ -55,6 +55,7 @@ export function Sino() {
             <strong>Notificações</strong>
             {naoLidas > 0 && <button className="btn sutil peq" onClick={async () => { await api.doc.marcarLidas(null).catch(() => undefined); void recarregarNotificacoes(); }}>Marcar todas como lidas</button>}
           </div>
+          {alertasInd.length > 0 && estado.ativo && <div className="sino-secao">Industrializado</div>}
           {alertasInd.length > 0 && (
             <ul>
               {alertasInd.map((v) => (
@@ -70,7 +71,7 @@ export function Sino() {
             </ul>
           )}
           {!estado.ativo ? (!alertasInd.length && <p className="suave sino-vazio">Nenhuma notificação.</p>) : !estado.notificacoes.length ? (!alertasInd.length && <p className="suave sino-vazio">Nenhuma notificação.</p>) : (
-            <ul>
+            <>{alertasInd.length > 0 && <div className="sino-secao">Demais operações</div>}<ul>
               {estado.notificacoes.slice(0, 30).map((n) => (
                 <li key={n.id}>
                   <button className={`sino-item${n.lida_em ? '' : ' nao-lida'}`} onClick={() => void abrir(n)}>
@@ -78,7 +79,7 @@ export function Sino() {
                   </button>
                 </li>
               ))}
-            </ul>
+            </ul></>
           )}
         </div>
       )}

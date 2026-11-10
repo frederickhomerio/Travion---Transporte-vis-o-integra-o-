@@ -149,6 +149,15 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
       return ok(await sb.from('historico_alteracoes').select('*').eq('embarque_id', embarqueId)
         .order('alterado_em', { ascending: false }).limit(300)) as never;
     },
+    async carregarEstados() {
+      const todos: unknown[] = [];
+      for (let de = 0; ; de += 1000) {
+        const r = ok(await sb.from('embarques_estados').select('embarque_id, estado, desde').order('id').range(de, de + 999)) as unknown[];
+        todos.push(...r);
+        if (r.length < 1000) break;
+      }
+      return todos as never;
+    },
     async carregarMeta(demo, data) {
       return ok(await sb.from('metas_diarias').select('*').eq('is_demo', demo).eq('data_operacional', data).maybeSingle()) as never;
     },
@@ -243,6 +252,11 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
       return saida;
     },
 
+    async colaboradoresInd() {
+      // RPC do módulo Industrializado (SQL do módulo); sem ela, a lista vem vazia e o campo aceita texto.
+      const r = await sb.rpc('ind_colaboradores');
+      return r.error ? [] : ((r.data ?? []) as Array<{ nome: string }>).map((x) => x.nome);
+    },
     async listarUsuarios() {
       const [perfis, filiais, perms, centros, acessos] = await Promise.all([
         todos((a, b) => sb.from('perfis').select('id,nome,email,telefone,papel,status,comercial_id,criado_em').order('nome').range(a, b)),

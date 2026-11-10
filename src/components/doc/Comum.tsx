@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../../data/store';
 import type { ArquivoDoc } from '../../data/api';
-import { ACEITA_CADASTRO, CATEGORIA, LIMITE_ARQUIVO, LIMITE_CADASTRO, MOTIVO_DEVOLUCAO, REF_CADASTRO, STATUS_DOC, TIPOS_ARQUIVO, TIPO_DOC, fmtTamanho, tipoCadastro } from '../../lib/documentacao';
+import { ACEITA_CADASTRO, CATEGORIA, devolucaoAberta, LIMITE_ARQUIVO, LIMITE_CADASTRO, MOTIVO_DEVOLUCAO, REF_CADASTRO, STATUS_DOC, TIPOS_ARQUIVO, TIPO_DOC, fmtTamanho, tipoCadastro } from '../../lib/documentacao';
 import { fmtDataHora } from '../../lib/formato';
 import { REF_ESTADIA } from '../../lib/estadia';
 import type { AnexoDoc, CategoriaAnexo, MensagemDoc, SolicitacaoDoc, StatusDoc } from '../../types';
@@ -27,6 +27,11 @@ export function TipoNumero({ s }: { s: SolicitacaoDoc }) {
     <span className="tn">
       <span className="tn-tipo">{TIPO_DOC[s.tipo]}</span>
       <span className="tn-num">{s.tipo === 'estadia' && s.est_codigo ? s.est_codigo : `Solicitação nº ${s.numero}`}</span>
+      {(s.devolucoes ?? 0) > 0 && (
+        <span className={`badge ${devolucaoAberta(s) ? 'suspenso' : 'aviso'} tn-dev`} title={`Devolvida pelo embarcador ${s.devolucoes} vez(es). Última: ${s.devolvida_motivo ?? '—'}`}>
+          {devolucaoAberta(s) ? 'Devolvida' : 'Corrigida'}{(s.devolucoes ?? 0) > 1 ? ` ${s.devolucoes}×` : ''}
+        </span>
+      )}
     </span>
   );
 }
@@ -122,9 +127,9 @@ export function Historico({ mensagens, anexos }: { mensagens: MensagemDoc[]; ane
       {mensagens.map((m) => {
         const arqs = anexos.filter((a) => a.mensagem_id === m.id);
         return (
-          <li key={m.id} className={`hd-item hd-${m.tipo}`}>
+          <li key={m.id} className={`hd-item hd-${m.referencia === 'devolucao' ? 'devolucao' : m.tipo}`}>
             <div className="hd-cab">
-              <strong>{m.tipo === 'pendencia' ? 'Pendência' : m.tipo === 'resposta' ? 'Resposta' : 'Evento'}</strong>
+              <strong>{m.tipo === 'pendencia' ? 'Pendência' : m.tipo === 'resposta' ? 'Resposta' : m.referencia === 'devolucao' ? 'Documentação devolvida' : 'Evento'}</strong>
               <span className="suave pequeno">{m.autor_nome} · {fmtDataHora(m.criado_em)}</span>
             </div>
             <p>{m.texto}</p>

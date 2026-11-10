@@ -9,7 +9,7 @@ import type { Permissao } from '../types';
 import { avisoConferencia, codigoOcorrencia, ETAPAS_TRANSITO, valoresConfirmados, type ValoresEmissao, etapaAnterior, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, proximaEtapa } from './regras';
 import {
   ROTULO_CHECAGEM, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_PARADA, VALORES_ZERO,
-  type CargaOcorrencia, type ChecagemInd, type ClienteInd, type OcorrenciaInd, type ParadaInd, type SituacaoParada, type TipoOcorrencia, type ValoresInd, type ViagemInd,
+  type CargaOcorrencia, type ChecagemInd, type ClienteInd, type OcorrenciaInd, type ParadaInd, type SituacaoParada, type Carroceria, type TipoCarga, type TipoOcorrencia, type ValoresInd, type ViagemInd,
 } from './tipos';
 
 export interface EstadoInd {
@@ -40,12 +40,12 @@ function semear(): EstadoInd {
     chegada_em: sit !== 'pendente' ? emMin(-180) : null, inicio_em: sit === 'em_operacao' || sit === 'concluida' ? emMin(-150) : null,
     fim_em: sit === 'concluida' ? emMin(-90) : null, nfs: null,
   });
-  const val = (fe: number, fm: number, extra: Partial<ValoresInd> = {}): ValoresInd => ({ ...VALORES_ZERO, frete_empresa: fe, frete_motorista: fm, ...extra });
+  const val = (fe: number, fm: number, extra: Partial<ValoresInd> = {}): ValoresInd => ({ ...VALORES_ZERO, frete_empresa: fe, frete_motorista: fm, pedagio_motorista: extra.pedagio ?? 0, descarga: fm > 5000 ? 250 : 0, ...extra });
   let n = 0;
   const v = (cliente: number, etapa: ViagemInd['etapa'], p: Partial<ViagemInd>): ViagemInd => ({
     id: uid(), codigo: ++n, cliente_id: clientes[cliente].id, tipo_carga: 'paletizada', pedido: `PED-${5100 + n}`, po: null, etapa,
     coleta_prevista: ['entregue', 'encerrada', 'transito', 'entregas'].includes(etapa) ? somarDias(hoje, -2) : hoje,
-    frota: 'terceiro', tipo_veiculo: 'Carreta', placa_cavalo: null, placa_carreta: null, motorista: null, motorista_cpf: null, motorista_telefone: null,
+    frota: 'terceiro', tipo_veiculo: 'Carreta', carroceria: (['sider', 'bau', 'graneleiro'] as const)[n % 3], peso_t: [28, 32, 14, 24.5, 30][n % 5], placa_cavalo: null, placa_carreta: null, motorista: null, motorista_cpf: null, motorista_telefone: null,
     paradas: [], valores: val(0, 0), combinado: null, emissao_assumida_por: null, emissao_assumida_em: null, cte: null, mdfe: null, nfs: null,
     entregue_em: null, canhoto_digital_em: null, canhoto_fisico_em: null, comprovante_ok_em: null, reversa_de: null, observacao: null,
     criado_em: emDias(-3), criado_por: '[DEMO] Equipe de embarque',
@@ -55,15 +55,15 @@ function semear(): EstadoInd {
   const mot = (i: number) => ({
     motorista: ['João Batista Lima', 'Carlos Henrique Souza', 'Marcos Vinícius Rocha', 'Edson Pereira', 'Rogério Alves', 'Antônio Carlos Dias', 'Wellington Santos', 'Luiz Fernando Melo'][i],
     motorista_cpf: `${100 + i}.${200 + i}.${300 + i}-${10 + i}`, motorista_telefone: `(62) 9 9${100 + i}-${4000 + i}`,
-    contratado_por: ['[DEMO] Vanessa Duarte', '[DEMO] Equipe de embarque'][i % 2],
+    contratado_por: ['Vanessa Duarte', 'Paulo Henrique Reis'][i % 2],
     placa_cavalo: `RTA${i}B${10 + i}`, placa_carreta: `QWE${i}C${20 + i}`,
   });
   const viagens: ViagemInd[] = [
-    v(1, 'lancada', { tipo_carga: 'fracionada', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null), par(2, 'entrega', 'Loja Centro', 'Anápolis', 'GO', emDias(1, 2)), par(3, 'entrega', 'Loja Norte', 'Brasília', 'DF', emDias(1, 6))], valores: val(6800, 5600, { pedagio: 180 }) }),
+    v(1, 'lancada', { tipo_carga: 'batida', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null), par(2, 'entrega', 'Loja Centro', 'Anápolis', 'GO', emDias(1, 2)), par(3, 'entrega', 'Loja Norte', 'Brasília', 'DF', emDias(1, 6))], valores: val(6800, 5600, { pedagio: 180 }) }),
     v(0, 'contratado', { ...mot(0), paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', null), par(2, 'entrega', 'CD Uberlândia', 'Uberlândia', 'MG', emDias(2))], valores: val(9200, 7900, { pedagio: 320 }),
       checagens: { cadastro: { em: emMin(-90), por: '[DEMO] Equipe de embarque' } },
       combinado: { o_que: 'Chegada na fábrica para agendar', para: emMin(45), marcou_em: null, registrado_por: '[DEMO] Equipe de embarque' } }),
-    v(3, 'coleta_agendada', { ...mot(1), tipo_carga: 'carga_geral', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', emMin(30), 'pendente', 'AG-88123'), par(2, 'entrega', 'Atacado Sul', 'Goiânia', 'GO', emDias(1))], valores: val(4200, 3900),
+    v(3, 'coleta_agendada', { ...mot(1), tipo_carga: 'granel', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', emMin(30), 'pendente', 'AG-88123'), par(2, 'entrega', 'Atacado Sul', 'Goiânia', 'GO', emDias(1))], valores: val(4200, 3900),
       combinado: { o_que: 'Chegada na coleta', para: emMin(-20), marcou_em: null, registrado_por: '[DEMO] Equipe de embarque' } }),
     v(2, 'carregando', { ...mot(2), paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null, 'em_operacao'), par(2, 'entrega', 'Distribuidora Leste', 'Goiânia', 'GO', null), par(3, 'entrega', 'Mercado Bom Preço', 'Trindade', 'GO', null)], valores: val(5100, 4300),
       checagens: { cadastro: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, monitoramento: { em: emMin(-90), por: '[DEMO] Equipe de embarque' } },
@@ -74,14 +74,14 @@ function semear(): EstadoInd {
       combinado: { o_que: 'Saída para viagem', para: emMin(-40), marcou_em: emMin(-55), registrado_por: '[DEMO] Equipe de embarque' } }),
     v(1, 'transito', { ...mot(5), cte: '35188', nfs: '77410', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Cuiabá', 'Cuiabá', 'MT', emMin(300), 'pendente', 'AUR-2231')], valores: val(12800, 10900, { pedagio: 610 }),
       combinado: { o_que: 'Chegada no cliente', para: emMin(240), marcou_em: null, registrado_por: '[DEMO] Equipe de pós-embarque', fase: 'transito' } }),
-    v(3, 'entregas', { ...mot(6), tipo_carga: 'fracionada', cte: '35170', nfs: '55120, 55121, 55122', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Loja 1', 'Itumbiara', 'GO', emMin(-300), 'concluida'), par(3, 'entrega', 'Loja 2', 'Uberlândia', 'MG', emMin(-30), 'em_operacao', 'PL-7781'), par(4, 'entrega', 'Loja 3', 'Uberaba', 'MG', emDias(1))], valores: val(8600, 7200, { descarga: 250 }) }),
+    v(3, 'entregas', { ...mot(6), tipo_carga: 'batida', cte: '35170', nfs: '55120, 55121, 55122', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Loja 1', 'Itumbiara', 'GO', emMin(-300), 'concluida'), par(3, 'entrega', 'Loja 2', 'Uberlândia', 'MG', emMin(-30), 'em_operacao', 'PL-7781'), par(4, 'entrega', 'Loja 3', 'Uberaba', 'MG', emDias(1))], valores: val(8600, 7200, { descarga: 250 }) }),
     v(0, 'entregue', { ...mot(7), po: '4500231987', cte: '35102', nfs: '99001', entregue_em: emDias(-33), canhoto_digital_em: emDias(-32), paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Sorriso', 'Sorriso', 'MT', emDias(-33), 'concluida', 'CG-4410')], valores: val(15200, 13300, { pedagio: 720, descarga: 400 }) }),
     v(2, 'entregue', { ...mot(1), cte: '35140', nfs: '30221', entregue_em: emDias(-6), canhoto_digital_em: emDias(-6), canhoto_fisico_em: emDias(-1), paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null, 'concluida'), par(2, 'entrega', 'Distribuidora Oeste', 'Jataí', 'GO', null, 'concluida')], valores: val(4800, 4400) }),
     v(4, 'encerrada', { ...mot(2), cte: '35090', nfs: '20110', entregue_em: emDias(-20), canhoto_digital_em: emDias(-20), canhoto_fisico_em: emDias(-12), comprovante_ok_em: emDias(-12), paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Cliente final', 'Catalão', 'GO', null, 'concluida')], valores: val(3600, 3050, { pedagio: 90 }) }),
   ];
   // Mais cargas para os quadros do Painel (disponíveis, contratados em cada cor, trânsito e marcados).
   viagens.push(
-    v(3, 'lancada', { tipo_carga: 'fracionada', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', null), par(2, 'entrega', 'Atacado Norte', 'Palmas', 'TO', emDias(2))], valores: val(9800, 8300) }),
+    v(3, 'lancada', { tipo_carga: 'batida', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', null), par(2, 'entrega', 'Atacado Norte', 'Palmas', 'TO', emDias(2))], valores: val(9800, 8300) }),
     v(4, 'lancada', { paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null), par(2, 'entrega', 'Cliente final', 'Goianésia', 'GO', null)], valores: val(2900, 2450) }),
     v(1, 'contratado', { ...mot(3), placa_cavalo: 'SDF4G55', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null), par(2, 'entrega', 'Loja Sul', 'Caldas Novas', 'GO', emDias(1))], valores: val(3800, 3200),
       combinado: { o_que: 'Chegada no CD para carregar', para: emMin(200), marcou_em: null, registrado_por: '[DEMO] Equipe de embarque' } }),
@@ -93,11 +93,11 @@ function semear(): EstadoInd {
     v(4, 'entregas', { ...mot(5), placa_cavalo: 'WSX8E99', cte: '35199', nfs: '20155', paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Cliente final', 'Anápolis', 'GO', emMin(-60), 'chegou')], valores: val(2600, 2200) }),
   );
   // Demonstração: um exemplo de cada situação que o supervisor precisa conferir.
-  const ok3 = { cadastro: { em: emMin(-120), por: '[DEMO] Vanessa Duarte' }, monitoramento: { em: emMin(-110), por: '[DEMO] Vanessa Duarte' }, oc_vinculo: { em: emMin(-100), por: '[DEMO] Vanessa Duarte' } };
+  const ok3 = { cadastro: { em: emMin(-120), por: 'Vanessa Duarte' }, monitoramento: { em: emMin(-110), por: 'Vanessa Duarte' }, oc_vinculo: { em: emMin(-100), por: 'Vanessa Duarte' } };
   const reg = (acao: string, em: string, detalhe: string | null = null) => ({ em, usuario: '[DEMO] Equipe de embarque', acao, detalhe, motivo: null });
   viagens.push(
     // 18 Disponível: Cargill exige PO e agendamento, sem veículo ainda.
-    v(0, 'lancada', { tipo_carga: 'carga_geral', tipo_veiculo: 'Bitrem', paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', emDias(1, 1)), par(2, 'entrega', 'Terminal Itaqui', 'São Luís', 'MA', emDias(4))], valores: val(21500, 18200, { pedagio: 1150 }), observacao: 'Exemplo: cliente exige PO (Cargill)' }),
+    v(0, 'lancada', { tipo_carga: 'granel', tipo_veiculo: 'Bitrem', paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', emDias(1, 1)), par(2, 'entrega', 'Terminal Itaqui', 'São Luís', 'MA', emDias(4))], valores: val(21500, 18200, { pedagio: 1150 }), observacao: 'Exemplo: cliente exige PO (Cargill)' }),
     // 19 Contratado SEM combinado e sem conferências (tudo vermelho).
     v(2, 'contratado', { ...mot(7), placa_cavalo: 'OPA1Z23', tipo_veiculo: 'Truck', paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null), par(2, 'entrega', 'Mercado Bom Preço', 'Trindade', 'GO', null)], valores: val(1900, 1550) }),
     // 20 Marcou o combinado SEM as 3 conferências: gera alerta no sino e faixa no Painel.
@@ -121,7 +121,7 @@ function semear(): EstadoInd {
     v(3, 'transito', { ...mot(0), placa_cavalo: 'ATR8S03', checagens: ok3, cte: '35232', nfs: '55190', paradas: [par(1, 'coleta', 'Indústria Planalto', 'Aparecida de Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Atacado Leste', 'Barreiras', 'BA', emMin(-90), 'pendente', 'PL-7799')], valores: val(10400, 8900, { pedagio: 380 }),
       combinado: { o_que: 'Chegada no cliente', para: emMin(-60), marcou_em: null, registrado_por: '[DEMO] Equipe de pós-embarque', fase: 'transito' } }),
     // 27 Marcado na descarga, com mais uma entrega depois (fracionada).
-    v(1, 'entregas', { ...mot(5), placa_cavalo: 'MLT9R04', tipo_carga: 'fracionada', checagens: ok3, cte: '35233', nfs: '77501, 77502', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Loja Norte', 'Brasília', 'DF', emMin(-50), 'em_operacao', 'AUR-2310'), par(3, 'entrega', 'Loja Sul', 'Taguatinga', 'DF', emMin(240), 'pendente', 'AUR-2311')], valores: val(5200, 4300, { pedagio: 150, descarga: 180 }) }),
+    v(1, 'entregas', { ...mot(5), placa_cavalo: 'MLT9R04', tipo_carga: 'batida', checagens: ok3, cte: '35233', nfs: '77501, 77502', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Loja Norte', 'Brasília', 'DF', emMin(-50), 'em_operacao', 'AUR-2310'), par(3, 'entrega', 'Loja Sul', 'Taguatinga', 'DF', emMin(240), 'pendente', 'AUR-2311')], valores: val(5200, 4300, { pedagio: 150, descarga: 180 }) }),
     // 28 Entregue ontem, sem canhoto ainda.
     v(2, 'entregue', { ...mot(6), placa_cavalo: 'ENT1A05', cte: '35180', nfs: '30250', entregue_em: emDias(-1), paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', null, 'concluida'), par(2, 'entrega', 'Distribuidora Oeste', 'Jataí', 'GO', null, 'concluida')], valores: val(4700, 4050) }),
     // 29 Entregue com canhoto digital, aguardando o físico (dia 25 de 30: amarelo).
@@ -156,7 +156,15 @@ function semear(): EstadoInd {
 // Armazenamento
 // ---------------------------------------------------------------------------
 let estado: EstadoInd = (() => {
-  try { const s = localStorage.getItem(CHAVE); if (s) return JSON.parse(s) as EstadoInd; } catch { /* sem armazenamento */ }
+  try {
+    const s = localStorage.getItem(CHAVE);
+    if (s) {
+      const e = JSON.parse(s) as EstadoInd;
+      // Tipos de carga antigos (10/11): fracionada vira batida, carga geral vira granel.
+      const novo: Record<string, TipoCarga> = { fracionada: 'batida', carga_geral: 'granel' };
+      return { ...e, viagens: e.viagens.map((v) => (novo[v.tipo_carga] ? { ...v, tipo_carga: novo[v.tipo_carga] } : v)) };
+    }
+  } catch { /* sem armazenamento */ }
   return semear();
 })();
 const ouvintes = new Set<() => void>();
@@ -175,12 +183,14 @@ export function restaurarPrevia() { gravar(semear()); }
 // ---------------------------------------------------------------------------
 export interface NovaViagem {
   cliente_id: string; tipo_carga: ViagemInd['tipo_carga']; pedido: string; po: string; frota: ViagemInd['frota']; coleta_prevista: string;
-  tipo_veiculo: string; placa_cavalo: string; placa_carreta: string; motorista: string; motorista_cpf: string; motorista_telefone: string; contratado_por: string;
+  tipo_veiculo: string; carroceria: Carroceria | ''; peso_t: string; placa_cavalo: string; placa_carreta: string; motorista: string; motorista_cpf: string; motorista_telefone: string; contratado_por: string;
   paradas: Array<Omit<ParadaInd, 'id' | 'situacao' | 'chegada_em' | 'inicio_em' | 'fim_em'> & { id?: string }>;
   valores: ValoresInd; observacao: string;
 }
 
 const t = (s: string) => (s.trim() ? s.trim() : null);
+/** "28,5" → 28.5; vazio → null. */
+const numPeso = (s: string) => { const n = Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s); return s.trim() && Number.isFinite(n) && n > 0 ? n : null; };
 function falha(msg: string): never { throw new Error(msg); }
 
 export function useInd() {
@@ -225,6 +235,7 @@ export function useInd() {
         if (p.exige_agendamento && !p.agendado_para) falha(`A parada "${p.local}" exige agendamento: informe o horário (o protocolo é opcional).`);
       }
       if (d.placa_cavalo.trim() && !d.contratado_por.trim()) falha('Informe quem contratou o veículo.');
+      if (d.peso_t.trim() && numPeso(d.peso_t) === null) falha('Peso inválido: informe em toneladas (ex.: 28 ou 28,5).');
     };
 
     return {
@@ -247,7 +258,7 @@ export function useInd() {
         const v: ViagemInd = {
           id: uid(), codigo: estado.seq + 1, cliente_id: d.cliente_id, tipo_carga: d.tipo_carga, pedido: t(d.pedido), po: t(d.po), etapa: 'lancada', coleta_prevista: d.coleta_prevista || null,
           frota: d.frota, tipo_veiculo: d.tipo_veiculo, placa_cavalo: t(d.placa_cavalo)?.toUpperCase() ?? null, placa_carreta: t(d.placa_carreta)?.toUpperCase() ?? null,
-          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone), contratado_por: t(d.contratado_por),
+          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone), contratado_por: t(d.contratado_por), carroceria: d.carroceria || null, peso_t: numPeso(d.peso_t),
           paradas: paradasNovas(d.paradas), valores: pode('ind.financeiro') ? d.valores : { ...VALORES_ZERO }, combinado: null,
           emissao_assumida_por: null, emissao_assumida_em: null, cte: null, mdfe: null, nfs: null, entregue_em: null,
           canhoto_digital_em: null, canhoto_fisico_em: null, comprovante_ok_em: null, reversa_de: null, observacao: t(d.observacao),
@@ -268,7 +279,7 @@ export function useInd() {
         mudar(id, 'Viagem editada', () => ({
           cliente_id: d.cliente_id, tipo_carga: d.tipo_carga, pedido: t(d.pedido), po: t(d.po), coleta_prevista: d.coleta_prevista || null, frota: d.frota, tipo_veiculo: d.tipo_veiculo,
           placa_cavalo: t(d.placa_cavalo)?.toUpperCase() ?? null, placa_carreta: t(d.placa_carreta)?.toUpperCase() ?? null,
-          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone), contratado_por: t(d.contratado_por),
+          motorista: t(d.motorista), motorista_cpf: t(d.motorista_cpf), motorista_telefone: t(d.motorista_telefone), contratado_por: t(d.contratado_por), carroceria: d.carroceria || null, peso_t: numPeso(d.peso_t),
           paradas: paradasNovas(d.paradas, v.paradas), valores, observacao: t(d.observacao),
         }), [mudouValor.length ? `Valores alterados: ${mudouValor.join(', ')}` : null,
           (t(d.contratado_por) ?? null) !== (v.contratado_por ?? null) ? `Contratado por: ${v.contratado_por ?? '—'} → ${t(d.contratado_por) ?? '—'}` : null].filter(Boolean).join('. ') || null, t(motivo));

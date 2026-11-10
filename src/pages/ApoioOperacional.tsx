@@ -10,7 +10,7 @@ import { AcessoNegado, Alerta, Carregando, EstadoVazio, useAviso } from '../comp
 import { mensagemErro } from '../data/api';
 import { useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
-import { ABERTOS, type Atalho, FILTROS_FILA, type FiltrosFila, TIPO_FILA, type TipoFila, filtrarFila, filtrarSemAtalho, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
+import { ABERTOS, type Atalho, devolucaoAberta, FILTROS_FILA, type FiltrosFila, TIPO_FILA, type TipoFila, filtrarFila, filtrarSemAtalho, fmtPlaca, noAtalho, rotaDoc, tempoDoc } from '../lib/documentacao';
 import { fmtHora } from '../lib/formato';
 import { documentosEstadia, periodoEstadia } from '../lib/estadia';
 import type { SolicitacaoDoc } from '../types';
@@ -158,6 +158,7 @@ export function ApoioOperacional() {
                       <td data-rot="Status"><StatusDocPill status={s.status} /></td>
                       <td data-rot="Responsável">{s.responsavel_nome ?? <span className="suave">—</span>}</td>
                       <td data-rot="Pendência">{s.status === 'aguardando_informacao' ? <span className="ao-pend">Resposta de {s.solicitante_nome}</span>
+                        : s.status === 'correcao_recebida' && devolucaoAberta(s) ? <span className="ao-pend dev">{meu ? 'Documentação devolvida: corrigir' : `Documentação devolvida: aguardando ${s.responsavel_nome ?? 'o responsável'}`}</span>
                         : s.status === 'correcao_recebida' ? <span className="ao-pend">{meu ? 'Correção recebida: retomar' : `Correção recebida: aguardando ${s.responsavel_nome ?? 'o responsável'}`}</span>
                         : s.status === 'aguardando_cliente' || s.status === 'pago_pendencia' ? <span className="ao-pend cliente">Retorno do cliente</span> : <span className="suave">—</span>}</td>
                       <td className="ao-acao">

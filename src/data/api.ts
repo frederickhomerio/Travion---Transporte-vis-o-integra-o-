@@ -6,8 +6,8 @@ import type { Cadastros } from '../lib/cadastros';
 import type { DadosPainel } from '../lib/painelOperacional';
 import type {
   AnexoDoc, CategoriaAnexo, ConferenciaEstadia, ConferenciaParticipantes, DadosCadastroDoc, DadosEstadia, DuplicadaEstadia, PagamentoEstadia, ParametrosConferencia,
-  ResultadoEstadia, RetornoEstadia, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
-  Configuracoes, DadosCnpj, Embarque, Financeiro, Historico, ItemVitrine, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
+  ResultadoEstadia, RetornoEstadia, DadosSolicitacaoDoc, LoteErp, MotivoDevolucao, MotivoDevolucaoDoc, StatusDoc, MensagemDoc, NotificacaoApp, SolicitacaoDoc,
+  Configuracoes, DadosCnpj, Embarque, EstadoEmbarque, Financeiro, Historico, ItemVitrine, LinkCliente, MetaDiaria, Papel, Perfil, Permissao,
   Posicao, PosicaoPublica, ResultadoGravacao, Sessao, StatusUsuario,
 } from '../types';
 
@@ -108,6 +108,8 @@ export interface ApiDoc {
   filaApoio(): Promise<Pick<DadosPainel, 'agora' | 'solicitacoes' | 'eventos'>>;
   responder(id: string, texto: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   anexarEmitidos(id: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
+  /** Embarcador devolve a documentação liberada que chegou errada: volta para a fila de quem liberou. */
+  devolverDocumentacao(id: string, motivo: MotivoDevolucaoDoc, texto: string, anexos: ArquivoDoc[]): Promise<ResultadoDoc>;
   /** Pede de novo a conferência automática NF × CT-e (id da conferência). */
   reconferirParticipantes(id: string): Promise<void>;
   /** motivo: obrigatório quando a conferência NF × CT-e está em divergência (fica no registro permanente). */
@@ -155,6 +157,8 @@ export interface Api {
   carregarPosicoes(demo: boolean, inicio: string, fim: string): Promise<Posicao[]>;
   carregarFinanceiro(demo: boolean): Promise<Financeiro[]>;
   carregarHistorico(embarqueId: string): Promise<Historico[]>;
+  /** Histórico de estados (Liberado/Suspenso/Encerrado) dos embarques visíveis, para metas fiéis dia a dia. */
+  carregarEstados(): Promise<EstadoEmbarque[]>;
   carregarMeta(demo: boolean, data: string): Promise<MetaDiaria | null>;
   ultimaDataComPosicao(demo: boolean, antesDe: string): Promise<string | null>;
   dadosOrigem(embarqueId: string): Promise<Record<string, unknown> | null>;
@@ -199,6 +203,9 @@ export interface Api {
   // Importação
   importarPlanilha(payload: Record<string, unknown>): Promise<RelatorioImportacao>;
   embarquesPorChave(chaves: string[], demo: boolean): Promise<Array<Pick<Embarque, 'id' | 'codigo' | 'chave_importacao'>>>;
+
+  /** Nomes dos colaboradores ativos do Industrializado (Supervisor, Embarcador e Apoio Operacional do módulo). */
+  colaboradoresInd(): Promise<string[]>;
 
   // Administração
   listarUsuarios(): Promise<UsuarioAdmin[]>;

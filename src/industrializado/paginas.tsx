@@ -1,10 +1,12 @@
 // Telas do módulo Industrializado (exclusivo do centro de custo Industrializado, filial Goiânia).
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ModalDivulgacao } from '../components/AnuncioFrete';
+import { arquivoInd, dadosDivulgacao, desenharInd, desenharListaInd, textoInd, textoListaInd } from './divulgacao';
 import { useSearchParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, EstadoVazio, Modal, Segmentado, useAviso } from '../components/ui';
-import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
+import { fmtData, fmtDataHora, fmtPct, fmtReais } from '../lib/formato';
 import { normalizar } from '../lib/texto';
 import type { Permissao } from '../types';
 import {
@@ -16,7 +18,7 @@ import { AnotarCorrecao, RoteiroDemo } from './demo';
 
 import {
   alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, codigoViagem, combinadoTransito, linkWhatsApp, valoresConfirmados, type ValoresEmissao, META_MARGEM_PCT, faltaConferencia, marcadoSemConferencia, pedidoCarga, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar,
-  PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, retiradasDoDia, type NivelAlerta, type QuadrosPainel,
+  PRAZO_CANHOTO_DIAS, proximaEtapa, proximoAgendamento, quadrosPainel, type NivelAlerta, type QuadrosPainel,
 } from './regras';
 import {
   ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_TIPO_CARGA, ROTULO_CHECAGEM, type ChecagemInd,
@@ -46,7 +48,7 @@ const ativa = (v: ViagemInd) => v.etapa !== 'encerrada' && v.etapa !== 'cancelad
 // Painel (torre de controle)
 // ===========================================================================
 export function PainelInd() {
-  const { viagens, ocorrencias, clientePorId, metas, acoes, pode } = useInd();
+  const { viagens, ocorrencias, clientePorId, acoes, pode } = useInd();
   const exec = useExecutar();
   const avisar = useAviso();
   const avisarFim = (v: ViagemInd, r: string, oc: boolean) => avisar('ok', r === 'proxima'
@@ -66,6 +68,7 @@ export function PainelInd() {
     return f.length ? `Marcação registrada. Atenção: falta ${f.map((c) => ROTULO_CHECAGEM[c]).join(', ')}.` : 'Marcação registrada.';
   };
   const [modal, setModal] = useState<{ tipo: AcaoQuadro; v: ViagemInd } | null>(null);
+  const [listaDiv, setListaDiv] = useState(false);
   const q = quadrosPainel(viagens, ocorrencias);
   const cont = (vs: ViagemInd[], f: (v: ViagemInd) => NivelAlerta) => {
     const c: Partial<Record<NivelAlerta, number>> = {};
@@ -113,7 +116,10 @@ export function PainelInd() {
       {atual && (
         <section className="cartao ind-lista-quadro">
           <div className="cartao-cab"><div><h2>{atual.titulo} ({atual.vs.length})</h2><div className="suave pequeno">{atual.desc}</div></div>
-            <button className="btn sutil peq" onClick={() => setSel(null)}>Fechar</button></div>
+            <div className="ind-acoes">
+              {atual.k === 'disponiveis' && atual.vs.length > 0 && <button className="btn peq" onClick={() => setListaDiv(true)}>Lista de fretes</button>}
+              <button className="btn sutil peq" onClick={() => setSel(null)}>Fechar</button>
+            </div></div>
           {atual.vs.length === 0 ? <div className="cartao-corpo suave">Nenhuma carga neste quadro.</div> : (
             <div style={{ overflowX: 'auto' }}>
               {atual.k === 'contratados' || atual.k === 'transito' ? (
@@ -133,11 +139,12 @@ export function PainelInd() {
         </section>
       )}
 
-      <MetaDia viagens={viagens} metas={metas} podeEditar={pode('ind.meta')} definir={(d, n) => exec(() => acoes.definirMeta(d, n), 'Meta salva.')} />
 
       <p className="suave pequeno" style={{ marginTop: 16 }}>
         Prévia com dados fictícios. <button className="btn sutil peq" onClick={() => restaurarPrevia()}>Restaurar dados da prévia</button>
       </p>
+      {modal?.tipo === 'divulgar' && <DivulgacaoCarga v={modal.v} aoFechar={() => setModal(null)} />}
+      {listaDiv && <DivulgacaoLista vs={q.disponiveis} aoFechar={() => setListaDiv(false)} />}
       {modal?.tipo === 'combinado' && <ModalCombinado v={modal.v} aoFechar={() => setModal(null)} />}
       {modal?.tipo === 'ocorrencia' && <ModalOcorrencia v={modal.v} aoFechar={() => setModal(null)} />}
       {modal?.tipo === 'emissao' && <ModalEmissao v={modal.v} aoFechar={() => setModal(null)} />}
@@ -188,7 +195,22 @@ function mensagemMotorista(k: ChaveQuadro, v: ViagemInd, cliente?: string): stri
   return `Olá, ${nome}! Aqui é da Transpanorama (Industrializado), sobre o ${pedido}. Combinado: Já marcou o carregamento${local}${c ? `, combinado às ${fmtDataHora(c.para)}` : ''}. Pode confirmar?`;
 }
 
-type AcaoQuadro = 'combinado' | 'ocorrencia' | 'emissao' | 'finalizar' | 'finalizarOc' | 'tirarPainel';
+/** Divulgação de uma carga disponível (imagem + texto de WhatsApp), só com valores do motorista. */
+function DivulgacaoCarga({ v, aoFechar }: { v: ViagemInd; aoFechar: () => void }) {
+  const d = useMemo(() => dadosDivulgacao(v), [v]);
+  const desenhar = useCallback((c: HTMLCanvasElement) => desenharInd(c, d), [d]);
+  const falta = [!v.peso_t && 'peso', !v.carroceria && 'carroceria', !(v.valores.frete_motorista > 0) && 'frete do motorista'].filter(Boolean);
+  return <ModalDivulgacao titulo={`Divulgação · pedido ${pedidoCarga(v)}`} desenhar={desenhar} texto={textoInd(d)} arquivoNome={arquivoInd(d)} aoFechar={aoFechar}
+    aviso={falta.length ? `Falta informar ${falta.join(', ')} na carga (Editar).` : null} />;
+}
+
+function DivulgacaoLista({ vs, aoFechar }: { vs: ViagemInd[]; aoFechar: () => void }) {
+  const ds = useMemo(() => vs.map(dadosDivulgacao), [vs]);
+  const desenhar = useCallback((c: HTMLCanvasElement) => desenharListaInd(c, ds), [ds]);
+  return <ModalDivulgacao titulo={`Lista de fretes · ${ds.length} carga(s) disponível(is)`} desenhar={desenhar} texto={textoListaInd(ds)} arquivoNome="cargas-disponiveis-industrializado.jpg" tipo="image/jpeg" aoFechar={aoFechar} />;
+}
+
+type AcaoQuadro = 'combinado' | 'ocorrencia' | 'emissao' | 'finalizar' | 'finalizarOc' | 'tirarPainel' | 'divulgar';
 
 function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, checar, carregado = () => undefined, descarga = () => undefined, pode }: {
   k: ChaveQuadro; vs: ViagemInd[]; clientePorId: Record<string, ClienteInd>; ocorrencias: OcorrenciaInd[];
@@ -218,7 +240,8 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
             : <span className="ind-falta pequeno">sem telefone</span>}</td>;
         if (k === 'disponiveis') return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td><td><Rota v={v} /></td><td>{v.coleta_prevista ? fmtData(v.coleta_prevista) : '—'}</td><td className="pequeno">{fmtDataHora(v.criado_em)}</td>
-            <td>{pode('ind.lancar') && <button className="btn primario peq" onClick={() => abrir(v.id)}>Vincular placa</button>}</td></tr>
+            <td><div className="ind-acoes"><button className="btn peq" onClick={() => acao('divulgar', v)}>Divulgação</button>
+              {pode('ind.lancar') && <button className="btn primario peq" onClick={() => abrir(v.id)}>Vincular placa</button>}</div></td></tr>
         );
         if (k === 'contratados') { const a = alertaCombinado(v); return (
           <tr key={v.id}>{via}<td>{cli?.nome}</td>{mot}<td><Checagens v={v} podeMarcar={pode('ind.avancar')} checar={checar} /></td><td>{v.combinado?.o_que ?? '—'}<div className="suave pequeno">{ROTULO_ETAPA[v.etapa]}</div></td>
@@ -261,46 +284,6 @@ function TabelaQuadro({ k, vs, clientePorId, ocorrencias, abrir, acao, marcou, c
         );
       })}</tbody>
     </table>
-  );
-}
-
-function MetaDia({ viagens, metas, podeEditar, definir }: { viagens: ViagemInd[]; metas: Record<string, number>; podeEditar: boolean; definir: (d: string, n: number) => void }) {
-  const [data, setData] = useState(hojeSP());
-  const meta = metas[data] ?? null;
-  const [edit, setEdit] = useState<string | null>(null);
-  const r = retiradasDoDia(viagens, data);
-  const pct = meta ? (r.retiradas / meta) * 100 : null;
-  const cor = pct === null ? 'neutro' : pct <= 60 ? 'atraso' : pct <= 80 ? 'aviso' : 'ok';
-  const max = Math.max(meta ?? 0, r.previstas, r.retiradas, 1);
-  const barra = (rot: string, n: number, cls: string) => (
-    <div className="ind-barra"><span className="ind-barra-rot">{rot}</span><span className="ind-barra-trilho"><span className={`ind-barra-valor ${cls}`} style={{ width: `${(n / max) * 100}%` }} /></span><strong className="num">{n}</strong></div>
-  );
-  return (
-    <section className="cartao" style={{ marginTop: 16 }}>
-      <div className="cartao-cab">
-        <div><h2>Cargas a retirar no dia × meta</h2><div className="suave pequeno">Pela retirada prevista de cada viagem. Retirada = passou de Carregando.</div></div>
-        <input className="entrada" type="date" value={data} onChange={(e) => setData(e.target.value || hojeSP())} style={{ width: 'auto' }} aria-label="Data" />
-      </div>
-      <div className="cartao-corpo ind-meta">
-        <div className="ind-meta-num">
-          <div><span className="rot">Meta do dia</span>
-            {edit !== null ? (
-              <span style={{ display: 'flex', gap: 6 }}><input className="entrada num" type="number" min={0} value={edit} onChange={(e) => setEdit(e.target.value)} style={{ width: 90 }} autoFocus />
-                <button className="btn primario peq" onClick={() => { definir(data, Number(edit)); setEdit(null); }}>Salvar</button></span>
-            ) : <strong className="ind-kpi-val num">{meta ?? '—'}{podeEditar && <button className="btn sutil peq" onClick={() => setEdit(String(meta ?? ''))}>Alterar</button>}</strong>}
-          </div>
-          <div><span className="rot">Programadas</span><strong className="ind-kpi-val num">{r.previstas}</strong></div>
-          <div><span className="rot">Retiradas</span><strong className="ind-kpi-val num">{r.retiradas}</strong></div>
-          <div><span className="rot">Atingido</span><strong className={`ind-kpi-val num ind-txt-${cor}`}>{fmtPct(pct, 0)}</strong>
-            <span className="suave pequeno">{meta !== null ? (meta - r.retiradas > 0 ? `faltam ${meta - r.retiradas}` : 'meta batida') : 'sem meta'}</span></div>
-        </div>
-        <div className="ind-barras">
-          {barra('Meta', meta ?? 0, 'meta')}
-          {barra('Programadas', r.previstas, 'prog')}
-          {barra('Retiradas', r.retiradas, cor)}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -552,6 +535,7 @@ function ModalEmissao({ v, aoFechar }: { v: ViagemInd; aoFechar: () => void }) {
         Receita {fmtReais(m.receita)} · Despesa {fmtReais(m.despesa)} · Margem {fmtReais(m.margem)} ({fmtPct(m.pct)}, meta {META_MARGEM_PCT}%)
         <span className="suave"> · inclui descarga, diária e CT-e complementar já lançados</span>
       </p>
+      {m.abaixoAlerta && <Alerta tipo="aviso">Margem abaixo de 10%. É só um aviso: a emissão segue liberada.</Alerta>}
       {pend.length > 0 && <p className="ind-pend pequeno">{pend.join(' · ')}</p>}
     </Modal>
   );

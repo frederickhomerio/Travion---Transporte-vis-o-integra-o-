@@ -5,9 +5,9 @@ import { useApp } from '../../data/store';
 import { ROTULO_PAPEL } from '../../lib/formato';
 import { ABAS_APP, abasDaPermissao } from '../../lib/permissoesAbas';
 import { normalizar } from '../../lib/texto';
-import type { Papel, Permissao } from '../../types';
+import { permissaoCabeNoPapel, type Papel, type Permissao } from '../../types';
 
-const PAPEIS: Papel[] = ['gestor', 'supervisor', 'embarcador', 'apoio', 'comercial', 'consulta', 'ind_embarque', 'ind_pos_embarque'];
+const PAPEIS: Papel[] = ['gestor', 'supervisor', 'embarcador', 'apoio', 'comercial', 'consulta', 'ind_supervisor', 'ind_embarcador', 'ind_apoio'];
 const SO_ADMIN: Permissao[] = ['usuarios.gerenciar', 'permissoes.gerenciar'];
 type Escolha = 'padrao' | 'permitir' | 'negar';
 
@@ -181,7 +181,7 @@ function PainelUsuario({ u, grupos, padrao, admin, euId, pode, mudancas, setMuda
         {ehAdmin && <Alerta tipo="info">Administrador tem todas as permissões. Para limitar, mude a função dele em Usuários e convites.</Alerta>}
         {proprio && <Alerta tipo="aviso">Você não pode alterar as suas próprias permissões. Peça a um administrador.</Alerta>}
         {!travado && <small className="suave">“Padrão” segue a função ({ROTULO_PAPEL[u.papel]}). “Permitir” e “Negar” valem só para esta pessoa e vencem o padrão.</small>}
-        {grupos.map(([g, itens]) => (
+        {grupos.map(([g, todos]) => [g, todos.filter((c) => permissaoCabeNoPapel(u.papel, c.chave))] as const).filter(([, itens]) => itens.length).map(([g, itens]) => (
           <div key={g} className="pu-grupo">
             <h3>{g}</h3>
             {itens.map((c) => {
@@ -249,6 +249,7 @@ function PorFuncao({ m, setM, grupos }: { m: MatrizPermissoes; setM: (f: (x: Mat
         As regras são aplicadas também no servidor.
         {!admin && ' Somente administradores alteram esta matriz.'}
       </Alerta>
+      <Alerta tipo="info">As funções do Industrializado (Supervisor, Embarcador e Apoio Operacional) só recebem permissões do módulo; as funções das outras operações não recebem as do Industrializado. Gestor e Coordenador Comercial veem os dois.</Alerta>
       <Alerta tipo="aviso">Valores financeiros (frete, ticket, faturamento, margem) só aparecem para quem tem “Ver financeiro”. Por padrão, Gestor não tem.</Alerta>
       <div className="cartao rolagem-x">
         <table className="tabela">
@@ -261,6 +262,7 @@ function PorFuncao({ m, setM, grupos }: { m: MatrizPermissoes; setM: (f: (x: Mat
                   <td>{c.descricao}<div className="pequeno suave mono">{c.chave}</div></td>
                   {PAPEIS.map((p) => {
                     const k = `${p}:${c.chave}`;
+                    if (!permissaoCabeNoPapel(p, c.chave)) return <td key={p} className="suave" style={{ textAlign: 'center' }} title="Industrializado e demais operações não se misturam">—</td>;
                     return (
                       <td key={p} style={{ textAlign: 'center' }}>
                         <input type="checkbox" style={{ width: 22, height: 22 }} aria-label={`${ROTULO_PAPEL[p]}: ${c.descricao}`}

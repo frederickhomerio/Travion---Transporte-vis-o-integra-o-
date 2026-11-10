@@ -1,11 +1,11 @@
-// Módulo Industrializado: cargas paletizadas, fracionadas e carga geral, cobradas por viagem (lotação).
+// Módulo Industrializado: cargas paletizadas, batidas e a granel, cobradas por viagem (lotação).
 // Exclusivo do centro de custo Industrializado (filial Goiânia). Decisões de 06/11/2026.
 
 export type EtapaInd =
   | 'lancada' | 'contratado' | 'coleta_agendada' | 'carregando' | 'carregada' | 'documentada'
   | 'transito' | 'entregas' | 'entregue' | 'encerrada' | 'cancelada';
 
-export type TipoCarga = 'paletizada' | 'fracionada' | 'carga_geral';
+export type TipoCarga = 'paletizada' | 'batida' | 'granel';
 export type TipoParada = 'coleta' | 'entrega';
 export type SituacaoParada = 'pendente' | 'chegou' | 'em_operacao' | 'concluida' | 'recusada';
 export type TipoOcorrencia = 'diaria' | 'deslocamento' | 'retrabalho' | 'reentrega' | 'devolucao' | 'reagendamento';
@@ -70,6 +70,8 @@ export interface ViagemInd {
   etapa: EtapaInd;
   frota: 'frota' | 'terceiro';
   tipo_veiculo: string; placa_cavalo: string | null; placa_carreta: string | null;
+  /** Carroceria pedida para a carga e peso total em toneladas (vão na divulgação do frete). */
+  carroceria?: Carroceria | null; peso_t?: number | null;
   motorista: string | null; motorista_cpf: string | null; motorista_telefone: string | null;
   /** Colaborador que contratou o veículo (aparece em dourado em toda a ficha). */
   contratado_por?: string | null;
@@ -113,7 +115,9 @@ export const ROTULO_ETAPA: Record<EtapaInd, string> = {
   entregue: 'Entregue', encerrada: 'Encerrada', cancelada: 'Cancelada',
 };
 
-export const ROTULO_TIPO_CARGA: Record<TipoCarga, string> = { paletizada: 'Paletizada', fracionada: 'Fracionada', carga_geral: 'Carga geral' };
+export type Carroceria = 'bau' | 'sider' | 'graneleiro';
+export const ROTULO_CARROCERIA: Record<Carroceria, string> = { bau: 'Baú', sider: 'Sider', graneleiro: 'Graneleiro' };
+export const ROTULO_TIPO_CARGA: Record<TipoCarga, string> = { paletizada: 'Carga paletizada', batida: 'Carga batida', granel: 'Carga granel' };
 
 export const ROTULO_OCORRENCIA: Record<TipoOcorrencia, string> = {
   diaria: 'Diária', deslocamento: 'Deslocamento', retrabalho: 'Retrabalho', reentrega: 'Reentrega',

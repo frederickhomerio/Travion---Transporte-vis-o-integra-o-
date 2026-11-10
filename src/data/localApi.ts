@@ -9,7 +9,7 @@ import { hojeSP, somarDias } from '../lib/formato';
 import { normalizar } from '../lib/texto';
 import type { LinhaImportacao } from '../lib/planilha';
 import {
-  CONFIG_PADRAO, type CentroCusto, type Cidade, type Cliente, type Comercial, type Configuracoes, type Conflito, type Embarque, type Filial,
+  CONFIG_PADRAO, PAPEIS_IND, type CentroCusto, type Cidade, type Cliente, type Comercial, type Configuracoes, type Conflito, type Embarque, type Filial,
   type Financeiro, type Historico, type LinkCliente, type Local, type MetaDiaria, type Papel, type Perfil,
   type Permissao, type Posicao, type PosicaoPublica, type Produto, type Sessao,
 } from '../types';
@@ -59,6 +59,7 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['documentacao.ver', 'Documentação', 'Consultar a documentação dos embarques (solicitações, pendências e documentos emitidos)'],
   ['documentacao.solicitar', 'Documentação', 'Pedir geração de lote e emissão de documentos e responder pendências do apoio'],
   ['documentacao.cancelar', 'Documentação', 'Cancelar solicitações de documentação (com motivo)'],
+  ['documentacao.devolver', 'Documentação', 'Devolver ao apoio a documentação emitida (CT-e, MDF-e) que chegou errada, com motivo'],
   ['apoio.pagina', 'Documentação', 'Acessar a aba Apoio Operacional (fila de demandas)'],
   ['apoio.atender', 'Documentação', 'Assumir e atender demandas: registrar lote, pedir ajuste, anexar e liberar documentos'],
   ['apoio.reassumir', 'Documentação', 'Reassumir chamado com correção recebida que está com outra pessoa do apoio (ex.: almoço ou fim do expediente)'],
@@ -92,16 +93,16 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
-    'documentacao.ver', 'documentacao.solicitar', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver',
+    'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver',
     'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote',
     'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
-    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar',
+    'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver',
     'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote'],
   embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
-    'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar',
+    'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver',
     'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila'],
   // Apoio Operacional reúne o antigo papel Operação (contadores e observação) e a fila de documentação.
   apoio: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
@@ -111,13 +112,16 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
     'embarques.editar_lote', 'embarques.editar_cadastro', 'embarques.editar_capacidade', 'embarques.corrigir_lote_pc_tabela',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
-    'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar',
+    'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver',
     'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila',
     'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
   consulta: ['embarques.ver'],
   // Industrializado: só o módulo, sem Lista de Fretes nem outros centros de custo.
-  ind_embarque: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.financeiro', 'ind.clientes'],
-  ind_pos_embarque: ['ind.pagina', 'ind.avancar', 'ind.ocorrencias', 'ind.pos_entrega'],
+  // Industrializado (10/11): as mesmas funções do Travion, com regras só do módulo. Emissão liberada para toda a equipe.
+  ind_supervisor: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias',
+    'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
+  ind_embarcador: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.pos_entrega', 'ind.financeiro'],
+  ind_apoio: ['ind.pagina', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.pos_entrega', 'ind.financeiro'],
 };
 
 interface Banco {
@@ -275,10 +279,10 @@ const EQUIPE_PREVIA: Array<{ id: string; nome: string; papel: Papel; filiais: st
   { id: 'perfil-18', nome: 'Lucas Teixeira', papel: 'comercial', filiais: [], carteira: 2 },
   { id: 'perfil-19', nome: 'Beatriz Nunes', papel: 'consulta', filiais: ['Montividiu'] },
   { id: 'perfil-20', nome: 'Rafael Souza', papel: 'consulta', filiais: ['Goiânia'] },
-  { id: 'perfil-21', nome: 'Vanessa Duarte', papel: 'ind_embarque', filiais: ['Goiânia'] },
-  { id: 'perfil-22', nome: 'Paulo Henrique Reis', papel: 'ind_embarque', filiais: ['Goiânia'] },
-  { id: 'perfil-23', nome: 'Simone Araújo', papel: 'ind_pos_embarque', filiais: ['Goiânia'] },
-  { id: 'perfil-24', nome: 'Renato Cunha', papel: 'ind_pos_embarque', filiais: ['Goiânia'] },
+  { id: 'perfil-21', nome: 'Vanessa Duarte', papel: 'ind_embarcador', filiais: ['Goiânia'] },
+  { id: 'perfil-22', nome: 'Paulo Henrique Reis', papel: 'ind_supervisor', filiais: ['Goiânia'] },
+  { id: 'perfil-23', nome: 'Simone Araújo', papel: 'ind_apoio', filiais: ['Goiânia'] },
+  { id: 'perfil-24', nome: 'Renato Cunha', papel: 'ind_apoio', filiais: ['Goiânia'] },
 ];
 const emailEquipe = (nome: string) => `${normalizar(nome).toLowerCase().replace(/[^a-z]+/g, '.')}@previa.local`;
 
@@ -691,6 +695,10 @@ export function criarLocalApi(): Api {
     async carregarHistorico(embarqueId) {
       if (!tem('historico.ver')) return [];
       return clone(db.historico.filter((h) => h.embarque_id === embarqueId && (!h.sensivel || tem('financeiro.ver'))));
+    },
+    async carregarEstados() {
+      // Prévia local: sem histórico gravado; o Painel usa a data de suspensão/encerramento atual.
+      return [];
     },
     async carregarMeta(demo, data) {
       if (!tem('financeiro.ver')) return null;
@@ -1155,6 +1163,9 @@ export function criarLocalApi(): Api {
       return db.embarques.filter((e) => e.chave_importacao && chaves.includes(e.chave_importacao)).map(({ id, codigo, chave_importacao }) => ({ id, codigo, chave_importacao }));
     },
 
+    async colaboradoresInd(): Promise<string[]> {
+      return db.perfis.filter((p) => p.status === 'ativo' && PAPEIS_IND.includes(p.papel)).map((p) => p.nome || p.email || '').filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    },
     async listarUsuarios(): Promise<UsuarioAdmin[]> {
       exigir('usuarios.gerenciar');
       return db.perfis.map((p) => ({ ...clone(p), acesso_pendente: p.status === 'ativo' && !(db.entraram ?? []).includes(p.id), centros: (db.perfilCentros ?? []).filter((x) => x.perfil_id === p.id).map((x) => x.centro_custo_id),
@@ -1315,8 +1326,9 @@ const PERFIS_DEMO = [
   { email: 'apoio@previa.local', papel: 'apoio', rotulo: 'Apoio Operacional', descricao: 'Centro Gerencial (todas as filiais): fila de lote e emissão, contadores e observação operacional' },
   { email: 'comercial@previa.local', papel: 'comercial', rotulo: 'Coordenador Comercial', descricao: 'Centro Gerencial (todas as filiais): cadastra embarques e suspende fretes' },
   { email: 'consulta@previa.local', papel: 'consulta', rotulo: 'Consulta interna', descricao: 'Somente leitura nos centros de custo das filiais Rio Verde e Jataí' },
-  { email: 'vanessa.duarte@previa.local', papel: 'ind_embarque', rotulo: 'Equipe de embarque', descricao: 'Industrializado (Goiânia): lança viagens, tracking, emissão e ocorrências' },
-  { email: 'simone.araujo@previa.local', papel: 'ind_pos_embarque', rotulo: 'Equipe de pós-embarque', descricao: 'Industrializado (Goiânia): entregas, ocorrências, canhotos e encerramento' },
+  { email: 'paulo.henrique.reis@previa.local', papel: 'ind_supervisor', rotulo: 'Supervisor (Industrializado)', descricao: 'Industrializado (Goiânia): tudo do módulo, inclusive meta, clientes, voltar/cancelar e aprovar ocorrências' },
+  { email: 'vanessa.duarte@previa.local', papel: 'ind_embarcador', rotulo: 'Embarcador (Industrializado)', descricao: 'Industrializado (Goiânia): lança e contrata, tracking, emissão, ocorrências e pós-entrega' },
+  { email: 'simone.araujo@previa.local', papel: 'ind_apoio', rotulo: 'Apoio Operacional (Industrializado)', descricao: 'Industrializado (Goiânia): tracking, emissão, ocorrências e pós-entrega' },
 ] as const;
 const ESCOPO_EQUIPE = (x: (typeof EQUIPE_PREVIA)[number]) =>
   PAPEIS_GERENCIAL.includes(x.papel) ? 'Centro Gerencial (todas as filiais)' : `Centro de custo da filial ${(x.filiais as string[]).join(' e ')}`;

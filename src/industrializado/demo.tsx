@@ -118,7 +118,7 @@ export function RoteiroDemo() {
         <li><strong>Veículos marcados:</strong> clique em Finalizado, com e sem ocorrência; teste a carga com duas entregas.</li>
         <li><strong>Finalizados com ocorrência e Pós-entrega:</strong> canhoto digital/físico, comprovante e encerrar a carga.</li>
         <li><strong>Botão "i"</strong> ao lado do pedido: abra a ficha completa e teste Imprimir/PDF.</li>
-        <li>Troque o perfil na faixa do topo (ex.: Equipe de embarque, pós-embarque) para ver o que cada função pode fazer.</li>
+        <li>Troque o perfil na faixa do topo (Supervisor, Embarcador ou Apoio Operacional do Industrializado) para ver o que cada função pode fazer.</li>
       </ol>
     </div>
   );

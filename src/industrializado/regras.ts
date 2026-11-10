@@ -5,6 +5,8 @@ import {
 } from './tipos';
 
 export const META_MARGEM_PCT = 12;
+/** Abaixo disso aparece o aviso de margem crítica. Só avisa, nunca trava a carga (10/11). */
+export const ALERTA_MARGEM_PCT = 10;
 export const PRAZO_CANHOTO_DIAS = 30;
 /** Laranja: faltam até 2 horas para o horário combinado e o veículo não marcou. */
 export const ALERTA_COMBINADO_MIN = 120;
@@ -21,6 +23,8 @@ export interface Margem {
   /** Valores somados (os da carga mais os das ocorrências aprovadas ou pagas). */
   linhas: ValoresInd;
   abaixoMeta: boolean;
+  /** Margem abaixo de 10%: aviso, sem travar. */
+  abaixoAlerta: boolean;
 }
 
 /**
@@ -41,7 +45,7 @@ export function calcularMargem(v: ViagemInd, ocorrencias: OcorrenciaInd[] = []):
   const despesa = l.frete_motorista + l.descarga + l.diaria + l.pedagio_motorista;
   const margem = receita - despesa;
   const pct = receita > 0 ? (margem / receita) * 100 : null;
-  return { receita, despesa, margem, pct, linhas: l, abaixoMeta: pct !== null && pct < META_MARGEM_PCT };
+  return { receita, despesa, margem, pct, linhas: l, abaixoMeta: pct !== null && pct < META_MARGEM_PCT, abaixoAlerta: pct !== null && pct < ALERTA_MARGEM_PCT };
 }
 
 // ---------------------------------------------------------------------------

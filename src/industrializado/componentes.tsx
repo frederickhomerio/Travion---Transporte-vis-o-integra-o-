@@ -1,6 +1,6 @@
 // Peças comuns das telas do Industrializado: chips, formulário de viagem, detalhes, ocorrência e motivo.
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Alerta, Gaveta, Modal, useAviso } from '../components/ui';
 import { fmtData, fmtDataHora, fmtPct, fmtReais, hojeSP } from '../lib/formato';
 import { useApp } from '../data/store';
@@ -9,7 +9,7 @@ import {
   alertaCanhoto, alertaCombinado, calcularMargem, combinadoAtual, pendenciasEncerrar, duracao, marcosCarga, combinadoTransito, ETAPAS_TRANSITO, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
 } from './regras';
 import {
-  ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_SIT_PARADA, ROTULO_TIPO_CARGA, VALORES_ZERO, CHECAGENS, ROTULO_CHECAGEM,
+  ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_SIT_PARADA, ROTULO_TIPO_CARGA, ROTULO_CARROCERIA, VALORES_ZERO, CHECAGENS, ROTULO_CHECAGEM,
   type CargaOcorrencia, type ChecagemInd, type EtapaInd, type OcorrenciaInd, type ParadaInd, type TipoOcorrencia, type ValoresInd, type ViagemInd,
 } from './tipos';
 
@@ -85,6 +85,7 @@ export function QuadroMargem({ v, ocorrencias }: { v: ViagemInd; ocorrencias: Oc
           </tr>
         </tbody>
       </table>
+      {m.abaixoAlerta && <p className="ind-falta pequeno" style={{ margin: '6px 0 0' }}>Margem abaixo de 10% (só aviso, não trava a carga).</p>}
       {v.valores_conferidos_em && <p className="pequeno" style={{ margin: '6px 0 0' }}>Valores conferidos na Emissão por {v.valores_conferidos_por} em {fmtDataHora(v.valores_conferidos_em)}.</p>}
       <p className="suave pequeno" style={{ margin: '6px 0 0' }}>
         Ocorrências aprovadas ou pagas entram sozinhas: valor ao cliente no CT-e complementar; valor ao motorista na diária (ocorrência de diária) ou no frete motorista (demais).
@@ -226,18 +227,20 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
   const exec = useExecutar();
   const ativos = clientes.filter((c) => c.ativo);
   const [d, setD] = useState<NovaViagem>(() => v ? {
-    cliente_id: v.cliente_id, tipo_carga: v.tipo_carga, pedido: v.pedido ?? '', po: v.po ?? '', coleta_prevista: v.coleta_prevista ?? '', frota: v.frota, tipo_veiculo: v.tipo_veiculo,
+    cliente_id: v.cliente_id, tipo_carga: v.tipo_carga, pedido: v.pedido ?? '', po: v.po ?? '', coleta_prevista: v.coleta_prevista ?? '', frota: v.frota, tipo_veiculo: v.tipo_veiculo, carroceria: v.carroceria ?? '', peso_t: v.peso_t ? String(v.peso_t).replace('.', ',') : '',
     placa_cavalo: v.placa_cavalo ?? '', placa_carreta: v.placa_carreta ?? '', motorista: v.motorista ?? '', motorista_cpf: v.motorista_cpf ?? '',
     motorista_telefone: v.motorista_telefone ?? '', contratado_por: v.contratado_por ?? '', paradas: v.paradas.map((p) => ({ ...p, agendado_para: p.agendado_para ? localInput(new Date(p.agendado_para)) : null })),
     valores: { ...v.valores }, observacao: v.observacao ?? '',
   } : {
-    cliente_id: '', tipo_carga: 'paletizada', pedido: '', po: '', coleta_prevista: hojeSP(), frota: 'terceiro', tipo_veiculo: 'Carreta', placa_cavalo: '', placa_carreta: '',
+    cliente_id: '', tipo_carga: 'paletizada', pedido: '', po: '', coleta_prevista: hojeSP(), frota: 'terceiro', tipo_veiculo: 'Carreta', carroceria: '', peso_t: '', placa_cavalo: '', placa_carreta: '',
     motorista: '', motorista_cpf: '', motorista_telefone: '', contratado_por: '', paradas: [paradaVazia('coleta', 1, false), paradaVazia('entrega', 2, false)],
     valores: { ...VALORES_ZERO }, observacao: '',
   });
   const [motivo, setMotivo] = useState('');
-  const { estado: app } = useApp();
+  const { estado: app, api } = useApp();
   const eu = app.sessao?.perfil.nome || app.sessao?.perfil.email || '';
+  const [colaboradores, setColaboradores] = useState<string[]>([]);
+  useEffect(() => { api.colaboradoresInd().then(setColaboradores).catch(() => setColaboradores([])); }, [api]);
   const cli = clientePorId[d.cliente_id];
   const set = <K extends keyof NovaViagem>(k: K, x: NovaViagem[K]) => setD((a) => ({ ...a, [k]: x }));
   const setP = (i: number, p: Partial<ParadaForm>) => setD((a) => ({ ...a, paradas: a.paradas.map((x, j) => (j === i ? { ...x, ...p } : x)) }));
@@ -283,8 +286,8 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
             <label className="campo"><span>PO</span><input className="entrada" value={d.po} onChange={(e) => set('po', e.target.value)} maxLength={40} />
               <small>Obrigatório depois que o veículo carregar.</small></label>
           )}
-          <label className="campo"><span>Retirada prevista</span><input className="entrada" type="date" value={d.coleta_prevista} onChange={(e) => set('coleta_prevista', e.target.value)} />
-            <small>Conta na meta de cargas do dia.</small></label>
+          <label className="campo"><span>Retirada prevista</span><input className="entrada" type="date" value={d.coleta_prevista} onChange={(e) => set('coleta_prevista', e.target.value)} /></label>
+          <label className="campo"><span>Peso total (t)</span><input className="entrada" inputMode="decimal" value={d.peso_t} onChange={(e) => set('peso_t', e.target.value)} placeholder="Ex.: 28,5" maxLength={8} /></label>
           <label className="campo"><span>Filial</span><input className="entrada" value={FILIAL_IND} disabled /></label>
         </div>
 
@@ -300,15 +303,24 @@ export function FormViagem({ v, aoFechar, aoSalvar }: { v?: ViagemInd; aoFechar:
               {['Carreta', 'Carreta LS', 'Bitrem', 'Truck', 'Toco', '3/4', 'VUC'].map((x) => <option key={x}>{x}</option>)}
             </select>
           </label>
-          <label className="campo"><span>Placa cavalo</span><input className="entrada" value={d.placa_cavalo} onChange={(e) => { const x = e.target.value.toUpperCase(); setD((p) => ({ ...p, placa_cavalo: x, contratado_por: p.contratado_por || (x.trim() ? eu : '') })); }} maxLength={8} /></label>
+          <label className="campo"><span>Carroceria</span>
+            <select className="entrada" value={d.carroceria} onChange={(e) => set('carroceria', e.target.value as NovaViagem['carroceria'])}>
+              <option value="">Escolha…</option>
+              {Object.entries(ROTULO_CARROCERIA).map(([k, r]) => <option key={k} value={k}>{r}</option>)}
+            </select>
+          </label>
+          <label className="campo"><span>Placa cavalo</span><input className="entrada" value={d.placa_cavalo} onChange={(e) => { const x = e.target.value.toUpperCase(); setD((p) => ({ ...p, placa_cavalo: x, contratado_por: p.contratado_por || (x.trim() && colaboradores.includes(eu) ? eu : '') })); }} maxLength={8} /></label>
           <label className="campo"><span>Placa carreta</span><input className="entrada" value={d.placa_carreta} onChange={(e) => set('placa_carreta', e.target.value.toUpperCase())} maxLength={8} /></label>
           <label className="campo"><span>Motorista</span><input className="entrada" value={d.motorista} onChange={(e) => set('motorista', e.target.value)} /></label>
           <label className="campo"><span>CPF</span><input className="entrada" value={d.motorista_cpf} onChange={(e) => set('motorista_cpf', e.target.value)} maxLength={14} /></label>
           <label className="campo"><span>Telefone</span><input className="entrada" value={d.motorista_telefone} onChange={(e) => set('motorista_telefone', e.target.value)} maxLength={20} /></label>
-          <label className="campo ind-campo-dourado"><span>Contratado por (colaborador)</span>
-            <input className="entrada" value={d.contratado_por} placeholder={eu} onChange={(e) => set('contratado_por', e.target.value)} maxLength={80} /></label>
+          <label className="campo ind-campo-dourado"><span>Contratado por (colaborador do Industrializado)</span>
+            <select className="entrada" value={d.contratado_por} onChange={(e) => set('contratado_por', e.target.value)}>
+              <option value="">Escolha…</option>
+              {[...new Set([...colaboradores, ...(d.contratado_por && !colaboradores.includes(d.contratado_por) ? [d.contratado_por] : [])])].map((x) => <option key={x} value={x}>{x}{colaboradores.includes(x) ? '' : ' (fora da equipe)'}</option>)}
+            </select></label>
         </div>
-        <p className="suave pequeno">Motorista, placa do cavalo e quem contratou podem ficar para depois; são exigidos para passar a Veículo contratado. Ao informar a placa, "Contratado por" vem com o seu nome (pode trocar).</p>
+        <p className="suave pequeno">Motorista, placa do cavalo e quem contratou podem ficar para depois; são exigidos para passar a Veículo contratado. "Contratado por" lista só os colaboradores do Industrializado; se você é da equipe, vem com o seu nome ao informar a placa.</p>
 
         <h3>Coletas e entregas</h3>
         {d.paradas.map((p, i) => (
@@ -442,7 +454,7 @@ export function DetalhesViagem({ id, aoFechar }: { id: string; aoFechar: () => v
           <dt>Retirada prevista</dt><dd>{v.coleta_prevista ? fmtData(v.coleta_prevista) : '—'}</dd>
           {cli?.exige_po && <><dt>PO</dt><dd>{v.po ?? <span className="ind-falta">pendente</span>}</dd></>}
           <dt>Rota</dt><dd><Rota v={v} /></dd>
-          <dt>Veículo</dt><dd>{v.tipo_veiculo} · {v.frota === 'frota' ? 'Frota própria' : 'Terceiro'} · {[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ') || '—'}</dd>
+          <dt>Veículo</dt><dd>{v.tipo_veiculo}{v.carroceria ? ` ${ROTULO_CARROCERIA[v.carroceria]}` : ''}{v.peso_t ? ` · ${String(v.peso_t).replace('.', ',')} t` : ''} · {v.frota === 'frota' ? 'Frota própria' : 'Terceiro'} · {[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ') || '—'}</dd>
           <dt>Motorista</dt><dd>{v.motorista ?? '—'}{v.motorista_cpf ? ` · CPF ${v.motorista_cpf}` : ''}{v.motorista_telefone ? ` · ${v.motorista_telefone}` : ''}</dd>
           <dt>Contratado por</dt><dd>{v.contratado_por ? <span className="ind-contratou">{v.contratado_por}</span> : '—'}</dd>
           <dt>Documentos</dt><dd>{v.cte ? `CT-e ${v.cte}` : 'CT-e —'}{v.mdfe ? ` · MDF-e ${v.mdfe}` : ''}{v.nfs ? ` · NF ${v.nfs}` : ''}</dd>
@@ -612,7 +624,7 @@ export function FichaCarga({ id, aoFechar }: { id: string; aoFechar: () => void 
             {(cli?.exige_po || v.po) && <><dt>PO</dt><dd>{v.po ?? <span className="ind-falta">pendente</span>}</dd></>}
             <dt>Motorista</dt><dd>{v.motorista ?? '—'}{v.motorista_cpf ? ` · CPF ${v.motorista_cpf}` : ''}{v.motorista_telefone ? ` · ${v.motorista_telefone}` : ''}</dd>
           <dt>Contratado por</dt><dd>{v.contratado_por ? <span className="ind-contratou">{v.contratado_por}</span> : '—'}</dd>
-            <dt>Veículo</dt><dd>{v.tipo_veiculo} · {v.frota === 'frota' ? 'Frota própria' : 'Terceiro'} · {[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ') || '—'}</dd>
+            <dt>Veículo</dt><dd>{v.tipo_veiculo}{v.carroceria ? ` ${ROTULO_CARROCERIA[v.carroceria]}` : ''}{v.peso_t ? ` · ${String(v.peso_t).replace('.', ',')} t` : ''} · {v.frota === 'frota' ? 'Frota própria' : 'Terceiro'} · {[v.placa_cavalo, v.placa_carreta].filter(Boolean).join(' / ') || '—'}</dd>
             <dt>Documentos</dt><dd>{[v.cte && `CT-e ${v.cte}`, v.mdfe && `MDF-e ${v.mdfe}`, v.nfs && `NF ${v.nfs}`].filter(Boolean).join(' · ') || '—'}</dd>
             {v.observacao && <><dt>Observação</dt><dd>{v.observacao}</dd></>}
           </dl>
