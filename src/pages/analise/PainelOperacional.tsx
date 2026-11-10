@@ -17,7 +17,7 @@ import { documentosEstadia, fmtReais, periodoEstadia } from '../../lib/estadia';
 import { fmtDataCurta, fmtDataHora, fmtHora, fmtNum, fmtPct, hojeSP } from '../../lib/formato';
 import {
   DIAS_CURTOS, DIAS_SEMANA, type FiltrosPainel, type LinhaChamado, TIPOS_DEMANDA, type TipoDemanda, type VisaoEvolucao,
-  type LinhaRetornoCliente, aplicarRelogioCliente, dataSP, evolucao, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo, retornoCliente,
+  type LinhaRetornoCliente, aplicarRelogioCliente, temposAtendimento, dataSP, evolucao, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo, retornoCliente,
 } from '../../lib/painelOperacional';
 import type { MotivoDevolucao, StatusDoc } from '../../types';
 import { ResultadoPill } from '../Estadia';
@@ -429,10 +429,21 @@ function QEvolucao({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void })
   const visao = c.pref.visaoEvol;
   const tipos = c.pref.tiposEvol;
   const { solicitante, colaborador } = c.pref;
-  const envios = useMemo(() => c.linhas.filter((l) => tipos.includes(l.s.tipo)
+  const doRecorte = useMemo(() => c.linhas.filter((l) => tipos.includes(l.s.tipo)
     && (!solicitante || l.s.solicitante_id === solicitante)
-    && (!colaborador || l.assumiram.has(colaborador) || l.s.responsavel_id === colaborador)).map((l) => Date.parse(l.s.enviado_em)), [c.linhas, tipos, solicitante, colaborador]);
+    && (!colaborador || l.assumiram.has(colaborador) || l.s.responsavel_id === colaborador)), [c.linhas, tipos, solicitante, colaborador]);
+  const envios = useMemo(() => doRecorte.map((l) => Date.parse(l.s.enviado_em)), [doRecorte]);
   const r = useMemo(() => evolucao(envios, visao, c.dataEvol, c.agora, c.inicioDados), [envios, visao, c.dataEvol, c.agora, c.inicioDados]);
+  const ta = useMemo(() => temposAtendimento(doRecorte, r.periodo.de, r.periodo.ate), [doRecorte, r.periodo.de, r.periodo.ate]);
+  const fmtAt = (ms: number | null) => (ms !== null && ms < 60000 ? `${Math.round(ms / 1000)} s` : fmtDur(ms));
+  const tempos = (
+    <div className="po-evol-tempos" title="Do Assumir à conclusão, sem a espera na fila, sem a correção do solicitante e sem a espera do cliente. Só chamados concluídos recebidos no período.">
+      <span><span>Tempo médio de atendimento</span><strong>{fmtAt(ta.medio_ms)}</strong></span>
+      <span><span>Maior atendimento</span><strong>{fmtAt(ta.maior_ms)}</strong></span>
+      <span><span>Menor atendimento</span><strong>{fmtAt(ta.menor_ms)}</strong></span>
+      <span className="suave">{ta.n ? `${ta.n} concluído(s) no período` : 'Nenhum concluído no período'}</span>
+    </div>
+  );
   const cmp = r.comparavel;
   const rotAnterior = visao === 'dia' ? 'Dia anterior' : visao === 'semana' ? 'Semana anterior' : 'Mês anterior';
   const fmtIntervalo = (ms: number) => (visao === 'dia' ? `${fmtDataCurta(dataSP(ms))} ${fmtHora(new Date(ms).toISOString())}` : `${DIAS_CURTOS[(new Date(ms - 3 * 3600e3).getUTCDay() + 6) % 7]} ${fmtDataCurta(dataSP(ms))}`);
@@ -460,8 +471,10 @@ function QEvolucao({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void })
             <input type="date" className="entrada" value={c.dataEvol} onChange={(e) => e.target.value && c.setDataEvol(e.target.value)} />
           </label>
           <SeletorTipos rotulo="Tipos" valor={tipos} aoMudar={(t) => c.mudar({ tiposEvol: t })} />
+          {tipos.length > 0 && tempos}
         </div>
       )}
+      {tv && tipos.length > 0 && tempos}
       {!tipos.length ? <SemTipos tipos={tipos} /> : (
         <>
           <div className="po-evol-kpis">

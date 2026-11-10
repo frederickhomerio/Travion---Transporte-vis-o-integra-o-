@@ -1831,3 +1831,9 @@ dd .ind-contratou::before { content: ''; }
 .po-cli-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 6px; }
 .tv .po-cli-faixa strong { font-size: 2.4em; }
 @media (max-width: 600px) { .po-cli-faixas { gap: 6px; } .po-cli-faixa { padding: 8px; } .po-cli-faixa strong { font-size: 1.3rem; } }
+
+/* Evolução das demandas: tempos de atendimento ao lado dos tipos */
+.po-evol-tempos { display: grid; grid-template-columns: auto auto; gap: 0 10px; font-size: 0.74rem; line-height: 1.35; color: var(--cinza-600); align-self: center; }
+.po-evol-tempos > span { display: contents; }
+.po-evol-tempos > span.suave { display: block; grid-column: 1 / -1; font-size: 0.7rem; }
+.po-evol-tempos strong { color: var(--vinho-escuro); font-variant-numeric: tabular-nums; margin-left: 3px; }

@@ -531,3 +531,14 @@ export function retornoCliente(atuais: LinhaChamado[], periodo: LinhaChamado[], 
   r.porComercial = fechar(grupos.comercial);
   return r;
 }
+
+/** Tempo de atendimento do apoio (assumir → conclusão, sem fila, sem pendência do solicitante e sem a espera do cliente)
+ *  dos chamados concluídos, recebidos entre `de` e `ate`. Sequência de eventos incompleta fica de fora. */
+export function temposAtendimento(linhas: LinhaChamado[], de: number, ate: number): { n: number; medio_ms: number | null; maior_ms: number | null; menor_ms: number | null } {
+  const v = linhas.filter((l) => {
+    const t = Date.parse(l.s.enviado_em);
+    return t >= de && t < ate && l.completo && CONCLUIDO.includes(l.s.status);
+  }).map((l) => l.atendimento_ms);
+  if (!v.length) return { n: 0, medio_ms: null, maior_ms: null, menor_ms: null };
+  return { n: v.length, medio_ms: v.reduce((a, b) => a + b, 0) / v.length, maior_ms: Math.max(...v), menor_ms: Math.min(...v) };
+}
