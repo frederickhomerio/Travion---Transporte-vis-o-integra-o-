@@ -1,5 +1,6 @@
 // Estado da documentação (solicitações, lotes, detalhes e notificações) com sincronização em duas vias:
-// tempo real (quando a assinatura é confirmada) e consulta incremental a cada 15 s como reforço.
+// tempo real (quando a assinatura é confirmada) e consulta incremental como reforço: a cada 15 s
+// quando o tempo real cai, e só a cada 2 min enquanto ele está ligado (poupa CPU do banco).
 // Registros são identificados pelo id; a versão maior vence, então evento e consulta não duplicam nada.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react';
@@ -9,6 +10,8 @@ import { useApp } from './store';
 
 export const INTERVALO_SYNC_MS = 15000;
 const INTERVALO_NOTIF_MS = 30000;
+/** Com o tempo real ligado, a consulta de reforço roda só a cada 2 min. */
+const INTERVALO_REFORCO_MS = 120000;
 /** Margem para registros gravados por transações que terminaram depois da última consulta. */
 const MARGEM_MS = 60000;
 
@@ -133,8 +136,19 @@ export function ProvedorDoc({ children }: { children: ReactNode }) {
       store.set({ tempoReal: ok });
       if (ok && !antes) void sincronizar(); // ao (re)estabelecer a assinatura, busca o que pode ter passado
     });
-    const t = setInterval(() => { if (document.visibilityState === 'visible') void sincronizar(); }, INTERVALO_SYNC_MS);
-    const tn = setInterval(() => { if (document.visibilityState === 'visible') void recarregarNotificacoes(); }, INTERVALO_NOTIF_MS);
+    // Com o tempo real ligado, os eventos já trazem as mudanças: o reforço só roda a cada 2 min.
+    let ultimoSync = Date.now();
+    let ultimaNotif = Date.now();
+    const vence = (ultimo: number, normal: number) =>
+      Date.now() - ultimo >= (store.get().tempoReal ? INTERVALO_REFORCO_MS : normal) - 1000;
+    const t = setInterval(() => {
+      if (document.visibilityState !== 'visible' || !vence(ultimoSync, INTERVALO_SYNC_MS)) return;
+      ultimoSync = Date.now(); void sincronizar();
+    }, INTERVALO_SYNC_MS);
+    const tn = setInterval(() => {
+      if (document.visibilityState !== 'visible' || !vence(ultimaNotif, INTERVALO_NOTIF_MS)) return;
+      ultimaNotif = Date.now(); void recarregarNotificacoes();
+    }, INTERVALO_NOTIF_MS);
     const voltar = () => { if (document.visibilityState === 'visible') { void sincronizar(); void recarregarNotificacoes(); } };
     const online = () => { void sincronizar(); void recarregarNotificacoes(); };
     const offline = () => store.set({ falhaSync: true, tempoReal: false });
