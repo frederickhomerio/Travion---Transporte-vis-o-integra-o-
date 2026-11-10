@@ -677,7 +677,7 @@ export function ClientesInd() {
   const { clientes, viagens, pode } = useInd();
   const [editar, setEditar] = useState<ClienteInd | 'novo' | null>(null);
   return (
-    <Pagina titulo="Clientes Industrializado" acoes={pode('ind.clientes') ? <button className="btn primario" onClick={() => setEditar('novo')}>+ Cliente</button> : undefined}>
+    <Pagina titulo="Clientes Industrializado" permissao="ind.clientes" acoes={pode('ind.clientes') ? <button className="btn primario" onClick={() => setEditar('novo')}>+ Cliente</button> : undefined}>
       <Alerta tipo="info">Lista própria do Industrializado, separada dos clientes dos outros centros de custo.</Alerta>
       <div className="cartao" style={{ marginTop: 12, overflowX: 'auto' }}>
         <table className="tabela">

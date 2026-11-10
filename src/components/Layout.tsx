@@ -41,7 +41,8 @@ function useGrupos(admin: boolean): GrupoMenu[] {
       ...se(pode('ind.emissao'), { to: '/industrializado/emissao', icone: 'documento', rotulo: 'Emissão' }),
       { to: '/industrializado/ocorrencias', icone: 'alerta', rotulo: 'Ocorrências' },
       { to: '/industrializado/pos-entrega', icone: 'relogio', rotulo: 'Pós-entrega' },
-      { to: '/industrializado/clientes', icone: 'cliente', rotulo: 'Clientes' },
+      // Clientes: só Supervisor do Industrializado, Coordenador Comercial, Gestor e Administrador (10/11).
+      ...se(pode('ind.clientes'), { to: '/industrializado/clientes', icone: 'cliente', rotulo: 'Clientes' }),
     ] },
     { id: 'apoio', rotulo: 'Apoio Operacional', icone: 'analise', itens: [
       ...se(pode('apoio.pagina'), { to: '/apoio', icone: 'lista', rotulo: 'Apoio Operacional' }),
