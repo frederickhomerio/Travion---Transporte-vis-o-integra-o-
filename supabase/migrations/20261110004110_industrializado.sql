@@ -223,7 +223,7 @@ begin
     insert into public.ind_clientes (id, dados, atualizado_por) values (v_id, v_dados, auth.uid()) returning * into a;
   else
     if p_versao is not null and a.versao <> p_versao then
-      perform private.ind_erro('40001', 'Este cliente foi alterado por outra pessoa. A tela foi atualizada; confira e salve de novo.');
+      perform private.ind_erro('PT409', 'Este cliente foi alterado por outra pessoa. A tela foi atualizada; confira e salve de novo.');
     end if;
     update public.ind_clientes set dados = v_dados, versao = versao + 1, atualizado_em = now(), atualizado_por = auth.uid()
     where id = v_id returning * into a;
@@ -265,7 +265,7 @@ begin
     values (v_id, v_codigo, v_cliente, v_novo, v_dados, auth.uid(), auth.uid()) returning * into a;
   else
     if p_versao is null or a.versao <> p_versao then
-      perform private.ind_erro('40001', 'Esta carga foi alterada por outra pessoa. A tela foi atualizada; confira e refaça a ação.');
+      perform private.ind_erro('PT409', 'Esta carga foi alterada por outra pessoa. A tela foi atualizada; confira e refaça a ação.');
     end if;
     v_velho := a.etapa;
     if v_velho in ('encerrada', 'cancelada') then perform private.ind_erro('55000', 'Carga encerrada ou cancelada não pode mudar.'); end if;
@@ -332,7 +332,7 @@ begin
     values (v_id, v_codigo, v_viagem, v_sit, v_dados, auth.uid(), auth.uid()) returning * into a;
   else
     if p_versao is null or a.versao <> p_versao then
-      perform private.ind_erro('40001', 'Esta ocorrência foi alterada por outra pessoa. A tela foi atualizada; confira e refaça a ação.');
+      perform private.ind_erro('PT409', 'Esta ocorrência foi alterada por outra pessoa. A tela foi atualizada; confira e refaça a ação.');
     end if;
     if v_viagem is distinct from a.viagem_id then perform private.ind_erro('22023', 'A ocorrência não muda de carga.'); end if;
     if a.situacao in ('paga', 'cancelada') and v_sit <> a.situacao then perform private.ind_erro('55000', 'Ocorrência paga ou cancelada não muda de situação.'); end if;

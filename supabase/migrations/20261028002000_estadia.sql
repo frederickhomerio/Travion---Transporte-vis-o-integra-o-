@@ -569,7 +569,7 @@ begin
   s := private.doc_carregar(p_id);
   if s.tipo <> 'estadia' then perform private.doc_erro('55000', 'Esta solicitação não é de estadia.'); end if;
   if p_versao is not null and s.versao <> p_versao then
-    perform private.doc_erro('40001', 'A estadia foi alterada por outra pessoa enquanto você editava. Os dados foram atualizados: confira e salve de novo.');
+    perform private.doc_erro('PT409', 'A estadia foi alterada por outra pessoa enquanto você editava. Os dados foram atualizados: confira e salve de novo.');
   end if;
   return s;
 end $$;
