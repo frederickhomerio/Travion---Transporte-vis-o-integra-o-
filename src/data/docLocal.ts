@@ -6,7 +6,7 @@ import type {
   Perfil, Permissao, RetornoEstadia, RetratoDoc, SolicitacaoDoc, StatusDoc,
 } from '../types';
 import type { ApiDoc, ArquivoDoc, EventoDoc, ResultadoDoc } from './api';
-import { LIMITE_CADASTRO, MAX_MOTORISTA, MOTIVO_DEVOLUCAO_DOC, MAX_VEICULO, TIPOS_CADASTRO, telefoneValido, tipoCadastro } from '../lib/documentacao';
+import { LIMITE_CADASTRO, MAX_MOTORISTA, MOTIVO_DEVOLUCAO_DOC, MAX_VEICULO, TIPOS_CADASTRO, fmtPlaca, podeCancelarSolicitacao, telefoneValido, tipoCadastro } from '../lib/documentacao';
 import { LIMITES_ESTADIA, MOTIVOS_ESTADIA, NUMERO_DOC_RE, RESULTADO_ESTADIA, calcularEstadia, fmtNumeroH, fmtReais, fmtToneladas, pesoToneladas } from '../lib/estadia';
 import { type EventoFluxo, type EventoPainel, type SolPainel, dataSP, diaHoraSP, inicioDiaSP } from '../lib/painelOperacional';
 
@@ -1020,11 +1020,17 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       const s = carregar(id);
       const p = eu();
       if (FINAIS.includes(s.status)) erro('Solicitação já concluída, encerrada ou cancelada.');
-      if (!(ctx.tem('documentacao.cancelar') || (s.solicitante_id === p.id && s.status === 'enviado'))) erro('Você não tem permissão para cancelar esta solicitação.');
+      if (!podeCancelarSolicitacao(s, (c) => ctx.tem(c), p.id)) erro('Você não tem permissão para cancelar esta solicitação.');
       if (!motivo.trim()) erro('Informe o motivo do cancelamento.');
       if (db.lotes.some((l) => l.solicitacao_id === s.id)) erro('O lote já foi registrado nesta solicitação: conclua a emissão em vez de cancelar.');
       tocar(s, { status: 'cancelado', cancelado_em: agora(), cancelado_por_nome: p.nome, cancelado_motivo: motivo.trim().slice(0, 1000) });
       evento(s, 'evento', `Solicitação cancelada por ${p.nome}: ${motivo.trim()}`);
+      if (s.tipo === 'cadastro') {
+        // Quem enviou fica sabendo se outra pessoa cancelou; o responsável do apoio fica sabendo se o embarcador cancelou.
+        const texto = `${rotulo(s)} · ${p.nome}: ${motivo.trim().slice(0, 140)}`;
+        notificar(s.solicitante_id, 'cadastro_cancelado', `Cadastro da placa ${fmtPlaca(s.placa)} cancelado`, texto, s, 'cadastro', `cadastro_cancelado:${s.id}`);
+        notificar(s.responsavel_id, 'cadastro_cancelado', `Cadastro da placa ${fmtPlaca(s.placa)} cancelado`, texto, s, 'apoio', `cadastro_cancelado:${s.id}`);
+      }
       if (s.tipo === 'estadia') notificar(s.solicitante_id, 'estadia_atualizada', 'Estadia cancelada', `${rotulo(s)} · ${motivo.trim().slice(0, 140)}`, s, 'estadia', `estadia_cancelada:${s.id}:${s.versao}`);
       return fim(s);
     },

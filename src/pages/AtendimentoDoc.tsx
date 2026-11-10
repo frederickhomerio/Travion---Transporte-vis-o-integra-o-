@@ -15,7 +15,7 @@ import { useDetalheDoc, useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
 import { cidadeAnuncio } from '../lib/anuncio';
 import {
-  ABERTOS, CATEGORIA, CATEGORIAS_SAIDA, MOTIVOS_ESCOLHA, devolucaoAberta, MOTIVO_DEVOLUCAO, OPERACAO, textoPagamento, PEDAGIO, REF_CADASTRO, TIPO_DOC, fmtFrete, fmtPlaca, fmtReais2, resumoDoc, tempoDoc, vezDe,
+  CATEGORIA, CATEGORIAS_SAIDA, MOTIVOS_ESCOLHA, devolucaoAberta, MOTIVO_DEVOLUCAO, OPERACAO, textoPagamento, PEDAGIO, REF_CADASTRO, TIPO_DOC, fmtFrete, fmtPlaca, fmtReais2, podeCancelarSolicitacao, resumoDoc, tempoDoc, vezDe,
 } from '../lib/documentacao';
 import { fmtDataAsHora } from '../lib/formato';
 import type { CategoriaAnexo, MotivoDevolucao, SolicitacaoDoc } from '../types';
@@ -215,7 +215,7 @@ function Atendimento({ s }: { s: SolicitacaoDoc }) {
               <strong>Histórico</strong>
               {detalhe ? <Historico mensagens={detalhe.mensagens} anexos={anexos} /> : <Carregando />}
             </div>
-            {ABERTOS.includes(s.status) && pode('documentacao.cancelar') && <CancelarBotao s={s} />}
+            {podeCancelarSolicitacao(s, pode, eu) && <CancelarBotao s={s} />}
           </section>
         )}
         {!ampliado && (
@@ -445,5 +445,5 @@ function ConcluirCadastro({ s, executar }: { s: SolicitacaoDoc; executar: Execut
 
 function CancelarBotao({ s }: { s: SolicitacaoDoc }) {
   const [aberto, setAberto] = useState(false);
-  return <div>{aberto && <CancelarDoc s={s} aoFechar={() => setAberto(false)} />}<button className="btn perigo peq" onClick={() => setAberto(true)}>Cancelar solicitação</button></div>;
+  return <div>{aberto && <CancelarDoc s={s} aoFechar={() => setAberto(false)} />}<button className="btn perigo peq" onClick={() => setAberto(true)}>{s.tipo === 'cadastro' ? 'Cancelar cadastro' : 'Cancelar solicitação'}</button></div>;
 }

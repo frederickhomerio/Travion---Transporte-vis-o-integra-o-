@@ -16,7 +16,7 @@ import { cidadeAnuncio } from '../lib/anuncio';
 import { separarCidadeUF } from '../lib/cadastros';
 import {
   ABERTOS, CONCLUIDOS, FORMATOS_CADASTRO, MAX_MOTORISTA, MAX_VEICULO, PLACA_RE, REF_CADASTRO, STATUS_DOC,
-  fmtPlaca, fmtReais2, lerReais, normalizarPlaca, rotaDoc, telefoneValido, tempoDoc,
+  fmtPlaca, fmtReais2, lerReais, normalizarPlaca, podeCancelarSolicitacao, rotaDoc, telefoneValido, tempoDoc,
 } from '../lib/documentacao';
 import { fmtDataAsHora, fmtHora } from '../lib/formato';
 import { normalizar } from '../lib/texto';
@@ -362,7 +362,7 @@ function CadastroDetalhe({ s, aoVoltar }: { s: SolicitacaoDoc; aoVoltar: () => v
   const anexos = detalhe?.anexos ?? [];
   const pendencia = [...(detalhe?.mensagens ?? [])].reverse().find((m) => m.tipo === 'pendencia');
   const eu = app.sessao?.perfil.id;
-  const podeCancelar = ABERTOS.includes(s.status) && (pode('documentacao.cancelar') || (s.solicitante_id === eu && s.status === 'enviado'));
+  const podeCancelar = podeCancelarSolicitacao(s, pode, eu);
   const r = s.retrato;
 
   const responder = async () => {

@@ -1,7 +1,7 @@
 // Regras de apresentação da documentação (Apoio Operacional). Funções puras; quem decide é o servidor.
 
 import type {
-  AnexoDoc, CategoriaAnexo, FormaPagamento, LoteErp, TitularPix, MotivoDevolucao, MotivoDevolucaoDoc, Pedagio, SolicitacaoDoc, StatusDoc, TipoOperacao, TipoSolicitacaoDoc, UnidadeFreteDoc,
+  AnexoDoc, CategoriaAnexo, FormaPagamento, LoteErp, TitularPix, MotivoDevolucao, MotivoDevolucaoDoc, Pedagio, Permissao, SolicitacaoDoc, StatusDoc, TipoOperacao, TipoSolicitacaoDoc, UnidadeFreteDoc,
 } from '../types';
 import { cidadeAnuncio } from './anuncio';
 import { normalizar } from './texto';
@@ -31,6 +31,21 @@ export const CATEGORIA: Record<CategoriaAnexo, string> = {
 };
 export const CATEGORIAS_SAIDA: CategoriaAnexo[] = ['cte', 'mdfe', 'outro_emitido'];
 export const ABERTOS: StatusDoc[] = ['enviado', 'em_atendimento', 'aguardando_informacao', 'correcao_recebida', 'aguardando_cliente', 'pago_pendencia'];
+
+/**
+ * Quem pode cancelar uma solicitação em aberto (sempre com motivo). Mesma regra do servidor (cancelar_solicitacao_doc):
+ * - "Cancelar solicitações de documentação" (por padrão só Gestor) cancela qualquer uma;
+ * - quem enviou cancela a própria enquanto ninguém assumiu;
+ * - ficha de Cadastro (10/11): "Cancelar fichas de cadastro" (Apoio e Gestor) cancela qualquer ficha, e
+ *   "Cancelar a própria ficha de cadastro" (quem envia cadastro) cancela a própria em qualquer etapa em aberto.
+ */
+export function podeCancelarSolicitacao(s: SolicitacaoDoc, pode: (c: Permissao) => boolean, eu: string | undefined): boolean {
+  if (!ABERTOS.includes(s.status)) return false;
+  if (pode('documentacao.cancelar')) return true;
+  const minha = !!eu && s.solicitante_id === eu;
+  if (minha && s.status === 'enviado') return true;
+  return s.tipo === 'cadastro' && (pode('cadastro.cancelar') || (minha && pode('cadastro.cancelar_propria')));
+}
 /** Motivos da devolução (pedir ajuste). */
 export const MOTIVO_DEVOLUCAO: Record<MotivoDevolucao, string> = {
   documento_ausente: 'Documento ausente', documento_ilegivel: 'Documento ilegível', divergencia_dados: 'Divergência de dados',

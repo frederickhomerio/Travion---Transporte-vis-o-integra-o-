@@ -327,12 +327,17 @@ export function DevolverDocumentacao({ s, aoFechar }: { s: SolicitacaoDoc; aoFec
 }
 
 export function CancelarDoc({ s, aoFechar }: { s: SolicitacaoDoc; aoFechar: () => void }) {
-  const { api } = useApp();
+  const { api, estado: app } = useApp();
   const { aplicar } = useDoc();
   const avisar = useAviso();
   const [motivo, setMotivo] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const eu = app.sessao?.perfil.id;
+  const cad = s.tipo === 'cadastro';
+  // Quem recebe o aviso: o responsável do apoio, se for o embarcador cancelando; quem enviou, se for outra pessoa.
+  const avisado = !cad ? null : s.solicitante_id === eu ? (s.responsavel_id && s.responsavel_id !== eu ? s.responsavel_nome : null)
+    : s.solicitante_nome;
   return (
     <Modal titulo={s.tipo === 'estadia' ? `Cancelar estadia ${s.est_codigo ?? ''}` : `Cancelar ${TIPO_DOC[s.tipo]} nº ${s.numero}`} aoFechar={aoFechar} rodape={<>
       <button className="btn" onClick={aoFechar} disabled={enviando}>Voltar</button>
@@ -340,11 +345,14 @@ export function CancelarDoc({ s, aoFechar }: { s: SolicitacaoDoc; aoFechar: () =
         setErro(null);
         if (!motivo.trim()) { setErro('Informe o motivo do cancelamento.'); return; }
         setEnviando(true);
-        try { aplicar(await api.doc.cancelar(s.id, motivo.trim())); avisar('ok', 'Solicitação cancelada.'); aoFechar(); }
+        try { aplicar(await api.doc.cancelar(s.id, motivo.trim())); avisar('ok', cad ? 'Cadastro cancelado.' : 'Solicitação cancelada.'); aoFechar(); }
         catch (e) { setErro(mensagemErro(e)); } finally { setEnviando(false); }
-      }}>{enviando ? 'Cancelando…' : 'Cancelar solicitação'}</button>
+      }}>{enviando ? 'Cancelando…' : cad ? 'Cancelar cadastro' : 'Cancelar solicitação'}</button>
     </>}>
-      <p>O histórico e os anexos ficam guardados.</p>
+      {cad ? (
+        <p>A ficha sai da fila do apoio e não pode ser reaberta: se precisar, envie um cadastro novo. O histórico e os anexos ficam guardados.
+          {avisado && <> <strong>{avisado}</strong> será avisado(a) pelo sino.</>}</p>
+      ) : <p>O histórico e os anexos ficam guardados.</p>}
       <label className="campo"><span>Motivo *</span><textarea className="entrada" rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={1000} /></label>
       {erro && <Alerta tipo="erro">{erro}</Alerta>}
     </Modal>
