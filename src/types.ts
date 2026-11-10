@@ -320,7 +320,9 @@ export type ResultadoEstadia = 'aprovada' | 'aprovada_parcial' | 'rejeitada';
 
 /** Formulário Envio de Estadia. Números como texto (zeros à esquerda valem); peso na unidade escolhida. */
 export interface DadosEstadia {
-  tipo_documento: TipoDocEstadia; documentos: string[]; placa: string; cliente_id: string; nfs_carga: string[];
+  tipo_documento: TipoDocEstadia; documentos: string[]; placa: string; cliente_id: string | null; nfs_carga: string[];
+  /** Cliente do Industrializado (funções do módulo; migração 4400). `ind_cliente_nome` só na prévia local. */
+  ind_cliente_id?: string | null; ind_cliente_nome?: string | null;
   sindicato: boolean; sindicato_nome: string | null; inicio: string; saida: string;
   tarifa: number; peso: number; peso_unidade: 't' | 'kg'; motivo: MotivoEstadia; motivo_outro: string | null;
   modalidade: ModalidadeEstadia; acordo_valor: number | null; acordo_confirmado_por: string | null; acordo_data: string | null;

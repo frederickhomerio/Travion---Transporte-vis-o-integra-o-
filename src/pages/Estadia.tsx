@@ -11,13 +11,14 @@ import { AcessoNegado, Alerta, Carregando, EstadoVazio, Segmentado, useAviso } f
 import { mensagemErro } from '../data/api';
 import { useDetalheDoc, useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
+import { useInd } from '../industrializado/dados';
 import { ABERTOS, CATEGORIA, FORMATOS_CADASTRO, PLACA_RE, STATUS_DOC, fmtPlaca, fmtTamanho, normalizarPlaca } from '../lib/documentacao';
 import {
   FINAIS_ESTADIA, LIMITES_ESTADIA, MODALIDADE_ESTADIA, MOTIVOS_ESTADIA, MOTIVO_ESTADIA, NUMERO_DOC_RE, REF_ESTADIA, RESULTADO_ESTADIA, TIPO_DOC_CURTO, TIPO_DOC_ESTADIA,
   calcularEstadia, documentosEstadia, fmtHoras, fmtReais, fmtTarifa, fmtToneladas, lerDecimal, lerNumeros, localParaIso, periodoEstadia, pesoToneladas,
 } from '../lib/estadia';
 import { fmtDataAsHora, fmtDataHora, fmtHora, hojeSP } from '../lib/formato';
-import type { CategoriaAnexo, DuplicadaEstadia, ModalidadeEstadia, MotivoEstadia, SolicitacaoDoc, TipoDocEstadia } from '../types';
+import { PAPEIS_IND, type CategoriaAnexo, type DuplicadaEstadia, type ModalidadeEstadia, type MotivoEstadia, type SolicitacaoDoc, type TipoDocEstadia } from '../types';
 
 export function Estadia({ aba }: { aba: 'envio' | 'consultar' }) {
   const { pode } = useApp();
@@ -119,7 +120,11 @@ function FormEstadia() {
   // Só as filiais do escopo do usuário (o servidor confere de novo); nunca deduzidas da cidade.
   const filiais = useMemo(() => (admin ? c.filiais : c.filiais.filter((f) => sessao.filiais.includes(f.id))).filter((f) => f.ativo), [c.filiais, sessao, admin]);
   const exigeFilial = !admin && sessao.filiais.length > 0;
-  const clientes = useMemo(() => c.clientes.filter((x) => x.ativo).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), [c.clientes]);
+  // Funções do Industrializado escolhem o cliente na lista do módulo (10/11); as demais, nos clientes do Travion.
+  const doInd = PAPEIS_IND.includes(app.sessao!.perfil.papel);
+  const ind = useInd();
+  const clientes = useMemo(() => (doInd ? ind.clientes.filter((x) => x.ativo).map((x) => ({ id: x.id, nome: x.nome })) : c.clientes.filter((x) => x.ativo))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), [doInd, ind.clientes, c.clientes]);
   const inicial = (): Rascunho => ({ ...VAZIO, filial: filiais.length === 1 ? filiais[0].id : '' });
   // Rascunho preservado na sessão (falha de rede, troca de aba); arquivos ficam na memória da tela.
   const [d, setD] = useState<Rascunho>(() => { try { const t = sessionStorage.getItem(CHAVE_RASCUNHO); if (t) return { ...inicial(), ...(JSON.parse(t) as Partial<Rascunho>) }; } catch { /* novo */ } return inicial(); });
@@ -187,7 +192,8 @@ function FormEstadia() {
       const anexos = await enviarArquivos(arquivos, (f) => api.doc.enviarArquivo(f, true), setArquivos);
       setEnviando('Gravando a estadia…');
       const r = await api.doc.criarEstadia({
-        tipo_documento: d.tipoDoc as TipoDocEstadia, documentos: d.docs, placa: pl, cliente_id: d.cliente, nfs_carga: d.nfs,
+        tipo_documento: d.tipoDoc as TipoDocEstadia, documentos: d.docs, placa: pl, cliente_id: doInd ? null : d.cliente, nfs_carga: d.nfs,
+        ind_cliente_id: doInd ? d.cliente : null, ind_cliente_nome: doInd ? clientes.find((x) => x.id === d.cliente)?.nome ?? null : null,
         sindicato: d.sindicato === 'sim', sindicato_nome: d.sindicato === 'sim' ? d.sindicatoNome.trim() : null, inicio: inicioIso, saida: saidaIso,
         tarifa: tarifa!, peso: peso!, peso_unidade: d.unidade as 't' | 'kg', motivo: d.motivo as MotivoEstadia, motivo_outro: d.motivo === 'outro' ? d.motivoOutro.trim() : null,
         modalidade: d.modalidade as ModalidadeEstadia, acordo_valor: acordo ? acordoValor : null, acordo_confirmado_por: acordo ? d.acordoQuem.trim() : null,
@@ -245,7 +251,8 @@ function FormEstadia() {
               <option value="">Selecione</option>
               {clientes.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
             </select>
-            {!clientes.length && <small>Nenhum cliente autorizado para o seu perfil.</small>}
+            {!clientes.length && <small>{doInd ? 'Nenhum cliente cadastrado no Industrializado (Industrializado → Clientes).' : 'Nenhum cliente autorizado para o seu perfil.'}</small>}
+            {doInd && clientes.length > 0 && <small>Clientes do Industrializado.</small>}
             {msg('cliente')}
           </label>
           <CampoNumeros rotulo="Número(s) da nota fiscal da carga" valor={d.nfs} aoMudar={(v) => set('nfs', v)} max={50}

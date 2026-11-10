@@ -1135,7 +1135,9 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
         if (d.acordo_data > dataSP(Date.now())) erro('A data da confirmação do acordo não pode estar no futuro.');
         if (!d.acordo_descricao?.trim()) erro('Descreva a tratativa do acordo.');
       }
-      const c = ctx.cliente(d.cliente_id);
+      const c = d.ind_cliente_id
+        ? { id: '', nome: d.ind_cliente_nome ?? 'Cliente Industrializado', comercial_id: null, carteira: null }
+        : (d.cliente_id ? ctx.cliente(d.cliente_id) : null);
       if (!c) erro('Selecione um cliente autorizado.');
       if (d.filial_id && !ctx.noEscopo(d.filial_id, null)) erro('Filial fora do seu escopo.');
       if (!d.filial_id && !ctx.ehAdmin() && ctx.temFiliais()) erro('Selecione a filial.');
