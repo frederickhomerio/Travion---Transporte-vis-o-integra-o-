@@ -148,7 +148,7 @@ do $$ declare r jsonb; s uuid := (select v from t9 where k = 'e1'); ver integer;
   begin perform conferir_estadia(s, '{"retroagir_h":""}', ver); raise exception 'vazio passou'; exception when sqlstate '22023' then null; end;
   begin perform encaminhar_cliente_estadia(s, null, ver); raise exception 'encaminhou sem cálculo'; exception when sqlstate '55000' then null; end;
   -- Versão antiga: conflito
-  begin perform conferir_estadia(s, '{"limite_h":24,"retroagir_h":12}', ver - 1); raise exception 'versão antiga passou'; exception when sqlstate '40001' then null; end;
+  begin perform conferir_estadia(s, '{"limite_h":24,"retroagir_h":12}', ver - 1); raise exception 'versão antiga passou'; exception when sqlstate 'PT409' then null; end;
   -- Ajuste de dados exige observação
   begin perform conferir_estadia(s, '{"limite_h":24,"retroagir_h":12,"peso_t":"38"}', ver); raise exception 'ajuste sem observação'; exception when sqlstate '22023' then null; end;
 

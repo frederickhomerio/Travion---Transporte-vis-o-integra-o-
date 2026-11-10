@@ -12,21 +12,22 @@ import { useDoc } from '../../data/documentacao';
 import { usePainel } from '../../data/painel';
 import { useApp } from '../../data/store';
 import { intervaloPeriodo } from '../../lib/dashboard';
-import { MOTIVO_DEVOLUCAO, STATUS_DOC, duracao, fmtPlaca } from '../../lib/documentacao';
+import { type FaixaCliente, MOTIVO_DEVOLUCAO, PRAZO_CLIENTE_DIAS, ROTULO_FAIXA_CLIENTE, STATUS_DOC, duracao, fmtPlaca } from '../../lib/documentacao';
 import { documentosEstadia, fmtReais, periodoEstadia } from '../../lib/estadia';
 import { fmtDataCurta, fmtDataHora, fmtHora, fmtNum, fmtPct, hojeSP } from '../../lib/formato';
 import {
   DIAS_CURTOS, DIAS_SEMANA, type FiltrosPainel, type LinhaChamado, TIPOS_DEMANDA, type TipoDemanda, type VisaoEvolucao,
-  dataSP, evolucao, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo,
+  type LinhaRetornoCliente, aplicarRelogioCliente, dataSP, evolucao, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo, retornoCliente,
 } from '../../lib/painelOperacional';
 import type { MotivoDevolucao, StatusDoc } from '../../types';
 import { ResultadoPill } from '../Estadia';
 
-type IdQuadro = 'filas' | 'equipe' | 'estadias' | 'mapa' | 'evolucao' | 'resumo';
+type IdQuadro = 'filas' | 'equipe' | 'estadias' | 'cliente' | 'mapa' | 'evolucao' | 'resumo';
 const QUADROS: Array<{ id: IdQuadro; rotulo: string }> = [
   { id: 'filas', rotulo: 'Filas por operação' },
   { id: 'equipe', rotulo: 'Atendimento por colaborador' },
   { id: 'estadias', rotulo: 'Estadias por situação' },
+  { id: 'cliente', rotulo: 'Retorno do cliente (Estadia)' },
   { id: 'mapa', rotulo: 'Mapa de calor' },
   { id: 'evolucao', rotulo: 'Evolução das demandas' },
   { id: 'resumo', rotulo: 'Resumo geral' },
@@ -99,7 +100,9 @@ function Painel({ perfilId }: { perfilId: string }) {
   const agora = tique + painel.desvio;
 
   const dados = painel.dados;
-  const linhas = useMemo(() => (dados ? linhasDoPainel(dados, agora) : []), [dados, agora]);
+  const { estado: docEstado } = useDoc();
+  // Estadia: o tempo com o cliente sai do relógio gravado na estadia (pausa da TP até a resposta do cliente).
+  const linhas = useMemo(() => (dados ? aplicarRelogioCliente(linhasDoPainel(dados, agora), docEstado.solicitacoes, agora) : []), [dados, agora, docEstado.solicitacoes]);
   const escopo = useMemo(() => linhas.filter((l) => noEscopo(l.s, pref)), [linhas, pref]);
   const filtros: FiltrosPainel = pref;
   const grupo = useMemo(() => grupoHistorico(escopo, filtros), [escopo, filtros]);
@@ -134,6 +137,7 @@ function Painel({ perfilId }: { perfilId: string }) {
       case 'filas': return <QFilas key={id} c={c} aoExpandir={expandir} />;
       case 'equipe': return <QEquipe key={id} c={c} aoExpandir={expandir} />;
       case 'estadias': return <QEstadias key={id} c={c} aoExpandir={expandir} />;
+      case 'cliente': return <QRetornoCliente key={id} c={c} aoExpandir={expandir} />;
       case 'mapa': return <QMapa key={id} c={c} aoExpandir={expandir} />;
       case 'evolucao': return <QEvolucao key={id} c={c} aoExpandir={expandir} />;
       case 'resumo': return <QResumo key={id} c={c} aoExpandir={expandir} />;
@@ -510,7 +514,7 @@ function QResumo({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
           )}
           {c.modo !== 'tv' && c.pref.tipos.includes('estadia') && (
             <p className="po-nota">
-              <strong>Estadia:</strong> {fmtDur(r.tempo_cliente_ms || null)} aguardando retorno do cliente (soma, inclui pago em pendência). Esse tempo fica fora do atendimento ativo do apoio.
+              <strong>Estadia:</strong> {fmtDur(r.tempo_cliente_ms || null)} com o cliente (soma das rodadas, do encaminhamento até a resposta do cliente). Esse tempo pausa o relógio da TP e fica fora do atendimento do apoio.
             </p>
           )}
         </>
@@ -610,6 +614,124 @@ function QEstadias({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void })
                 </table>
               </div>
             </div>
+          )}
+        </>
+      )}
+    </Quadro>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Retorno do cliente (Estadia): relógio do cliente, faixas de prazo, valores parados e quem está demorando.
+// ---------------------------------------------------------------------------
+const FAIXAS_CLIENTE: FaixaCliente[] = ['no_prazo', 'atencao', 'atrasado'];
+
+function QRetornoCliente({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
+  const { estado: doc } = useDoc();
+  const { pode } = useApp();
+  const nav = useNavigate();
+  const [visao, setVisao] = useState<'cliente' | 'comercial'>('cliente');
+  const [faixa, setFaixa] = useState<FaixaCliente | null>(null);
+  const tv = c.modo === 'tv';
+  const atuais = useMemo(() => c.linhas.filter((l) => l.s.tipo === 'estadia'), [c.linhas]);
+  const periodo = useMemo(() => c.grupo.filter((l) => l.s.tipo === 'estadia'), [c.grupo]);
+  const r = useMemo(() => retornoCliente(atuais, periodo, doc.solicitacoes, c.agora), [atuais, periodo, doc.solicitacoes, c.agora]);
+  const linhasTab: LinhaRetornoCliente[] = visao === 'cliente' ? r.porCliente : r.porComercial;
+  const abertas = faixa ? r.abertas.filter((a) => a.faixa === faixa) : [];
+  const abrir = (id: string) => nav(pode('estadia.ver') ? `/estadia/consultar?s=${id}` : `/apoio/${id}`);
+  const pct = (v: number | null) => (v === null ? '—' : fmtPct(v * 100));
+
+  return (
+    <Quadro id="cliente" titulo="Retorno do cliente (Estadia)" modo={c.modo} aoExpandir={aoExpandir}
+      sub={`Com o cliente agora: todas as estadias abertas · respostas, reenvios e aprovação: enviadas de ${c.txtPeriodo}`}>
+      {!c.pref.tipos.includes('estadia') ? <p className="po-vazio">Marque o tipo Estadia nos filtros para ver este quadro.</p> : (
+        <>
+          <div className="po-resumo po-cli-kpis">
+            <div><span>Aguardando o cliente agora</span><strong>{fmtNum(r.abertas.length)}</strong><small>{fmtReais(r.valor_aguardando)} calculados</small></div>
+            <div><span>Maior espera agora</span><strong>{r.maior_espera_ms === null ? '—' : duracao(r.maior_espera_ms)}</strong><small>sem resposta do cliente</small></div>
+            <div><span>Mediana de resposta do cliente</span><strong>{r.mediana_resposta_ms === null ? '—' : duracao(r.mediana_resposta_ms)}</strong>
+              <small>{r.respondidas ? `${r.respondidas} estadia(s) respondida(s) no período` : 'Nenhuma resposta no período'}</small></div>
+            <div className={r.pago_sem_receita > 0 ? 'po-cli-risco' : ''}><span>Pago sem receita</span><strong>{fmtReais(r.pago_sem_receita)}</strong>
+              <small>{r.pagas_sem_receita ? `${r.pagas_sem_receita} estadia(s) em Pago em pendência` : 'Nada pago antes do aceite'}</small></div>
+          </div>
+          <div className="po-cli-faixas" role="list" aria-label="Estadias com o cliente por tempo de espera">
+            {FAIXAS_CLIENTE.map((f) => (
+              <button key={f} type="button" role="listitem" className={`po-cli-faixa prazo-${f}${faixa === f ? ' ativa' : ''}`} disabled={tv || !r.faixas[f].n}
+                aria-expanded={faixa === f} onClick={() => setFaixa(faixa === f ? null : f)}>
+                <span className="po-cli-faixa-rot">{ROTULO_FAIXA_CLIENTE[f]}</span>
+                <strong>{r.faixas[f].n}</strong>
+                <small>{fmtReais(r.faixas[f].valor)}</small>
+              </button>
+            ))}
+          </div>
+          {!tv && faixa && (
+            <div className="po-est-det">
+              <div className="po-est-det-cab">
+                <strong>{ROTULO_FAIXA_CLIENTE[faixa]} com o cliente · {abertas.length} {abertas.length === 1 ? 'estadia' : 'estadias'}</strong>
+                <button type="button" className="btn sutil peq" onClick={() => setFaixa(null)}>Fechar relação</button>
+              </div>
+              <div className="rolagem-x">
+                <table className="tabela po-est-tab">
+                  <thead><tr><th>Estadia e placa</th><th>Cliente</th><th>Comercial</th><th>Encaminhada</th><th className="n">Sem resposta há</th><th className="n">Calculado</th><th>Situação</th><th>Responsável</th><th><span className="sr">Ação</span></th></tr></thead>
+                  <tbody>
+                    {abertas.map((a) => {
+                      const d = doc.solicitacoes[a.id];
+                      if (!d) return null;
+                      return (
+                        <tr key={a.id}>
+                          <td><strong>{d.est_codigo ?? `Nº ${d.numero}`}</strong><small className="po-est-placa">Placa {fmtPlaca(d.placa)}{(d.est_rodadas_cliente ?? 0) > 1 ? ` · rodada ${d.est_rodadas_cliente}` : ''}</small></td>
+                          <td>{d.retrato.cliente ?? '—'}</td>
+                          <td>{d.retrato.carteira ?? '—'}</td>
+                          <td>{fmtDataHora(d.est_cliente_desde)}</td>
+                          <td className="n"><strong>{duracao(a.aberto_ms)}</strong></td>
+                          <td className="n">{fmtReais(a.valor)}</td>
+                          <td>{STATUS_DOC[d.status]}</td>
+                          <td>{d.responsavel_nome ?? '—'}</td>
+                          <td><button type="button" className="btn peq" onClick={() => abrir(a.id)}>Abrir</button></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {!tv && (
+            <>
+              <div className="po-cli-cab">
+                <Segmentado valor={visao} aoMudar={(v) => setVisao(v as 'cliente' | 'comercial')} rotulo="Agrupar por"
+                  opcoes={[{ valor: 'cliente', rotulo: 'Por cliente' }, { valor: 'comercial', rotulo: 'Por comercial' }]} />
+                <span className="pequeno suave">Aprovação geral: {pct(r.aprovacao)} do valor calculado · {r.reenviadas} estadia(s) reenviada(s) ao cliente no período</span>
+              </div>
+              {!linhasTab.length ? <p className="po-vazio">Nenhuma estadia encaminhada ao cliente neste escopo.</p> : (
+                <div className="rolagem-x">
+                  <table className="tabela po-est-tab">
+                    <thead><tr>
+                      <th>{visao === 'cliente' ? 'Cliente' : 'Comercial'}</th><th className="n">Com o cliente agora</th><th className="n">R$ aguardando</th><th className="n">Maior espera</th>
+                      <th className="n">Mediana de resposta</th><th className="n">Reenviadas</th><th className="n">Aprovação</th>
+                    </tr></thead>
+                    <tbody>
+                      {linhasTab.map((x) => {
+                        const f = x.maior_espera_ms === null ? null : x.maior_espera_ms > PRAZO_CLIENTE_DIAS.atrasado * 86400e3 ? 'atrasado' : x.maior_espera_ms > PRAZO_CLIENTE_DIAS.atencao * 86400e3 ? 'atencao' : 'no_prazo';
+                        return (
+                          <tr key={x.chave}>
+                            <td><strong>{x.nome}</strong></td>
+                            <td className="n">{x.abertas || '—'}</td>
+                            <td className="n">{x.valor_aguardando ? fmtReais(x.valor_aguardando) : '—'}</td>
+                            <td className="n">{x.maior_espera_ms === null ? '—' : <span className={`tcli tcli-${f}`}>{duracao(x.maior_espera_ms)}</span>}</td>
+                            <td className="n">{x.mediana_resposta_ms === null ? '—' : duracao(x.mediana_resposta_ms)}{x.respondidas ? <small> ({x.respondidas})</small> : null}</td>
+                            <td className="n">{x.reenviadas || '—'}</td>
+                            <td className="n">{pct(x.aprovacao)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="po-nota">O relógio do cliente vai do encaminhamento até a data e hora em que o cliente respondeu (informada no retorno). Reenvio abre nova rodada e soma.
+                Prazo: até {PRAZO_CLIENTE_DIAS.atencao} dias no prazo, até {PRAZO_CLIENTE_DIAS.atrasado} dias atenção, acima disso atrasado. Ao passar de {PRAZO_CLIENTE_DIAS.atencao} e de {PRAZO_CLIENTE_DIAS.atrasado} dias, o solicitante e o comercial recebem aviso no app.</p>
+            </>
           )}
         </>
       )}

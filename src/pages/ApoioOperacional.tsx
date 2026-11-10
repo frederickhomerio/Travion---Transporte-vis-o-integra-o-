@@ -3,7 +3,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { StatusDocPill, TipoNumero, useAgora } from '../components/doc/Comum';
+import { StatusDocPill, TempoCliente, TipoNumero, useAgora } from '../components/doc/Comum';
 import { CancelarDoc } from '../components/doc/DocumentacaoEmbarque';
 import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, Carregando, EstadoVazio, useAviso } from '../components/ui';
@@ -154,7 +154,7 @@ export function ApoioOperacional() {
                       <td data-rot="Cliente e lote"><span className="ao-l1">{s.retrato.cliente}</span><span className="ao-l2">{s.tipo === 'estadia' ? documentosEstadia(s) : s.tipo === 'cadastro' ? 'Cadastro no ERP' : s.retrato.lote_numero ? `Lote ${s.retrato.lote_numero}` : 'Lote a gerar'}</span></td>
                       <td data-rot="Placa e rota"><span className="ao-l1">{fmtPlaca(s.placa)}</span><span className="ao-l2">{s.tipo === 'estadia' ? periodoEstadia(s) : rotaDoc(s)}</span></td>
                       <td data-rot="Comercial">{s.solicitante_nome}</td>
-                      <td data-rot="Tempo"><span className="ao-l2">{t.rotulo}</span><span className="ao-l1">{t.texto}</span></td>
+                      <td data-rot="Tempo"><span className="ao-l2">{t.rotulo}</span><span className="ao-l1">{t.texto}</span><TempoCliente t={t} bloco /></td>
                       <td data-rot="Status"><StatusDocPill status={s.status} /></td>
                       <td data-rot="Responsável">{s.responsavel_nome ?? <span className="suave">—</span>}</td>
                       <td data-rot="Pendência">{s.status === 'aguardando_informacao' ? <span className="ao-pend">Resposta de {s.solicitante_nome}</span>

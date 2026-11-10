@@ -1798,3 +1798,36 @@ dd .ind-contratou::before { content: ''; }
 .ind-filtro-flag { margin-top: 0; align-self: stretch; white-space: nowrap; padding: 0 12px; border: 1px solid var(--borda, #e5ddd5); border-radius: 10px; background: var(--superficie, #fff); font-weight: 600; }
 .ind-filtro-flag.ativo { border-color: var(--vermelho-700); color: var(--vermelho-700); background: var(--vermelho-100); }
 .ind-filtro-flag input { accent-color: var(--vermelho-700); }
+
+/* Estadia: relógio do cliente (migração 4600) */
+.tcli { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--texto-suave); white-space: nowrap; }
+.tcli-bloco { display: flex; margin-top: 0.15rem; }
+.tcli::before { content: ''; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--texto-suave); opacity: 0.5; flex: none; }
+.tcli-no_prazo::before { background: var(--faixa-verde); opacity: 1; }
+.tcli-atencao { color: var(--ambar-800); font-weight: 600; }
+.tcli-atencao::before { background: var(--faixa-amarelo); opacity: 1; }
+.tcli-atrasado { color: #a8232c; font-weight: 600; }
+.tcli-atrasado::before { background: var(--faixa-vermelho); opacity: 1; border-radius: 2px; }
+.ma-relogios { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.5rem; margin: 0.25rem 0 0.75rem; }
+.ma-relogios > div { border: 1px solid var(--borda); border-radius: 8px; padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.15rem; }
+.ma-relogios span { font-size: 0.75rem; color: var(--texto-suave); }
+.ma-relogios strong { font-size: 1.05rem; }
+.ma-relogios .pausado strong::after { content: ' · pausado'; font-size: 0.75rem; font-weight: 500; color: var(--texto-suave); }
+
+/* Painel: Retorno do cliente (Estadia) */
+.po-cli-kpis small { font-size: 0.75rem; color: var(--cinza-600); }
+.po-cli-kpis .po-cli-risco strong { color: #a8232c; }
+.po-cli-faixas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.po-cli-faixa { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border-radius: var(--raio-campo);
+  border: 2px solid var(--borda); background: var(--fundo-cartao, #fff); text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.po-cli-faixa:disabled { cursor: default; opacity: 0.7; }
+.po-cli-faixa strong { font-family: var(--fonte-titulo); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.po-cli-faixa small { font-size: 0.78rem; color: var(--cinza-600); }
+.po-cli-faixa-rot { font-size: 0.78rem; font-weight: 600; }
+.po-cli-faixa.prazo-no_prazo { border-color: var(--faixa-verde); } .po-cli-faixa.prazo-no_prazo strong { color: #1e6b3c; }
+.po-cli-faixa.prazo-atencao { border-color: var(--faixa-amarelo); } .po-cli-faixa.prazo-atencao strong { color: var(--ambar-800); }
+.po-cli-faixa.prazo-atrasado { border-color: var(--faixa-vermelho); } .po-cli-faixa.prazo-atrasado strong { color: #a8232c; }
+.po-cli-faixa.ativa { box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08); }
+.po-cli-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 6px; }
+.tv .po-cli-faixa strong { font-size: 2.4em; }
+@media (max-width: 600px) { .po-cli-faixas { gap: 6px; } .po-cli-faixa { padding: 8px; } .po-cli-faixa strong { font-size: 1.3rem; } }

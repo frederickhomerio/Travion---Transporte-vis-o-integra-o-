@@ -90,7 +90,9 @@ export interface DadosDetalheDoc {
   /** Lote e Emissão / Emissão: conferência automática NF × CT-e de cada CT-e anexado. */
   conferencias?: ConferenciaParticipantes[];
 }
-export interface DadosRetornoEstadia { resultado: ResultadoEstadia; valor_aprovado: number | null; justificativa: string; data_retorno: string }
+export interface DadosRetornoEstadia { resultado: ResultadoEstadia; valor_aprovado: number | null; justificativa: string; data_retorno: string;
+  /** Data e hora em que o cliente respondeu (ISO). Fecha o relógio do cliente (migração 4600). */
+  retorno_em: string }
 export interface DadosPagamentoEstadia { valor_pago: number; data_pagamento: string; observacao: string | null }
 export type EventoDoc = { tabela: 'solicitacoes' | 'lotes' | 'notificacoes' | 'detalhe'; id?: string };
 

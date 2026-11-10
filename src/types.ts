@@ -244,6 +244,8 @@ export interface SolicitacaoDoc {
   est_horas_validas?: number | null; est_valor_calculado?: number | null; est_conferido_em?: string | null; est_conferido_por_nome?: string | null;
   est_encaminhado_em?: string | null; est_resultado?: ResultadoEstadia | null; est_valor_aprovado?: number | null; est_retorno_em?: string | null;
   est_valor_pago?: number | null; est_pago_em?: string | null; est_encerrado_motivo?: string | null;
+  /** Relógio do cliente (migração 4600): início da rodada aberta, segundos das rodadas fechadas e quantas rodadas. */
+  est_cliente_desde?: string | null; est_cliente_seg?: number; est_rodadas_cliente?: number;
   solicitante_id: string; solicitante_nome: string; responsavel_id: string | null; responsavel_nome: string | null;
   enviado_em: string; assumido_em: string | null; concluido_em: string | null; concluido_por_nome: string | null;
   cancelado_em: string | null; cancelado_por_nome: string | null; cancelado_motivo: string | null;
@@ -338,6 +340,8 @@ export interface ConferenciaEstadia {
 }
 export interface RetornoEstadia {
   id: string; solicitacao_id: string; resultado: ResultadoEstadia; valor_aprovado: number | null; justificativa: string; data_retorno: string;
+  /** Data e hora da resposta do cliente e tempo da rodada (migração 4600); nulos nos retornos antigos. */
+  retorno_em?: string | null; rodada?: number | null; tempo_cliente_seg?: number | null;
   conferencia_id: string; valor_calculado: number; status_anterior: StatusDoc; status_novo: StatusDoc; mensagem_id: string | null;
   autor_nome: string; criado_em: string;
 }

@@ -6,9 +6,10 @@ import type {
   Perfil, Permissao, RetornoEstadia, RetratoDoc, SolicitacaoDoc, StatusDoc,
 } from '../types';
 import type { ApiDoc, ArquivoDoc, EventoDoc, ResultadoDoc } from './api';
-import { LIMITE_CADASTRO, MAX_MOTORISTA, MOTIVO_DEVOLUCAO_DOC, MAX_VEICULO, TIPOS_CADASTRO, fmtPlaca, podeCancelarSolicitacao, telefoneValido, tipoCadastro } from '../lib/documentacao';
+import { LIMITE_CADASTRO, MAX_MOTORISTA, MOTIVO_DEVOLUCAO_DOC, MAX_VEICULO, TIPOS_CADASTRO, duracao, fmtPlaca, podeCancelarSolicitacao, telefoneValido, tipoCadastro } from '../lib/documentacao';
 import { LIMITES_ESTADIA, MOTIVOS_ESTADIA, NUMERO_DOC_RE, RESULTADO_ESTADIA, calcularEstadia, fmtNumeroH, fmtReais, fmtToneladas, pesoToneladas } from '../lib/estadia';
 import { type EventoFluxo, type EventoPainel, type SolPainel, dataSP, diaHoraSP, inicioDiaSP } from '../lib/painelOperacional';
+import { fmtDataHora } from '../lib/formato';
 
 const CHAVE = 'travion-previa-doc-v3';
 const TIPOS = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
@@ -506,6 +507,11 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
         inicio: `${dia(6)}T09:15:00-03:00`, saida: `${dia(5)}T15:45:00-03:00`, tarifa: 0.42, peso: 38.2, unidade: 't', motivo: 'agendamento_alongado', idade: 3 * 1440 },
       { ei: 3, sol: gestor, status: 'aprovada', placa: 'MTV1D52', tipoDoc: 'cte', docs: ['000182640'], nfs: ['0044102'],
         inicio: `${dia(12)}T10:00:00-03:00`, saida: `${dia(10)}T22:30:00-03:00`, tarifa: 0.45, peso: 37.9, unidade: 't', motivo: 'troca_nota', idade: 9 * 1440 },
+      // Relógio do cliente na prévia: uma em atenção (mais de 7 dias) e uma atrasada (mais de 15 dias).
+      { ei: 0, sol: sup, status: 'aguardando_cliente', placa: 'QTR5H21', tipoDoc: 'cte', docs: ['000181205'], nfs: ['0043877'],
+        inicio: `${dia(14)}T06:20:00-03:00`, saida: `${dia(12)}T19:10:00-03:00`, tarifa: 0.45, peso: 37.4, unidade: 't', motivo: 'demora_descarga', idade: 10 * 1440 },
+      { ei: 2, sol: com, status: 'aguardando_cliente', placa: 'GYN7K30', tipoDoc: 'cte', docs: ['000179930'], nfs: ['0042710'],
+        inicio: `${dia(23)}T08:00:00-03:00`, saida: `${dia(21)}T13:30:00-03:00`, tarifa: 0.5, peso: 38.9, unidade: 't', motivo: 'falta_cota', idade: 19 * 1440 },
     ];
     for (const it of itens) {
       const e = es[it.ei];
@@ -561,7 +567,8 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
         (db.conferencias ??= []).push(conf);
         Object.assign(s, { est_conferencia_id: conf.id, est_conferencia_versao: 1, est_limite_h: conf.limite_h, est_retroagir_h: conf.retroagir_h,
           est_horas_validas: calc.horas_validas, est_valor_calculado: calc.valor, est_conferido_em: conf.criado_em, est_conferido_por_nome: apoio.nome,
-          est_encaminhado_em: min(it.idade - 45) });
+          est_encaminhado_em: min(it.idade - 45), est_cliente_desde: it.status === 'aguardando_cliente' ? min(it.idade - 45) : null, est_rodadas_cliente: 1,
+          est_cliente_seg: it.status === 'aprovada' ? (it.idade - 45 - 5 * 1440 - 180) * 60 : 0 });
         m(`Memória de cálculo v1 salva: ${it.tarifa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} × ${fmtToneladas(pesoT)} × ${calc.horas_validas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h válidas = ${fmtReais(calc.valor)} (limite 24 h, retroagir ${conf.retroagir_h} h)`, apoio, it.idade - 40, 'calculo');
         m(`Encaminhada ao cliente pelo apoio (fora do app), conferência v1: ${fmtReais(calc.valor)} · enviado por e-mail ao financeiro do cliente`, apoio, it.idade - 45, 'cliente');
         if (it.status === 'aprovada') {
@@ -572,6 +579,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
           const rm = m(`Retorno do cliente registrado (${dia(5).split('-').reverse().join('/')}): Aprovada, valor aprovado ${fmtReais(calc.valor)} · Cliente aprovou por e-mail · situação Pago em pendência → Aprovada (pagamento e pendência de receita continuam registrados)`, apoio, 5 * 1440, 'retorno');
           await anexo('est_retorno', 'aprovacao-cliente.png', await imagemDemo(['E-mail do cliente (demonstração)', 'Estadia aprovada', `Valor ${fmtReais(calc.valor)}`]), apoio, 5 * 1440, rm.id);
           (db.retornos ??= []).push({ id: uid(), solicitacao_id: id, resultado: 'aprovada', valor_aprovado: calc.valor, justificativa: 'Cliente aprovou por e-mail', data_retorno: dia(5),
+            retorno_em: min(5 * 1440 + 180), rodada: 1, tempo_cliente_seg: (it.idade - 45 - 5 * 1440 - 180) * 60,
             conferencia_id: conf.id, valor_calculado: calc.valor, status_anterior: 'pago_pendencia', status_novo: 'aprovada', mensagem_id: rm.id, autor_nome: apoio.nome, criado_em: min(5 * 1440) });
           Object.assign(s, { est_valor_pago: calc.valor, est_pago_em: dia(7), est_resultado: 'aprovada', est_valor_aprovado: calc.valor, est_retorno_em: min(5 * 1440),
             concluido_em: min(5 * 1440), concluido_por_nome: apoio.nome, atualizado_em: min(5 * 1440), versao: 6 });
@@ -1023,7 +1031,9 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       if (!podeCancelarSolicitacao(s, (c) => ctx.tem(c), p.id)) erro('Você não tem permissão para cancelar esta solicitação.');
       if (!motivo.trim()) erro('Informe o motivo do cancelamento.');
       if (db.lotes.some((l) => l.solicitacao_id === s.id)) erro('O lote já foi registrado nesta solicitação: conclua a emissão em vez de cancelar.');
-      tocar(s, { status: 'cancelado', cancelado_em: agora(), cancelado_por_nome: p.nome, cancelado_motivo: motivo.trim().slice(0, 1000) });
+      tocar(s, { status: 'cancelado', cancelado_em: agora(), cancelado_por_nome: p.nome, cancelado_motivo: motivo.trim().slice(0, 1000),
+        // Estadia com o cliente: a rodada aberta fecha no cancelamento (mesma regra do banco).
+        ...(s.est_cliente_desde ? { est_cliente_seg: (s.est_cliente_seg ?? 0) + Math.floor((Date.now() - Date.parse(s.est_cliente_desde)) / 1000), est_cliente_desde: null } : {}) });
       evento(s, 'evento', `Solicitação cancelada por ${p.nome}: ${motivo.trim()}`);
       if (s.tipo === 'cadastro') {
         // Quem enviou fica sabendo se outra pessoa cancelou; o responsável do apoio fica sabendo se o embarcador cancelou.
@@ -1230,11 +1240,13 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
     encaminharClienteEstadia: (id, observacao, versao) => comTrava(async () => {
       offline();
       const s = carregarEstadia(id, versao);
-      responsavel(s, ['em_atendimento']);
+      responsavel(s, ['em_atendimento', 'pago_pendencia']);
       if (!s.est_conferencia_id) erro('Salve a memória de cálculo antes de aguardar o retorno do cliente.');
+      if (s.est_cliente_desde) erro('Esta estadia já está aguardando o retorno do cliente.');
       const obs = observacao?.trim().slice(0, 1000) || null;
-      tocar(s, { status: 'aguardando_cliente', est_encaminhado_em: agora() });
-      evento(s, 'evento', `Encaminhada ao cliente pelo apoio (fora do app), conferência v${s.est_conferencia_versao}: ${fmtReais(s.est_valor_calculado ?? 0)}${obs ? ` · ${obs}` : ''}`, 'cliente');
+      const rodada = (s.est_rodadas_cliente ?? 0) + 1;
+      tocar(s, { status: s.status === 'em_atendimento' ? 'aguardando_cliente' : s.status, est_encaminhado_em: agora(), est_cliente_desde: agora(), est_rodadas_cliente: rodada });
+      evento(s, 'evento', `Encaminhada ao cliente pelo apoio (fora do app)${rodada > 1 ? ` · rodada ${rodada}` : ''}, conferência v${s.est_conferencia_versao}: ${fmtReais(s.est_valor_calculado ?? 0)} · relógio da TP pausado, relógio do cliente aberto${obs ? ` · ${obs}` : ''}`, 'cliente');
       notificar(s.solicitante_id, 'estadia_atualizada', 'Estadia aguardando retorno do cliente', `${rotulo(s)} · ${s.retrato.cliente ?? ''} · valor calculado ${fmtReais(s.est_valor_calculado ?? 0)}`, s, 'estadia', `estadia_cliente:${s.id}:${s.versao}`);
       return fim(s);
     }),
@@ -1246,26 +1258,33 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       if (!['aprovada', 'aprovada_parcial', 'rejeitada'].includes(d.resultado)) erro('Escolha o resultado do cliente.');
       const just = d.justificativa?.trim().slice(0, 2000);
       if (!just) erro('Descreva o retorno do cliente (justificativa).');
-      const hoje = dataSP(Date.now());
-      const data = d.data_retorno || hoje;
-      if (data > hoje) erro('A data do retorno não pode estar no futuro.');
+      const retMs = d.retorno_em ? Date.parse(d.retorno_em) : Date.now();
+      if (Number.isNaN(retMs)) erro('Data e hora do retorno inválidas.');
+      if (retMs > Date.now() + 5 * 60e3) erro('A data e a hora do retorno não podem estar no futuro.');
+      const desde = s.est_cliente_desde ? Date.parse(s.est_cliente_desde) : null;
+      if (desde !== null && retMs < desde) erro(`O retorno não pode ser antes do encaminhamento ao cliente (${fmtDataHora(s.est_cliente_desde!)}).`);
+      const data = dataSP(retMs);
+      const rodadaSeg = desde !== null ? Math.floor((retMs - desde) / 1000) : null;
       const valor = d.resultado === 'rejeitada' ? null : Math.round((d.resultado === 'aprovada' ? d.valor_aprovado ?? s.est_valor_calculado! : d.valor_aprovado ?? 0) * 100) / 100;
       if (d.resultado !== 'rejeitada' && !(valor! > 0)) erro('Informe o valor aprovado pelo cliente (maior que zero).');
       if (!(anexos ?? []).some((a) => a.categoria === 'est_retorno')) erro('Anexe a evidência do retorno do cliente.');
       if (anexos.filter((a) => a.categoria === 'est_retorno').length > LIMITES_ESTADIA.max.est_retorno) erro(`No máximo ${LIMITES_ESTADIA.max.est_retorno} arquivo(s) em evidência do retorno.`);
       const antes = s.status;
       const novo: StatusDoc = d.resultado === 'aprovada' ? 'aprovada' : d.resultado === 'aprovada_parcial' ? 'aprovada_parcial' : 'em_atendimento';
-      const m = evento(s, 'evento', `Retorno do cliente registrado (${data.split('-').reverse().join('/')}): ${RESULTADO_ESTADIA[d.resultado]}${valor != null ? `, valor aprovado ${fmtReais(valor)}` : ''} · ${just}${
+      const m = evento(s, 'evento', `Retorno do cliente registrado (${fmtDataHora(new Date(retMs).toISOString())}): ${RESULTADO_ESTADIA[d.resultado]}${valor != null ? `, valor aprovado ${fmtReais(valor)}` : ''} · ${just}${
+        rodadaSeg !== null ? ` · cliente levou ${duracao(rodadaSeg * 1000)} (rodada ${s.est_rodadas_cliente ?? 1})` : ''}${
         antes === 'pago_pendencia' && novo === 'aprovada' ? ' · situação Pago em pendência → Aprovada (pagamento e pendência de receita continuam registrados)'
         : antes === 'pago_pendencia' && novo === 'aprovada_parcial' ? ' · situação Pago em pendência → Aprovada parcialmente (pagamento continua registrado)' : ''}`, 'retorno');
       try { vincular(s, anexos, ['est_retorno'], m.id); } catch (x) { db.mensagens.pop(); throw x; }
       const p = eu();
       const ret: RetornoEstadia = { id: uid(), solicitacao_id: s.id, resultado: d.resultado, valor_aprovado: valor, justificativa: just, data_retorno: data,
+        retorno_em: new Date(retMs).toISOString(), rodada: rodadaSeg !== null ? s.est_rodadas_cliente ?? 1 : null, tempo_cliente_seg: rodadaSeg,
         conferencia_id: s.est_conferencia_id, valor_calculado: s.est_valor_calculado ?? 0, status_anterior: antes, status_novo: novo, mensagem_id: m.id,
         autor_nome: p.nome, criado_em: agora() };
       (db.retornos ??= []).push(ret);
       const fecha = novo === 'aprovada' || novo === 'aprovada_parcial';
       tocar(s, { status: novo, est_resultado: d.resultado, est_valor_aprovado: valor, est_retorno_em: agora(),
+        est_cliente_seg: (s.est_cliente_seg ?? 0) + (rodadaSeg ?? 0), est_cliente_desde: null,
         ...(fecha ? { concluido_em: agora(), concluido_por_nome: p.nome } : {}) });
       notificar(s.solicitante_id, 'estadia_atualizada',
         d.resultado === 'aprovada' ? 'Estadia aprovada pelo cliente' : d.resultado === 'aprovada_parcial' ? 'Estadia aprovada parcialmente' : 'Estadia rejeitada pelo cliente',

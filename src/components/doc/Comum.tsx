@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../../data/store';
 import type { ArquivoDoc } from '../../data/api';
-import { ACEITA_CADASTRO, CATEGORIA, devolucaoAberta, LIMITE_ARQUIVO, LIMITE_CADASTRO, MOTIVO_DEVOLUCAO, REF_CADASTRO, STATUS_DOC, TIPOS_ARQUIVO, TIPO_DOC, fmtTamanho, tipoCadastro } from '../../lib/documentacao';
+import { ACEITA_CADASTRO, CATEGORIA, type TempoDoc, devolucaoAberta, LIMITE_ARQUIVO, LIMITE_CADASTRO, MOTIVO_DEVOLUCAO, REF_CADASTRO, STATUS_DOC, TIPOS_ARQUIVO, TIPO_DOC, fmtTamanho, tipoCadastro } from '../../lib/documentacao';
 import { fmtDataHora } from '../../lib/formato';
 import { REF_ESTADIA } from '../../lib/estadia';
 import type { AnexoDoc, CategoriaAnexo, MensagemDoc, SolicitacaoDoc, StatusDoc } from '../../types';
@@ -15,6 +15,14 @@ export function useAgora(intervalo = 30000) {
   const [agora, setAgora] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setAgora(Date.now()), intervalo); return () => clearInterval(t); }, [intervalo]);
   return agora;
+}
+
+/** Relógio do cliente na Estadia: ponto colorido pela faixa de prazo (verde até 7 dias, amarelo até 15, vermelho acima). */
+export function TempoCliente({ t, bloco }: { t: TempoDoc; bloco?: boolean }) {
+  if (!t.cliente) return null;
+  const titulo = t.cliente.faixa === 'atrasado' ? 'Cliente sem retorno há mais de 15 dias' : t.cliente.faixa === 'atencao' ? 'Cliente sem retorno há mais de 7 dias'
+    : t.cliente.faixa === 'no_prazo' ? 'Aguardando o cliente, dentro do prazo de 7 dias' : 'Tempo total que o cliente levou para responder';
+  return <span className={`tcli${t.cliente.faixa ? ` tcli-${t.cliente.faixa}` : ''}${bloco ? ' tcli-bloco' : ''}`} title={titulo}>{t.cliente.texto}</span>;
 }
 
 export function StatusDocPill({ status }: { status: StatusDoc }) {

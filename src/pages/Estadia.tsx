@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
-import { type ArquivoLocal, Historico, JanelaAnexos, LinhaInfo, SeletorArquivos, StatusDocPill, enviarArquivos, useArquivo } from '../components/doc/Comum';
+import { type ArquivoLocal, Historico, JanelaAnexos, LinhaInfo, SeletorArquivos, StatusDocPill, TempoCliente, enviarArquivos, useAgora, useArquivo } from '../components/doc/Comum';
 import { CancelarDoc } from '../components/doc/DocumentacaoEmbarque';
 import { Layout } from '../components/Layout';
 import { AcessoNegado, Alerta, Carregando, EstadoVazio, Segmentado, useAviso } from '../components/ui';
@@ -12,7 +12,7 @@ import { mensagemErro } from '../data/api';
 import { useDetalheDoc, useDoc } from '../data/documentacao';
 import { useApp } from '../data/store';
 import { useInd } from '../industrializado/dados';
-import { ABERTOS, CATEGORIA, FORMATOS_CADASTRO, PLACA_RE, STATUS_DOC, fmtPlaca, fmtTamanho, normalizarPlaca } from '../lib/documentacao';
+import { ABERTOS, CATEGORIA, FORMATOS_CADASTRO, PLACA_RE, STATUS_DOC, fmtPlaca, fmtTamanho, normalizarPlaca, tempoDoc } from '../lib/documentacao';
 import {
   FINAIS_ESTADIA, LIMITES_ESTADIA, MODALIDADE_ESTADIA, MOTIVOS_ESTADIA, MOTIVO_ESTADIA, NUMERO_DOC_RE, REF_ESTADIA, RESULTADO_ESTADIA, TIPO_DOC_CURTO, TIPO_DOC_ESTADIA,
   calcularEstadia, documentosEstadia, fmtHoras, fmtReais, fmtTarifa, fmtToneladas, lerDecimal, lerNumeros, localParaIso, periodoEstadia, pesoToneladas,
@@ -481,16 +481,18 @@ function ConsultarEstadia({ aoAbrir }: { aoAbrir: (id: string) => void }) {
 
 function ListaEstadias({ titulo, sub, lista, aoAbrir, vazio }: { titulo: string; sub?: React.ReactNode; lista: SolicitacaoDoc[]; aoAbrir: (id: string) => void; vazio: React.ReactNode }) {
   const { pode } = useApp();
+  const agora = useAgora();
   return (
     <section className="cartao cad-ac" aria-label={titulo}>
       <div className="cartao-cab cad-ac-cab"><h2>{titulo}</h2>{sub && <span className="pequeno suave" aria-live="polite">{sub}</span>}</div>
       {!lista.length ? <EstadoVazio titulo="Nada por aqui">{vazio}</EstadoVazio> : (
         <div className="ao-tabela-wrap">
           <table className="ao-tabela">
-            <thead><tr><th>Solicitação e placa</th><th>Documento</th><th>Cliente</th><th>Período</th><th>Situação</th><th>Resultado do cliente</th><th><span className="sr">Ação</span></th></tr></thead>
+            <thead><tr><th>Solicitação e placa</th><th>Documento</th><th>Cliente</th><th>Período</th><th>Situação</th><th>Tempo</th><th>Resultado do cliente</th><th><span className="sr">Ação</span></th></tr></thead>
             <tbody>
               {lista.map((s) => {
                 const pend = s.status === 'aguardando_informacao';
+                const tm = tempoDoc(s, agora);
                 return (
                   <tr key={s.id}>
                     <td data-rot="Solicitação e placa"><span className="tn"><span className="tn-tipo">{s.est_codigo}</span><span className="tn-num">Placa {fmtPlaca(s.placa)}</span></span></td>
@@ -498,6 +500,7 @@ function ListaEstadias({ titulo, sub, lista, aoAbrir, vazio }: { titulo: string;
                     <td data-rot="Cliente">{s.retrato.cliente}</td>
                     <td data-rot="Período"><span className="ao-l2">{periodoEstadia(s)}</span></td>
                     <td data-rot="Situação"><StatusDocPill status={s.status} />{pend && <span className="ao-pend">Aguardando sua resposta</span>}</td>
+                    <td data-rot="Tempo">{s.status === 'cancelado' ? <span className="suave">—</span> : <><span className="ao-l2">{tm.rotulo}</span><span className="ao-l1">{tm.texto}</span><TempoCliente t={tm} bloco /></>}</td>
                     <td data-rot="Resultado do cliente">{s.est_resultado ? <ResultadoPill r={s.est_resultado} /> : <span className="suave">Sem retorno registrado</span>}</td>
                     <td className="ao-acao"><button className={`btn peq ${pend && pode('estadia.solicitar') ? 'primario' : ''}`} onClick={() => aoAbrir(s.id)}>{pend && pode('estadia.solicitar') ? 'Responder' : 'Abrir'}</button></td>
                   </tr>
