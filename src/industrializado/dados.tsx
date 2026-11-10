@@ -1,8 +1,9 @@
 // Dados do módulo Industrializado.
-// PRÉVIA: guardados só neste navegador, com dados fictícios. Em produção, cada ação vira uma função no banco
-// (com a mesma checagem de permissão e o histórico gravado pelo servidor).
+// Prévia: guardados só neste navegador, com dados fictícios. Produção: no banco (tabelas ind_*), gravados pelas
+// funções ind_salvar_*, que conferem de novo a permissão de cada mudança e não deixam apagar o histórico.
 
 import { useMemo, useSyncExternalStore } from 'react';
+import type { Api, ApiInd } from '../data/api';
 import { useApp } from '../data/store';
 import { hojeSP, somarDias } from '../lib/formato';
 import type { Permissao } from '../types';
@@ -14,6 +15,8 @@ import {
 
 export interface EstadoInd {
   versao: 1; seq: number; seqOc: number; clientes: ClienteInd[]; viagens: ViagemInd[]; ocorrencias: OcorrenciaInd[];
+  /** Produção: false até a primeira leitura do servidor terminar. */
+  carregado?: boolean;
   /** Meta diária de cargas a retirar, por data (AAAA-MM-DD). */
   metas: Record<string, number>;
 }
@@ -152,13 +155,40 @@ function semear(): EstadoInd {
     o(7, 27, 'diaria', 'carregado', 'Fila na doca da Loja Norte', 0, 0, 'cancelada'),
     o(8, 15, 'reagendamento', 'carregado', 'Terminal pediu nova janela de descarga para esta PO', 0, 0, 'aberta'),
   ];
-  return { versao: 1, seq: n, seqOc: ocorrencias.length, clientes, viagens, ocorrencias, metas: { [hoje]: 8 } };
+  return { versao: 1, seq: n, seqOc: ocorrencias.length, clientes, viagens, ocorrencias, metas: { [hoje]: 8 }, carregado: true };
 }
 
 // ---------------------------------------------------------------------------
 // Armazenamento
+// Prévia (modo local): tudo no navegador. Produção: cada carga, ocorrência, cliente e meta vai para o banco
+// (funções ind_salvar_*), que confere a permissão de novo; a tela atualiza na hora e se corrige com a resposta.
 // ---------------------------------------------------------------------------
-let estado: EstadoInd = (() => {
+const VAZIO: EstadoInd = { versao: 1, seq: 0, seqOc: 0, clientes: [], viagens: [], ocorrencias: [], metas: {}, carregado: false };
+let estado: EstadoInd = VAZIO;
+let modo: 'nenhum' | 'local' | 'remoto' = 'nenhum';
+let dono: string | null = null;
+let remoto: ApiInd | null = null;
+let desassinar: (() => void) | null = null;
+/** Versão de cada registro no servidor (controle de "outra pessoa mexeu antes"). */
+const versoes = new Map<string, number>();
+/** Código provisório de ocorrência → código dado pelo servidor (acerta o texto do histórico da carga). */
+const codigosOc = new Map<string, string>();
+let fila: Promise<void> = Promise.resolve();
+let pendentes = 0;
+let recarregarDepois = false;
+let timer: ReturnType<typeof setTimeout> | null = null;
+let avisoErro: ((m: string) => void) | null = null;
+
+const ouvintes = new Set<() => void>();
+const notificar = () => { for (const o of ouvintes) o(); };
+const assinar = (f: () => void) => { ouvintes.add(f); return () => { ouvintes.delete(f); }; };
+const ler = () => estado;
+
+/** A tela registra aqui como mostrar erros do servidor (ex.: sem permissão, outra pessoa alterou antes). */
+export function aoErroInd(f: (m: string) => void) { avisoErro = f; return () => { if (avisoErro === f) avisoErro = null; }; }
+const msgErro = (e: unknown) => (e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : 'Não foi possível gravar no servidor.');
+
+function lerLocal(): EstadoInd {
   try {
     const s = localStorage.getItem(CHAVE);
     if (s) {
@@ -168,19 +198,116 @@ let estado: EstadoInd = (() => {
       // PO única antiga (10/11): passa para a(s) entrega(s) sem PO.
       const poNasEntregas = (v: ViagemInd): ViagemInd => (v.po && v.paradas.every((p) => !p.po)
         ? { ...v, po: null, paradas: v.paradas.map((p) => (p.tipo === 'entrega' ? { ...p, po: v.po } : p)) } : v);
-      return { ...e, viagens: e.viagens.map((v) => poNasEntregas(novo[v.tipo_carga] ? { ...v, tipo_carga: novo[v.tipo_carga] } : v)) };
+      return { ...e, carregado: true, viagens: e.viagens.map((v) => poNasEntregas(novo[v.tipo_carga] ? { ...v, tipo_carga: novo[v.tipo_carga] } : v)) };
     }
   } catch { /* sem armazenamento */ }
   return semear();
-})();
-const ouvintes = new Set<() => void>();
-function gravar(novo: EstadoInd) {
-  estado = novo;
-  try { localStorage.setItem(CHAVE, JSON.stringify(novo)); } catch { /* fica só em memória */ }
-  for (const o of ouvintes) o();
 }
-const assinar = (f: () => void) => { ouvintes.add(f); return () => { ouvintes.delete(f); }; };
-const ler = () => estado;
+
+/** Liga o módulo à fonte de dados certa (uma vez por usuário logado). */
+function iniciar(api: Api, podeVer: boolean, usuarioId: string | null) {
+  if (dono !== usuarioId) {
+    desassinar?.(); desassinar = null; remoto = null; versoes.clear();
+    estado = VAZIO; modo = 'nenhum'; dono = usuarioId;
+  }
+  if (modo !== 'nenhum') return;
+  if (api.modo === 'local' || !api.ind) { modo = 'local'; estado = lerLocal(); return; }
+  if (!podeVer || !usuarioId) return;
+  modo = 'remoto'; remoto = api.ind;
+  desassinar = remoto.assinar(() => agendarRecarga());
+  void recarregar();
+}
+
+function agendarRecarga() {
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => { timer = null; void recarregar(); }, 400);
+}
+
+const semVersao = <T,>(x: Record<string, unknown>): T => {
+  const { versao, ...resto } = x;
+  if (typeof versao === 'number' && typeof resto.id === 'string') versoes.set(resto.id, versao);
+  return resto as T;
+};
+
+async function recarregar() {
+  const r = remoto;
+  if (!r) return;
+  if (pendentes > 0) { recarregarDepois = true; return; }
+  try {
+    const e = await r.estado();
+    if (remoto !== r) return;
+    if (pendentes > 0) { recarregarDepois = true; return; }
+    const viagens = (e.viagens as Array<Record<string, unknown>>).map((x) => semVersao<ViagemInd>(x));
+    const ocorrencias = (e.ocorrencias as Array<Record<string, unknown>>).map((x) => semVersao<OcorrenciaInd>(x));
+    estado = {
+      versao: 1, carregado: true, metas: e.metas ?? {},
+      seq: viagens.reduce((m, v) => Math.max(m, v.codigo), 0), seqOc: ocorrencias.length,
+      clientes: (e.clientes as Array<Record<string, unknown>>).map((x) => semVersao<ClienteInd>(x)), viagens, ocorrencias,
+    };
+    notificar();
+  } catch (err) { avisoErro?.(msgErro(err)); }
+}
+
+/** Troca o registro gravado pela resposta do servidor (código, versão, quem criou); se a tela já mudou de novo, só acerta os campos do servidor. */
+function aplicar<K extends 'viagens' | 'ocorrencias' | 'clientes'>(lista: K, enviado: EstadoInd[K][number], salvo: Record<string, unknown>) {
+  const s = semVersao<EstadoInd[K][number]>(salvo);
+  if (lista === 'ocorrencias') {
+    const a = (enviado as OcorrenciaInd).codigo, b = (s as unknown as OcorrenciaInd).codigo;
+    if (a && b && a !== b) codigosOc.set(a, b);
+  }
+  const campos = ['codigo', 'criado_em', 'criado_por', 'aberta_em', 'aberta_por'] as const;
+  estado = {
+    ...estado,
+    [lista]: (estado[lista] as Array<{ id: string }>).map((x) => {
+      if (x.id !== s.id) return x;
+      if (x === enviado) return s;
+      const patch: Record<string, unknown> = {};
+      for (const c of campos) if (c in (s as object)) patch[c] = (s as unknown as Record<string, unknown>)[c];
+      return { ...x, ...patch };
+    }),
+  };
+  notificar();
+}
+
+/** Troca, nas entradas novas do histórico, o código provisório da ocorrência pelo código do servidor. */
+function corrigirCodigos(v: ViagemInd, desde: number): ViagemInd {
+  if (!codigosOc.size) return v;
+  const troca = (x: string | null) => (x == null ? x : x.replace(/OC-\d+/g, (c) => codigosOc.get(c) ?? c));
+  return { ...v, historico: v.historico.map((h, i) => (i < desde ? h : { ...h, acao: troca(h.acao) ?? h.acao, detalhe: troca(h.detalhe) })) };
+}
+
+function sincronizar(antigo: EstadoInd, novo: EstadoInd) {
+  const r = remoto!;
+  const tarefas: Array<() => Promise<void>> = [];
+  const porId = <T extends { id: string }>(xs: T[]) => new Map(xs.map((x) => [x.id, x]));
+  const ac = porId(antigo.clientes), av = porId(antigo.viagens), ao = porId(antigo.ocorrencias);
+  for (const c of novo.clientes) if (ac.get(c.id) !== c) tarefas.push(async () => aplicar('clientes', c, await r.salvarCliente(c, versoes.get(c.id) ?? null)));
+  for (const v of novo.viagens) if (av.get(v.id) !== v) {
+    const ja = av.get(v.id)?.historico.length ?? 0;
+    tarefas.push(async () => aplicar('viagens', v, await r.salvarViagem(corrigirCodigos(v, ja), versoes.get(v.id) ?? null)));
+  }
+  for (const o of novo.ocorrencias) if (ao.get(o.id) !== o) tarefas.push(async () => aplicar('ocorrencias', o, await r.salvarOcorrencia(o, versoes.get(o.id) ?? null)));
+  for (const [d, n] of Object.entries(novo.metas)) if (antigo.metas[d] !== n) tarefas.push(() => r.definirMeta(d, n));
+  if (!tarefas.length) return;
+  pendentes++;
+  // Uma gravação de cada vez, na ordem das ações (a versão de cada registro vem da resposta anterior).
+  fila = fila.then(async () => {
+    try { for (const t of tarefas) await t(); }
+    catch (e) { avisoErro?.(`${msgErro(e)} A tela foi atualizada com o que está no servidor.`); recarregarDepois = true; }
+    finally {
+      pendentes--;
+      if (pendentes === 0 && recarregarDepois) { recarregarDepois = false; void recarregar(); }
+    }
+  });
+}
+
+function gravar(novo: EstadoInd) {
+  const antigo = estado;
+  estado = novo;
+  notificar();
+  if (modo === 'remoto') sincronizar(antigo, novo);
+  else if (modo === 'local') { try { localStorage.setItem(CHAVE, JSON.stringify(novo)); } catch { /* fica só em memória */ } }
+}
 
 export function restaurarPrevia() { gravar(semear()); }
 
@@ -200,7 +327,8 @@ const numPeso = (s: string) => { const n = Number(s.includes(',') ? s.replace(/\
 function falha(msg: string): never { throw new Error(msg); }
 
 export function useInd() {
-  const { estado: app, pode } = useApp();
+  const { estado: app, pode, api } = useApp();
+  iniciar(api, pode('ind.pagina'), app.sessao?.perfil.id ?? null);
   const st = useSyncExternalStore(assinar, ler, ler);
   const usuario = app.sessao?.perfil.nome || app.sessao?.perfil.email || 'Usuário';
 
@@ -527,5 +655,5 @@ export function useInd() {
   }, [pode, usuario]);
 
   const clientePorId = useMemo(() => Object.fromEntries(st.clientes.map((c) => [c.id, c])), [st.clientes]);
-  return { ...st, clientePorId, acoes, pode };
+  return { ...st, clientePorId, acoes, pode, previa: api.modo === 'local' };
 }

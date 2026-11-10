@@ -56,6 +56,19 @@ export function criarSupabaseApi(url: string, chaveAnon: string): Api {
   const api: Api = {
     modo: 'supabase',
     doc: criarDocSupabase(sb, rpc),
+    ind: {
+      estado: () => rpc('ind_estado', {}),
+      salvarViagem: (dados, versao) => rpc('ind_salvar_viagem', { p_dados: dados, p_versao: versao }),
+      salvarOcorrencia: (dados, versao) => rpc('ind_salvar_ocorrencia', { p_dados: dados, p_versao: versao }),
+      salvarCliente: (dados, versao) => rpc('ind_salvar_cliente', { p_dados: dados, p_versao: versao }),
+      definirMeta: async (data, meta) => { await rpc('ind_definir_meta', { p_data: data, p_meta: meta }); },
+      assinar(aoMudar) {
+        const canal = sb.channel(`travion-ind-${Math.random().toString(36).slice(2)}`);
+        for (const t of ['ind_viagens', 'ind_ocorrencias', 'ind_clientes', 'ind_metas']) canal.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => aoMudar());
+        canal.subscribe((s) => { if (s === 'SUBSCRIBED') aoMudar(); });
+        return () => { void sb.removeChannel(canal); };
+      },
+    },
 
     async sessaoAtual() {
       const { data } = await sb.auth.getSession();

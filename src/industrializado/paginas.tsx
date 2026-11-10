@@ -13,7 +13,7 @@ import {
   ChipCanhoto, ChipCombinado, ChipEtapa, ChipNivel, DetalhesViagem, FILIAL_IND, FormViagem, ModalCombinado, ModalMotivo, ModalOcorrencia,
   BotaoInfo, Checagens, ParadasTracking, Rota, useExecutar,
 } from './componentes';
-import { restaurarPrevia, useInd } from './dados';
+import { aoErroInd, restaurarPrevia, useInd } from './dados';
 import { AnotarCorrecao, RoteiroDemo } from './demo';
 
 import {
@@ -32,11 +32,15 @@ function useRelogio() {
 }
 
 function Pagina({ titulo, permissao = 'ind.pagina', acoes, children }: { titulo: string; permissao?: Permissao; acoes?: ReactNode; children: ReactNode }) {
-  const { pode } = useInd();
+  const { pode, carregado } = useInd();
+  const avisar = useAviso();
+  useEffect(() => aoErroInd((m) => avisar('erro', m)), [avisar]);
   useRelogio();
+  const negado = !pode('ind.pagina') || !pode(permissao);
   return (
     <Layout titulo={titulo} aoLadoTitulo={<span className="badge info">{FILIAL_IND}</span>} acoes={acoes}>
-      {!pode('ind.pagina') || !pode(permissao) ? <AcessoNegado motivo="Esta tela é do módulo Industrializado. Fale com o administrador se precisar de acesso." /> : children}
+      {negado ? <AcessoNegado motivo="Esta tela é do módulo Industrializado. Fale com o administrador se precisar de acesso." />
+        : !carregado ? <p className="suave">Carregando as cargas do Industrializado…</p> : children}
       <AnotarCorrecao />
     </Layout>
   );
@@ -48,7 +52,7 @@ const ativa = (v: ViagemInd) => v.etapa !== 'encerrada' && v.etapa !== 'cancelad
 // Painel (torre de controle)
 // ===========================================================================
 export function PainelInd() {
-  const { viagens, ocorrencias, clientePorId, acoes, pode } = useInd();
+  const { viagens, ocorrencias, clientePorId, acoes, pode, previa } = useInd();
   const exec = useExecutar();
   const avisar = useAviso();
   const avisarFim = (v: ViagemInd, r: string, oc: boolean) => avisar('ok', r === 'proxima'
@@ -140,9 +144,9 @@ export function PainelInd() {
       )}
 
 
-      <p className="suave pequeno" style={{ marginTop: 16 }}>
+      {previa && <p className="suave pequeno" style={{ marginTop: 16 }}>
         Prévia com dados fictícios. <button className="btn sutil peq" onClick={() => restaurarPrevia()}>Restaurar dados da prévia</button>
-      </p>
+      </p>}
       {modal?.tipo === 'divulgar' && <DivulgacaoCarga v={modal.v} aoFechar={() => setModal(null)} />}
       {listaDiv && <DivulgacaoLista vs={q.disponiveis} aoFechar={() => setListaDiv(false)} />}
       {modal?.tipo === 'combinado' && <ModalCombinado v={modal.v} aoFechar={() => setModal(null)} />}

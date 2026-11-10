@@ -3,6 +3,17 @@
 //  - localApi: prévia local sem servidor, só com dados fictícios, para conhecer as telas.
 
 import type { Cadastros } from '../lib/cadastros';
+
+/** Industrializado: documentos (jsonb) com versão; o servidor confere a permissão comparando o antes e o depois. */
+export interface ApiInd {
+  estado(): Promise<{ clientes: unknown[]; viagens: unknown[]; ocorrencias: unknown[]; metas: Record<string, number> }>;
+  salvarViagem(dados: object, versao: number | null): Promise<Record<string, unknown>>;
+  salvarOcorrencia(dados: object, versao: number | null): Promise<Record<string, unknown>>;
+  salvarCliente(dados: object, versao: number | null): Promise<Record<string, unknown>>;
+  definirMeta(data: string, meta: number): Promise<void>;
+  /** Avisa quando outra pessoa grava algo no módulo. */
+  assinar(aoMudar: () => void): () => void;
+}
 import type { DadosPainel } from '../lib/painelOperacional';
 import type {
   AnexoDoc, CategoriaAnexo, ConferenciaEstadia, ConferenciaParticipantes, DadosCadastroDoc, DadosEstadia, DuplicadaEstadia, PagamentoEstadia, ParametrosConferencia,
@@ -137,6 +148,8 @@ export interface ApiDoc {
 export interface Api {
   readonly modo: 'supabase' | 'local';
   readonly doc: ApiDoc;
+  /** Industrializado no servidor (só no modo supabase; na prévia local os dados ficam no navegador). */
+  readonly ind?: ApiInd;
 
   // Autenticação
   sessaoAtual(): Promise<Sessao | null>;

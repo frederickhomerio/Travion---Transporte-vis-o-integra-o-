@@ -145,7 +145,7 @@ export function ModalCombinado({ v, aoFechar }: { v: ViagemInd; aoFechar: () => 
 // Ocorrência
 // ---------------------------------------------------------------------------
 export function ModalOcorrencia({ v, aoFechar, aoCriar, cargaPadrao, titulo }: { v: ViagemInd; aoFechar: () => void; aoCriar?: (o: OcorrenciaInd) => void; cargaPadrao?: CargaOcorrencia; titulo?: string }) {
-  const { acoes, pode } = useInd();
+  const { acoes, pode, ocorrencias } = useInd();
   const exec = useExecutar();
   const entregas = v.paradas.filter((p) => p.tipo === 'entrega');
   const atual = entregas.find((p) => p.situacao === 'em_operacao' || p.situacao === 'chegou') ?? entregas.find((p) => p.situacao === 'pendente') ?? entregas[0];
@@ -154,7 +154,9 @@ export function ModalOcorrencia({ v, aoFechar, aoCriar, cargaPadrao, titulo }: {
     carga: (cargaPadrao ?? (atual && (atual.situacao === 'concluida') ? 'descarregado' : 'carregado')) as CargaOcorrencia,
     avaria: false, descricao: '', valor_motorista: 0, valor_cliente: 0,
   });
-  const [criada, setCriada] = useState<OcorrenciaInd | null>(null);
+  const [criadaLocal, setCriada] = useState<OcorrenciaInd | null>(null);
+  // Lê do estado para mostrar o código definitivo dado pelo servidor.
+  const criada = criadaLocal && (ocorrencias.find((o) => o.id === criadaLocal.id) ?? criadaLocal);
   if (criada) {
     return (
       <Modal titulo="Ocorrência aberta" aoFechar={aoFechar} rodape={<button className="btn primario" onClick={aoFechar}>Fechar</button>}>
