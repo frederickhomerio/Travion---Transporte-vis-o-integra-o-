@@ -66,6 +66,8 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['apoio.reassumir', 'Documentação', 'Reassumir chamado com correção recebida que está com outra pessoa do apoio (ex.: almoço ou fim do expediente)'],
   ['cadastro.solicitar', 'Cadastro', 'Enviar cadastro de motorista e veículos ao apoio e responder pendências'],
   ['cadastro.ver', 'Cadastro', 'Acompanhar os cadastros do seu centro de custo (os próprios sempre aparecem)'],
+  ['cadastro.cancelar_propria', 'Cadastro', 'Cancelar a própria ficha de cadastro em aberto, mesmo depois que o apoio assumiu (com motivo)'],
+  ['cadastro.cancelar', 'Cadastro', 'Cancelar qualquer ficha de cadastro em aberto do seu escopo (com motivo)'],
   ['usuarios.inativar', 'Administração', 'Inativar e reativar usuários'],
   ['usuarios.excluir', 'Administração', 'Excluir usuários que ainda não têm registros no app'],
   ['permissoes.gerenciar', 'Administração', 'Definir as permissões de cada usuário em Administração → Permissões'],
@@ -89,41 +91,42 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
 
 /** Mesma matriz inicial de supabase/migrations/20261026000200_permissoes.sql */
-const EMB_IND = PERMISSOES_EMBARQUES_IND;
+// Por padrão as funções do Industrializado não recebem o cancelamento de ficha de qualquer pessoa (só ind_apoio, abaixo).
+const EMB_IND = PERMISSOES_EMBARQUES_IND.filter((c) => c !== 'cadastro.cancelar' && c !== 'cadastro.cancelar_propria');
 export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]> = {
   gestor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
-    'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver',
+    'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'cadastro.cancelar',
     'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote',
     'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver',
-    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote'],
+    'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote'],
   embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver',
-    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila'],
+    'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila'],
   // Apoio Operacional reúne o antigo papel Operação (contadores e observação) e a fila de documentação.
   apoio: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'analise.operacional', 'estadia.ver', 'analise.fila'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'cadastro.cancelar', 'analise.operacional', 'estadia.ver', 'analise.fila'],
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'analise.operacional', 'estadia.ver', 'analise.fila'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'cadastro.cancelar', 'analise.operacional', 'estadia.ver', 'analise.fila'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
     'embarques.editar_lote', 'embarques.editar_cadastro', 'embarques.editar_capacidade', 'embarques.corrigir_lote_pc_tabela',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
     'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver',
-    'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila',
+    'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila',
     'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
   consulta: ['embarques.ver'],
   // Industrializado: o módulo, mais Lista de Fretes (ver e divulgar), Cadastro e Estadia do módulo Embarques (10/11).
   // Industrializado (10/11): as mesmas funções do Travion, com regras só do módulo. Emissão liberada para toda a equipe.
   ind_supervisor: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias',
-    'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta', ...EMB_IND],
-  ind_embarcador: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.pos_entrega', 'ind.financeiro', ...EMB_IND],
-  ind_apoio: ['ind.pagina', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.pos_entrega', 'ind.financeiro', ...EMB_IND],
+    'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta', ...EMB_IND, 'cadastro.cancelar_propria'],
+  ind_embarcador: ['ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.pos_entrega', 'ind.financeiro', ...EMB_IND, 'cadastro.cancelar_propria'],
+  ind_apoio: ['ind.pagina', 'ind.avancar', 'ind.emissao', 'ind.ocorrencias', 'ind.pos_entrega', 'ind.financeiro', ...EMB_IND, 'cadastro.cancelar_propria', 'cadastro.cancelar'],
 };
 
 interface Banco {
@@ -455,7 +458,7 @@ export function criarLocalApi(): Api {
   if (!db.perfilCentros) { migrarCentros(db); gravarStorage(CHAVE, JSON.stringify(db)); }
   // Bancos da prévia gravados antes da aba Cadastro: recebem as permissões novas da matriz inicial (como a migração 1700).
   for (const nova of ['cadastro.solicitar', 'cadastro.ver', 'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote', 'embarques.corrigir_lote_pc_tabela',
-    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'] as Permissao[]) {
+    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta', 'cadastro.cancelar', 'cadastro.cancelar_propria'] as Permissao[]) {
     if (db.papelPermissoes.some((x) => x.chave === nova)) continue;
     for (const [papel, ps] of Object.entries(MATRIZ_INICIAL)) if (ps.includes(nova)) db.papelPermissoes.push({ papel: papel as Papel, chave: nova });
     // Migração 2800: o Coordenador Comercial passa a editar o lote inteiro.

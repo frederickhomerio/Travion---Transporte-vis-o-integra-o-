@@ -20,7 +20,7 @@ export type Permissao =
   | 'compartilhamento.preparar' | 'compartilhamento.links'
   | 'importacao.executar' | 'cadastros.gerenciar' | 'usuarios.gerenciar' | 'configuracoes.gerenciar'
   | 'documentacao.ver' | 'documentacao.solicitar' | 'documentacao.cancelar' | 'documentacao.devolver' | 'apoio.pagina' | 'apoio.atender' | 'apoio.reassumir'
-  | 'cadastro.solicitar' | 'cadastro.ver' | 'permissoes.gerenciar' | 'analise.operacional' | 'analise.fila'
+  | 'cadastro.solicitar' | 'cadastro.ver' | 'cadastro.cancelar' | 'cadastro.cancelar_propria' | 'permissoes.gerenciar' | 'analise.operacional' | 'analise.fila'
   | 'estadia.solicitar' | 'estadia.ver' | 'estadia.reabrir' | 'usuarios.inativar' | 'usuarios.excluir'
   | 'ind.pagina' | 'ind.lancar' | 'ind.avancar' | 'ind.voltar' | 'ind.cancelar' | 'ind.emissao' | 'ind.ocorrencias'
   | 'ind.ocorrencias_aprovar' | 'ind.pos_entrega' | 'ind.financeiro' | 'ind.clientes' | 'ind.meta';
@@ -285,7 +285,7 @@ export interface ConferenciaParticipantes {
 }
 
 export interface NotificacaoApp {
-  id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada' | 'cadastro_concluido' | 'estadia_atualizada' | 'documentacao_devolvida'; titulo: string; texto: string;
+  id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada' | 'cadastro_concluido' | 'cadastro_cancelado' | 'estadia_atualizada' | 'documentacao_devolvida'; titulo: string; texto: string;
   solicitacao_id: string; embarque_id: string | null; destino: 'embarque' | 'apoio' | 'cadastro' | 'estadia'; criada_em: string; lida_em: string | null;
 }
 
@@ -367,4 +367,4 @@ export function permissaoCabeNoPapel(papel: Papel, chave: Permissao): boolean {
  * Lista de Fretes só para ver e divulgar (sem editar lote e sem pedir emissão), Cadastro e Estadia.
  * O escopo continua o do centro de custo da pessoa, como nos outros centros.
  */
-export const PERMISSOES_EMBARQUES_IND: Permissao[] = ['embarques.ver', 'financeiro.ver', 'cadastro.solicitar', 'cadastro.ver', 'estadia.solicitar', 'estadia.ver'];
+export const PERMISSOES_EMBARQUES_IND: Permissao[] = ['embarques.ver', 'financeiro.ver', 'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar', 'cadastro.cancelar_propria', 'estadia.solicitar', 'estadia.ver'];
