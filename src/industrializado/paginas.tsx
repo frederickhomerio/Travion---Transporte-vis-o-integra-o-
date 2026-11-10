@@ -335,16 +335,17 @@ export function ViagensInd() {
       {grupos.length === 0 ? <EstadoVazio titulo="Nenhuma viagem encontrada" /> : (
         <div className="cartao" style={{ overflowX: 'auto' }}>
           <table className="tabela ind-tabela">
-            <thead><tr><th>Pedido / veículo</th><th>Etapa</th><th>Rota</th><th>Próximo agendamento</th><th>Motorista / placa</th><th>Docs</th><th>Tracking</th>{verValor && <th className="n">Margem</th>}</tr></thead>
+            <thead><tr><th>Pedido / veículo</th><th>Retirada prevista</th><th>Etapa</th><th>Rota</th><th>Próximo agendamento</th><th>Motorista / placa</th><th>Docs</th><th>Tracking</th>{verValor && <th className="n">Margem</th>}</tr></thead>
             <tbody>
               {grupos.map(({ c, vs }) => [
-                <tr key={c.id} className="ind-grupo"><td colSpan={verValor ? 8 : 7}><span className="ind-grupo-cli">{c.logo_url && <LogoCliente url={c.logo_url} nome={c.nome} tam={24} />}{c.nome}</span> <span className="suave pequeno">· {vs.length} {vs.length === 1 ? 'viagem' : 'viagens'}</span></td></tr>,
+                <tr key={c.id} className="ind-grupo"><td colSpan={verValor ? 9 : 8}><span className="ind-grupo-cli">{c.logo_url && <LogoCliente url={c.logo_url} nome={c.nome} tam={24} />}{c.nome}</span> <span className="suave pequeno">· {vs.length} {vs.length === 1 ? 'viagem' : 'viagens'}</span></td></tr>,
                 ...vs.map((v) => {
                   const ag = proximoAgendamento(v);
                   const m = calcularMargem(v, ocorrencias);
                   return (
                     <tr key={v.id} className="clicavel" onClick={() => setAberta(v.id)}>
-                      <td><strong>{pedidoCarga(v)}</strong> <BotaoInfo v={v} /><div className="suave pequeno">{v.tipo_veiculo || '—'} · {ROTULO_TIPO_CARGA[v.tipo_carga]}{v.reversa_de ? ' · reversa' : ''}</div></td>
+                      <td><span className="ind-nowrap"><strong>{pedidoCarga(v)}</strong> <BotaoInfo v={v} /></span><div className="suave pequeno">{v.tipo_veiculo || '—'} · {ROTULO_TIPO_CARGA[v.tipo_carga]}{v.reversa_de ? ' · reversa' : ''}</div></td>
+                      <td className="ind-nowrap">{v.coleta_prevista ? fmtData(v.coleta_prevista) : <span className="suave">—</span>}</td>
                       <td><ChipEtapa etapa={v.etapa} /></td>
                       <td><Rota v={v} /></td>
                       <td>{ag ? <>{fmtDataHora(ag.agendado_para)}<div className="suave pequeno">{ag.local}{ag.protocolo ? ` · ${ag.protocolo}` : ''}</div></> : <span className="suave">—</span>}</td>

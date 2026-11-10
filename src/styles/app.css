@@ -1786,3 +1786,4 @@ dd .ind-contratou::before { content: ''; }
 /* Industrializado: pesquisa ao lado do título do quadro aberto no Painel */
 .ind-cab-busca { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .ind-busca-quadro { width: 280px; max-width: 100%; }
+.ind-nowrap { white-space: nowrap; }
