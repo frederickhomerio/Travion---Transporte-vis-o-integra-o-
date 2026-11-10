@@ -62,17 +62,39 @@ export interface CombinadoInd {
 }
 
 /** Conferências do veículo contratado antes da coleta (vermelho até marcar, verde depois). */
-export type ChecagemInd = 'cadastro' | 'monitoramento' | 'oc' | 'vinculo';
-export const CHECAGENS: ChecagemInd[] = ['cadastro', 'monitoramento', 'oc', 'vinculo'];
-export const ROTULO_CHECAGEM: Record<ChecagemInd, string> = { cadastro: 'Cadastro', monitoramento: 'Monitoramento', oc: 'OC', vinculo: 'Vínculo' };
+export type ChecagemInd = 'cadastro_enviado' | 'cadastro_liberado' | 'monitoramento_enviado' | 'monitoramento_liberado' | 'oc' | 'vinculo';
+export const CHECAGENS: ChecagemInd[] = ['cadastro_enviado', 'cadastro_liberado', 'monitoramento_enviado', 'monitoramento_liberado', 'oc', 'vinculo'];
+export const ROTULO_CHECAGEM: Record<ChecagemInd, string> = {
+  cadastro_enviado: 'Cadastro enviado', cadastro_liberado: 'Cadastro liberado',
+  monitoramento_enviado: 'Monitoramento enviado', monitoramento_liberado: 'Monitoramento liberado',
+  oc: 'OC', vinculo: 'Vínculo',
+};
+/** Como as conferências aparecem na tela: Cadastro e Monitoramento com Enviado e Liberado; OC e Vínculo sozinhos. */
+export const GRUPOS_CHECAGEM: Array<{ rotulo: string | null; itens: Array<[ChecagemInd, string]> }> = [
+  { rotulo: 'Cadastro', itens: [['cadastro_enviado', 'Enviado'], ['cadastro_liberado', 'Liberado']] },
+  { rotulo: 'Monitoramento', itens: [['monitoramento_enviado', 'Enviado'], ['monitoramento_liberado', 'Liberado']] },
+  { rotulo: null, itens: [['oc', 'OC']] },
+  { rotulo: null, itens: [['vinculo', 'Vínculo']] },
+];
+/** "Liberado" pressupõe "Enviado": marcar liberado marca enviado; desmarcar enviado desmarca liberado. */
+export const PAR_CHECAGEM: Partial<Record<ChecagemInd, { enviado: ChecagemInd; liberado: ChecagemInd }>> = {
+  cadastro_enviado: { enviado: 'cadastro_enviado', liberado: 'cadastro_liberado' }, cadastro_liberado: { enviado: 'cadastro_enviado', liberado: 'cadastro_liberado' },
+  monitoramento_enviado: { enviado: 'monitoramento_enviado', liberado: 'monitoramento_liberado' }, monitoramento_liberado: { enviado: 'monitoramento_enviado', liberado: 'monitoramento_liberado' },
+};
 export type ChecagensInd = Partial<Record<ChecagemInd, { em: string; por: string }>>;
 
-/** Até 10/11/2026 OC e Vínculo eram uma conferência só (oc_vinculo): quem marcou a antiga fica com as duas marcadas. */
-export function separarOcVinculo<T extends { checagens?: ChecagensInd }>(v: T): T {
-  const antiga = (v.checagens as Record<string, { em: string; por: string }> | undefined)?.oc_vinculo;
-  if (!v.checagens || !('oc_vinculo' in v.checagens)) return v;
-  const { oc_vinculo: _x, ...resto } = v.checagens as Record<string, { em: string; por: string }>;
-  return { ...v, checagens: { ...resto, ...(antiga ? { oc: resto.oc ?? antiga, vinculo: resto.vinculo ?? antiga } : {}) } as ChecagensInd };
+/** Conferências antigas (até 10/11/2026): Cadastro e Monitoramento marcados viram Enviado + Liberado; OC/Vínculo vira OC + Vínculo. */
+export function normalizarChecagens<T extends { checagens?: ChecagensInd }>(v: T): T {
+  const c = v.checagens as Record<string, { em: string; por: string }> | undefined;
+  const antigas: Array<[string, ChecagemInd[]]> = [['cadastro', ['cadastro_enviado', 'cadastro_liberado']], ['monitoramento', ['monitoramento_enviado', 'monitoramento_liberado']], ['oc_vinculo', ['oc', 'vinculo']]];
+  if (!c || !antigas.some(([k]) => k in c)) return v;
+  const novo: Record<string, { em: string; por: string }> = { ...c };
+  for (const [k, ks] of antigas) {
+    if (!(k in novo)) continue;
+    const x = novo[k]; delete novo[k];
+    if (x) for (const n of ks) novo[n] = novo[n] ?? x;
+  }
+  return { ...v, checagens: novo as ChecagensInd };
 }
 
 export interface AcaoInd { em: string; usuario: string; acao: string; detalhe: string | null; motivo: string | null }
@@ -96,7 +118,7 @@ export interface ViagemInd {
   paradas: ParadaInd[];
   valores: ValoresInd;
   combinado: CombinadoInd | null;
-  /** Cadastro, Monitoramento, OC e Vínculo (ausente = nada marcado). */
+  /** Cadastro e Monitoramento (enviado e liberado), OC e Vínculo (ausente = nada marcado). */
   checagens?: ChecagensInd;
   // Emissão própria do Industrializado (fora do Apoio Operacional)
   emissao_assumida_por: string | null; emissao_assumida_em: string | null;

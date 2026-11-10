@@ -1706,8 +1706,9 @@ button.cf-chip { cursor: pointer; }
 @media (max-width: 720px) { .ind-meta { grid-template-columns: 1fr; } .ind-quadros { grid-template-columns: 1fr 1fr; } .ind-quadro-btn { min-height: 130px; } }
 @media (min-width: 1280px) { .ind-quadros { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 
-/* Industrializado: conferências do veículo contratado (Cadastro, Monitoramento, OC, Vínculo) */
+/* Industrializado: conferências do veículo contratado (Cadastro e Monitoramento enviado/liberado, OC, Vínculo) */
 .ind-checagens { display: flex; flex-direction: column; gap: 3px; min-width: 112px; }
+.ind-checagens:has(.ind-checagem-grupo) { min-width: 232px; }
 .ind-checagem { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; line-height: 1.2; padding: 2px 7px 2px 4px; border-radius: 999px; cursor: pointer; white-space: nowrap; width: fit-content; }
 .ind-checagem input { width: 12px; height: 12px; margin: 0; cursor: pointer; }
 .ind-checagem.pendente { background: var(--vermelho-100); color: var(--vermelho-700); box-shadow: inset 0 0 0 1px #f2c2c5; }
@@ -1715,7 +1716,13 @@ button.cf-chip { cursor: pointer; }
 .ind-checagem.ok { background: var(--verde-100); color: var(--verde-700); }
 .ind-checagem.ok input { accent-color: var(--verde-700); }
 .ind-checagem:has(input:disabled) { cursor: default; }
+.ind-checagem-grupo { display: flex; align-items: center; gap: 3px; flex-wrap: nowrap; }
+.ind-checagem-rot { font-size: 11px; font-weight: 700; min-width: 84px; }
+.ind-checagem-rot.pendente { color: var(--vermelho-700); }
+.ind-checagem-rot.ok { color: var(--verde-700); }
 .ind-checagens.horizontal { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+.ind-checagens.horizontal .ind-checagem-grupo { margin-right: 6px; }
+.ind-checagens.horizontal .ind-checagem-rot { min-width: 0; font-size: 12px; }
 .ind-checagens.horizontal .ind-checagem { font-size: 12px; padding: 4px 10px 4px 6px; }
 /* Industrializado: conferência de valores na Emissão */
 .ind-h3 { font-size: 14px; margin: 16px 0 6px; }

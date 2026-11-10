@@ -9,7 +9,7 @@ import {
   alertaCanhoto, alertaCombinado, faltaPoEntregas, numeroEntrega, posCarga, calcularMargem, combinadoAtual, pendenciasEncerrar, duracao, marcosCarga, combinadoTransito, ETAPAS_TRANSITO, pedidoCarga, META_MARGEM_PCT, pendenciasAvanco, proximaEtapa, rota, type NivelAlerta,
 } from './regras';
 import {
-  ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_SIT_PARADA, ROTULO_TIPO_CARGA, ROTULO_CARROCERIA, VALORES_ZERO, CHECAGENS, ROTULO_CHECAGEM,
+  ETAPAS_FLUXO, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_OCORRENCIA, ROTULO_SIT_PARADA, ROTULO_TIPO_CARGA, ROTULO_CARROCERIA, VALORES_ZERO, GRUPOS_CHECAGEM, ROTULO_CHECAGEM,
   type CargaOcorrencia, type ChecagemInd, type EtapaInd, type OcorrenciaInd, type ParadaInd, type TipoOcorrencia, type ValoresInd, type ViagemInd,
 } from './tipos';
 
@@ -574,19 +574,22 @@ export function ParadasTracking({ v, compacto }: { v: ViagemInd; compacto?: bool
   );
 }
 
-/** Cadastro, Monitoramento, OC e Vínculo: vermelho até conferir, verde depois. Clicar marca ou desmarca (fica no histórico). */
+/** Cadastro e Monitoramento (Enviado, Liberado), OC e Vínculo: vermelho até marcar, verde depois. Clicar marca ou desmarca (fica no histórico). */
 export function Checagens({ v, podeMarcar, checar, horizontal }: { v: ViagemInd; podeMarcar: boolean; horizontal?: boolean; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void }) {
+  const caixa = (item: ChecagemInd, rotulo: string) => {
+    const c = v.checagens?.[item];
+    return (
+      <label key={item} className={`ind-checagem ${c ? 'ok' : 'pendente'}`} title={c ? `${ROTULO_CHECAGEM[item]} por ${c.por} em ${fmtDataHora(c.em)}` : `${ROTULO_CHECAGEM[item]}: pendente`}>
+        <input type="checkbox" checked={!!c} disabled={!podeMarcar} onChange={(e) => checar(v, item, e.target.checked)} />
+        {rotulo}
+      </label>
+    );
+  };
   return (
     <div className={`ind-checagens${horizontal ? ' horizontal' : ''}`}>
-      {CHECAGENS.map((item) => {
-        const c = v.checagens?.[item];
-        return (
-          <label key={item} className={`ind-checagem ${c ? 'ok' : 'pendente'}`} title={c ? `Conferido por ${c.por} em ${fmtDataHora(c.em)}` : 'Pendente'}>
-            <input type="checkbox" checked={!!c} disabled={!podeMarcar} onChange={(e) => checar(v, item, e.target.checked)} />
-            {ROTULO_CHECAGEM[item]}
-          </label>
-        );
-      })}
+      {GRUPOS_CHECAGEM.map((g) => (g.rotulo
+        ? <div key={g.rotulo} className="ind-checagem-grupo"><span className={`ind-checagem-rot ${g.itens.every(([i]) => v.checagens?.[i]) ? 'ok' : 'pendente'}`}>{g.rotulo}</span>{g.itens.map(([i, r]) => caixa(i, r))}</div>
+        : g.itens.map(([i, r]) => caixa(i, r))))}
     </div>
   );
 }

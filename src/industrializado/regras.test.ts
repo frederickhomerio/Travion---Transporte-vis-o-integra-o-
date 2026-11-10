@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { alertaCanhoto, alertaCombinado, alertaDescarga, calcularMargem, posCarga, combinadoAtual, marcosCarga, linkWhatsApp, pendenciasValores, valoresConfirmados, faltaConferencia, marcadoSemConferencia, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, quadrosPainel, retiradasDoDia } from './regras';
-import { VALORES_ZERO, separarOcVinculo, type ClienteInd, type OcorrenciaInd, type ViagemInd } from './tipos';
+import { VALORES_ZERO, normalizarChecagens, type ClienteInd, type OcorrenciaInd, type ViagemInd } from './tipos';
 
 const base: ViagemInd = {
   id: 'v1', codigo: 1, cliente_id: 'c1', tipo_carga: 'paletizada', pedido: 'P1', coleta_prevista: null, po: null, etapa: 'lancada', frota: 'terceiro',
@@ -127,14 +127,16 @@ describe('painel', () => {
 
 describe('conferências', () => {
   const ok = { em: 'x', por: 'y' };
+  const tudo = { cadastro_enviado: ok, cadastro_liberado: ok, monitoramento_enviado: ok, monitoramento_liberado: ok, oc: ok, vinculo: ok };
   const marcado = { ...base, etapa: 'contratado' as const, combinado: { o_que: 'Chegada', para: '2026-11-06T12:00:00Z', marcou_em: '2026-11-06T11:50:00Z', registrado_por: 'x' } };
   it('marcado sem as 3 conferências gera alerta; com as 3, não', () => {
-    expect(faltaConferencia(base)).toEqual(['cadastro', 'monitoramento', 'oc', 'vinculo']);
-    expect(faltaConferencia(separarOcVinculo({ checagens: { cadastro: ok, monitoramento: ok, oc_vinculo: ok } as never }))).toEqual([]);
-    expect(faltaConferencia({ checagens: { cadastro: ok, monitoramento: ok, oc: ok } })).toEqual(['vinculo']);
+    expect(faltaConferencia(base)).toEqual(['cadastro_enviado', 'cadastro_liberado', 'monitoramento_enviado', 'monitoramento_liberado', 'oc', 'vinculo']);
+    expect(faltaConferencia(normalizarChecagens({ checagens: { cadastro: ok, monitoramento: ok, oc_vinculo: ok } as never }))).toEqual([]);
+    expect(faltaConferencia(normalizarChecagens({ checagens: { cadastro: ok } as never }))).toEqual(['monitoramento_enviado', 'monitoramento_liberado', 'oc', 'vinculo']);
+    expect(faltaConferencia({ checagens: { ...tudo, cadastro_liberado: undefined } })).toEqual(['cadastro_liberado']);
     expect(marcadoSemConferencia(marcado)).toBe(true);
-    expect(marcadoSemConferencia({ ...marcado, checagens: { cadastro: ok, monitoramento: ok } })).toBe(true);
-    expect(marcadoSemConferencia({ ...marcado, checagens: { cadastro: ok, monitoramento: ok, oc: ok, vinculo: ok } })).toBe(false);
+    expect(marcadoSemConferencia({ ...marcado, checagens: { cadastro_enviado: ok, cadastro_liberado: ok, monitoramento_enviado: ok, monitoramento_liberado: ok } })).toBe(true);
+    expect(marcadoSemConferencia({ ...marcado, checagens: tudo })).toBe(false);
   });
   it('sem marcar o combinado ou já em trânsito, não alerta', () => {
     expect(marcadoSemConferencia({ ...marcado, combinado: { ...marcado.combinado, marcou_em: null } })).toBe(false);
@@ -144,14 +146,15 @@ describe('conferências', () => {
 
 describe('conferências travam emissão e trânsito', () => {
   const ok = { em: 'x', por: 'y' };
-  const tudo = { cadastro: ok, monitoramento: ok, oc: ok, vinculo: ok };
+  const tudo = { cadastro_enviado: ok, cadastro_liberado: ok, monitoramento_enviado: ok, monitoramento_liberado: ok, oc: ok, vinculo: ok };
+  
   it('documentada sem as 3 não segue para trânsito', () => {
     expect(pendenciasAvanco({ ...base, etapa: 'documentada' }, undefined)).toHaveLength(1);
     expect(pendenciasAvanco({ ...base, etapa: 'documentada', checagens: tudo }, undefined)).toHaveLength(0);
   });
   it('emissão exige as 3', () => {
     const d = { cte: '1', nfs: '2', po: '' };
-    expect(pendenciasEmissao({ ...base, etapa: 'carregada', checagens: { cadastro: ok } }, undefined, d)).toHaveLength(1);
+    expect(pendenciasEmissao({ ...base, etapa: 'carregada', checagens: { cadastro_enviado: ok } }, undefined, d)).toHaveLength(1);
     expect(pendenciasEmissao({ ...base, etapa: 'carregada', checagens: tudo }, undefined, d)).toHaveLength(0);
   });
 });
