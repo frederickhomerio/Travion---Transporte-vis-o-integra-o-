@@ -95,14 +95,19 @@ export function PainelInd() {
     { k: 'marcados', titulo: 'Veículos Marcados', desc: 'No local do cliente para descarga', vs: q.marcados },
     { k: 'comOcorrencia', titulo: 'Finalizados com Ocorrência', desc: 'Entregues com ocorrência ainda pendente (sem ocorrência, saem do painel)', vs: q.comOcorrencia },
   ];
-  const atual = quadros.find((x) => x.k === sel) ?? null;
+  const [busca, setBusca] = useState('');
+  const qb = normalizar(busca.trim()).replace(/[\s-]/g, '');
+  /** Pesquisa do quadro aberto: placa (cavalo ou carreta), motorista ou pedido. */
+  const achou = (v: ViagemInd) => !qb || normalizar([v.placa_cavalo, v.placa_carreta, v.motorista, v.pedido].filter(Boolean).join('|')).replace(/[\s-]/g, '').includes(qb);
+  const quadroSel = quadros.find((x) => x.k === sel) ?? null;
+  const atual = quadroSel && { ...quadroSel, vs: quadroSel.vs.filter(achou) };
 
   return (
     <Pagina titulo="Painel Industrializado">
       <RoteiroDemo />
       {semConf.length > 0 && (
         <Alerta tipo="erro"><div>
-          <strong>{semConf.length === 1 ? '1 veículo marcado' : `${semConf.length} veículos marcados`} sem as 3 conferências:</strong>{' '}
+          <strong>{semConf.length === 1 ? '1 veículo marcado' : `${semConf.length} veículos marcados`} sem as conferências:</strong>{' '}
           {semConf.map((v, i) => <span key={v.id}>{i > 0 && ' · '}<button className="btn sutil peq" onClick={() => { setSel('contratados'); setAberta(v.id); }}>Pedido {pedidoCarga(v)}</button> <span className="pequeno">(falta {faltaConferencia(v).map((c) => ROTULO_CHECAGEM[c]).join(', ')})</span></span>)}
         </div></Alerta>
       )}
@@ -125,15 +130,16 @@ export function PainelInd() {
 
       {atual && (
         <section className="cartao ind-lista-quadro">
-          <div className="cartao-cab"><div><h2>{atual.titulo} ({atual.vs.length})</h2><div className="suave pequeno">{atual.desc}</div></div>
+          <div className="cartao-cab"><div className="ind-cab-busca"><div><h2>{atual.titulo} ({qb ? `${atual.vs.length} de ${quadroSel!.vs.length}` : atual.vs.length})</h2><div className="suave pequeno">{atual.desc}</div></div>
+              <input type="search" className="entrada ind-busca-quadro" placeholder="Pesquisar placa, motorista ou pedido" aria-label="Pesquisar placa, motorista ou pedido" value={busca} onChange={(e) => setBusca(e.target.value)} /></div>
             <div className="ind-acoes">
-              {atual.k === 'disponiveis' && atual.vs.length > 0 && <button className="btn peq" onClick={() => setListaDiv(true)}>Lista de fretes</button>}
+              {atual.k === 'disponiveis' && quadroSel!.vs.length > 0 && <button className="btn peq" onClick={() => setListaDiv(true)}>Lista de fretes</button>}
               <button className="btn sutil peq" onClick={() => setSel(null)}>Fechar</button>
             </div></div>
-          {atual.vs.length === 0 ? <div className="cartao-corpo suave">Nenhuma carga neste quadro.</div> : (
+          {atual.vs.length === 0 ? <div className="cartao-corpo suave">{qb ? 'Nenhuma carga encontrada com essa pesquisa.' : 'Nenhuma carga neste quadro.'}</div> : (
             <div style={{ overflowX: 'auto' }}>
               {atual.k === 'contratados' || atual.k === 'transito' ? (
-                (atual.ordem ?? []).filter((n) => atual.cores?.[n]).map((n) => {
+                (atual.ordem ?? []).filter((n) => atual.vs.some((v) => (atual.k === 'contratados' ? corContratado(v) : corTransito(v)) === n)).map((n) => {
                   const vs = atual.vs.filter((v) => (atual.k === 'contratados' ? corContratado(v) : corTransito(v)) === n)
                     .sort((a, b) => (atual.k === 'contratados' ? Date.parse(a.combinado?.para ?? '') - Date.parse(b.combinado?.para ?? '') : Date.parse(alertaDescarga(a).quando ?? '') - Date.parse(alertaDescarga(b).quando ?? '')));
                   return (

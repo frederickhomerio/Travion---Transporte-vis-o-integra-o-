@@ -273,7 +273,7 @@ export function codigoViagem(n: number): string { return `IND-${String(n).padSta
 export function pedidoCarga(v: { pedido: string | null }): string { return v.pedido?.trim() || 'Sem pedido'; }
 
 // ---------------------------------------------------------------------------
-// Conferências (Cadastro, Monitoramento, OC/Vínculo)
+// Conferências (Cadastro, Monitoramento, OC, Vínculo)
 // ---------------------------------------------------------------------------
 /** Conferências ainda não marcadas na viagem. */
 export function faltaConferencia(v: Pick<ViagemInd, 'checagens'>): ChecagemInd[] {
@@ -285,7 +285,7 @@ const ETAPAS_CONFERENCIA: EtapaInd[] = ['lancada', 'contratado', 'coleta_agendad
 export function marcadoSemConferencia(v: Pick<ViagemInd, 'checagens' | 'combinado' | 'etapa'>): boolean {
   return !!v.combinado?.marcou_em && ETAPAS_CONFERENCIA.includes(v.etapa) && faltaConferencia(v).length > 0;
 }
-/** Sem Cadastro, Monitoramento e OC/Vínculo marcados, a carga não é documentada nem sai para trânsito. */
+/** Sem Cadastro, Monitoramento, OC e Vínculo marcados, a carga não é documentada nem sai para trânsito. */
 export function avisoConferencia(v: Pick<ViagemInd, 'checagens'>, para: string): string[] {
   const f = faltaConferencia(v);
   return f.length ? [`Marque ${f.map((c) => ROTULO_CHECAGEM[c]).join(', ')} antes de ${para}`] : [];

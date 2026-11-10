@@ -14,7 +14,7 @@ export function Sino() {
   const { api, pode } = useApp();
   const { estado, recarregarNotificacoes } = useDoc();
   const ind = useInd();
-  // Industrializado: veículo marcou o combinado sem Cadastro, Monitoramento e OC/Vínculo conferidos.
+  // Industrializado: veículo marcou o combinado sem Cadastro, Monitoramento, OC e Vínculo conferidos.
   // Fica no sino enquanto a situação durar (some sozinho quando as 3 conferências forem marcadas).
   const alertasInd = pode('ind.pagina') ? ind.viagens.filter(marcadoSemConferencia) : [];
   const nav = useNavigate();

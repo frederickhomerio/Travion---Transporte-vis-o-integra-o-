@@ -111,7 +111,7 @@ export function RoteiroDemo() {
       <p className="pequeno">Todos os dados são fictícios e ficam só no seu navegador. Pode clicar em tudo à vontade. Para recomeçar do zero, use "Restaurar dados da prévia" no fim do Painel. Viu algo errado ou faltando? Clique em <strong>✎ Anotar correção</strong> (canto da tela) e, no fim, envie as anotações ao Frederick.</p>
       <ol className="pequeno">
         <li><strong>Disponíveis:</strong> abra uma carga sem veículo, informe placa e motorista e veja o "Contratado por" (dourado) vir preenchido.</li>
-        <li><strong>Contratados:</strong> marque as conferências Cadastro, Monitoramento e OC/Vínculo; veja a carga da Cargill que marcou sem conferências (faixa vermelha e sino).</li>
+        <li><strong>Contratados:</strong> marque as conferências Cadastro, Monitoramento, OC e Vínculo; veja a carga da Cargill que marcou sem conferências (faixa vermelha e sino).</li>
         <li><strong>Veículo carregado:</strong> leve uma carga marcada para Aguardando Emissão.</li>
         <li><strong>Emissão:</strong> confira os valores (frete, pedágio, custo extra, adicional) e a margem; tente emitir a Cargill sem PO.</li>
         <li><strong>Em trânsito:</strong> use o WhatsApp do motorista, combine a chegada no cliente, abra uma ocorrência e clique em "Marcado na descarga".</li>

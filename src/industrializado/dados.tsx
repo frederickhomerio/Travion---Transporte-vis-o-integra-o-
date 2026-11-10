@@ -9,7 +9,7 @@ import { hojeSP, somarDias } from '../lib/formato';
 import type { Permissao } from '../types';
 import { avisoConferencia, codigoOcorrencia, ETAPAS_TRANSITO, valoresConfirmados, type ValoresEmissao, etapaAnterior, pendenciasAvanco, pendenciasEmissao, pendenciasEncerrar, proximaEtapa } from './regras';
 import {
-  ROTULO_CHECAGEM, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_PARADA, VALORES_ZERO,
+  ROTULO_CHECAGEM, ROTULO_ETAPA, ROTULO_OCORRENCIA, ROTULO_SIT_PARADA, VALORES_ZERO, separarOcVinculo,
   type CargaOcorrencia, type ChecagemInd, type ClienteInd, type OcorrenciaInd, type ParadaInd, type SituacaoParada, type Carroceria, type TipoCarga, type TipoOcorrencia, type ValoresInd, type ViagemInd,
 } from './tipos';
 
@@ -75,7 +75,7 @@ function semear(): EstadoInd {
       combinado: { o_que: 'Fim do carregamento', para: emMin(80), marcou_em: null, registrado_por: '[DEMO] Equipe de embarque' } }),
     v(0, 'carregada', { ...mot(3), historico: [{ em: emDias(-1), usuario: '[DEMO] Equipe de embarque', acao: 'Viagem lançada', detalhe: null, motivo: null }, { em: emMin(-25), usuario: '[DEMO] Equipe de embarque', acao: 'Etapa: Carregando → Carregada', detalhe: null, motivo: null }], paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', emMin(-240), 'concluida', 'CG-5521'), par(2, 'entrega', 'Porto Seco', 'Anápolis', 'GO', emDias(1, 3))], valores: val(7400, 6300, { pedagio: 140 }) }),
     v(4, 'documentada', { ...mot(4), cte: '35201', mdfe: '9921', nfs: '118220, 118221', paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Cliente final', 'Rio Verde', 'GO', null)], valores: val(3900, 3500),
-      checagens: { cadastro: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, monitoramento: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, oc_vinculo: { em: emMin(-90), por: '[DEMO] Equipe de embarque' } },
+      checagens: { cadastro: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, monitoramento: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, oc: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, vinculo: { em: emMin(-90), por: '[DEMO] Equipe de embarque' } },
       combinado: { o_que: 'Saída para viagem', para: emMin(-40), marcou_em: emMin(-55), registrado_por: '[DEMO] Equipe de embarque' } }),
     v(1, 'transito', { ...mot(5), cte: '35188', nfs: '77410', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Cuiabá', 'Cuiabá', 'MT', emMin(300), 'pendente', 'AUR-2231')], valores: val(12800, 10900, { pedagio: 610 }),
       combinado: { o_que: 'Chegada no cliente', para: emMin(240), marcou_em: null, registrado_por: '[DEMO] Equipe de pós-embarque', fase: 'transito' } }),
@@ -91,14 +91,14 @@ function semear(): EstadoInd {
     v(1, 'contratado', { ...mot(3), placa_cavalo: 'SDF4G55', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null), par(2, 'entrega', 'Loja Sul', 'Caldas Novas', 'GO', emDias(1))], valores: val(3800, 3200),
       combinado: { o_que: 'Chegada no CD para carregar', para: emMin(200), marcou_em: null, registrado_por: '[DEMO] Equipe de embarque' } }),
     v(2, 'coleta_agendada', { ...mot(6), placa_cavalo: 'HJK7L88', paradas: [par(1, 'coleta', 'Fábrica Serra Azul', 'Senador Canedo', 'GO', emMin(30), 'chegou'), par(2, 'entrega', 'Distribuidora Sul', 'Itumbiara', 'GO', null)], valores: val(4100, 3600),
-      checagens: { cadastro: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, monitoramento: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, oc_vinculo: { em: emMin(-90), por: '[DEMO] Equipe de embarque' } },
+      checagens: { cadastro: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, monitoramento: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, oc: { em: emMin(-90), por: '[DEMO] Equipe de embarque' }, vinculo: { em: emMin(-90), por: '[DEMO] Equipe de embarque' } },
       combinado: { o_que: 'Chegada na fábrica', para: emMin(-10), marcou_em: emMin(-15), registrado_por: '[DEMO] Equipe de embarque' } }),
     comPo(v(0, 'transito', { ...mot(4), placa_cavalo: 'PLM2N44', cte: '35210', nfs: '99102', paradas: [par(1, 'coleta', 'Fábrica Cargill', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Terminal Rondonópolis', 'Rondonópolis', 'MT', emDias(1, 1), 'pendente', 'CG-5600')], valores: val(11200, 9600, { pedagio: 480 }) }), '4500233001'),
     v(1, 'transito', { ...mot(0), placa_cavalo: 'QAZ5W66', cte: '35211', nfs: '77455', paradas: [par(1, 'coleta', 'CD Aurora', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'CD Belém', 'Belém', 'PA', emDias(3), 'pendente', 'AUR-2290')], valores: val(18900, 16100, { pedagio: 900 }) }),
     v(4, 'entregas', { ...mot(5), placa_cavalo: 'WSX8E99', cte: '35199', nfs: '20155', paradas: [par(1, 'coleta', 'Embalagens Cerrado', 'Goiânia', 'GO', null, 'concluida'), par(2, 'entrega', 'Cliente final', 'Anápolis', 'GO', emMin(-60), 'chegou')], valores: val(2600, 2200) }),
   );
   // Demonstração: um exemplo de cada situação que o supervisor precisa conferir.
-  const ok3 = { cadastro: { em: emMin(-120), por: 'Vanessa Duarte' }, monitoramento: { em: emMin(-110), por: 'Vanessa Duarte' }, oc_vinculo: { em: emMin(-100), por: 'Vanessa Duarte' } };
+  const ok3 = { cadastro: { em: emMin(-120), por: 'Vanessa Duarte' }, monitoramento: { em: emMin(-110), por: 'Vanessa Duarte' }, oc: { em: emMin(-100), por: 'Vanessa Duarte' }, vinculo: { em: emMin(-100), por: 'Vanessa Duarte' } };
   const reg = (acao: string, em: string, detalhe: string | null = null) => ({ em, usuario: '[DEMO] Equipe de embarque', acao, detalhe, motivo: null });
   viagens.push(
     // 18 Disponível: Cargill exige PO e agendamento, sem veículo ainda.
@@ -198,7 +198,7 @@ function lerLocal(): EstadoInd {
       // PO única antiga (10/11): passa para a(s) entrega(s) sem PO.
       const poNasEntregas = (v: ViagemInd): ViagemInd => (v.po && v.paradas.every((p) => !p.po)
         ? { ...v, po: null, paradas: v.paradas.map((p) => (p.tipo === 'entrega' ? { ...p, po: v.po } : p)) } : v);
-      return { ...e, carregado: true, viagens: e.viagens.map((v) => poNasEntregas(novo[v.tipo_carga] ? { ...v, tipo_carga: novo[v.tipo_carga] } : v)) };
+      return { ...e, carregado: true, viagens: e.viagens.map((v) => separarOcVinculo(poNasEntregas(novo[v.tipo_carga] ? { ...v, tipo_carga: novo[v.tipo_carga] } : v))) };
     }
   } catch { /* sem armazenamento */ }
   return semear();
@@ -237,7 +237,7 @@ async function recarregar() {
     const e = await r.estado();
     if (remoto !== r) return;
     if (pendentes > 0) { recarregarDepois = true; return; }
-    const viagens = (e.viagens as Array<Record<string, unknown>>).map((x) => semVersao<ViagemInd>(x));
+    const viagens = (e.viagens as Array<Record<string, unknown>>).map((x) => separarOcVinculo(semVersao<ViagemInd>(x)));
     const ocorrencias = (e.ocorrencias as Array<Record<string, unknown>>).map((x) => semVersao<OcorrenciaInd>(x));
     estado = {
       versao: 1, carregado: true, metas: e.metas ?? {},

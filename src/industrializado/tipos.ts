@@ -62,10 +62,18 @@ export interface CombinadoInd {
 }
 
 /** Conferências do veículo contratado antes da coleta (vermelho até marcar, verde depois). */
-export type ChecagemInd = 'cadastro' | 'monitoramento' | 'oc_vinculo';
-export const CHECAGENS: ChecagemInd[] = ['cadastro', 'monitoramento', 'oc_vinculo'];
-export const ROTULO_CHECAGEM: Record<ChecagemInd, string> = { cadastro: 'Cadastro', monitoramento: 'Monitoramento', oc_vinculo: 'OC/Vínculo' };
+export type ChecagemInd = 'cadastro' | 'monitoramento' | 'oc' | 'vinculo';
+export const CHECAGENS: ChecagemInd[] = ['cadastro', 'monitoramento', 'oc', 'vinculo'];
+export const ROTULO_CHECAGEM: Record<ChecagemInd, string> = { cadastro: 'Cadastro', monitoramento: 'Monitoramento', oc: 'OC', vinculo: 'Vínculo' };
 export type ChecagensInd = Partial<Record<ChecagemInd, { em: string; por: string }>>;
+
+/** Até 10/11/2026 OC e Vínculo eram uma conferência só (oc_vinculo): quem marcou a antiga fica com as duas marcadas. */
+export function separarOcVinculo<T extends { checagens?: ChecagensInd }>(v: T): T {
+  const antiga = (v.checagens as Record<string, { em: string; por: string }> | undefined)?.oc_vinculo;
+  if (!v.checagens || !('oc_vinculo' in v.checagens)) return v;
+  const { oc_vinculo: _x, ...resto } = v.checagens as Record<string, { em: string; por: string }>;
+  return { ...v, checagens: { ...resto, ...(antiga ? { oc: resto.oc ?? antiga, vinculo: resto.vinculo ?? antiga } : {}) } as ChecagensInd };
+}
 
 export interface AcaoInd { em: string; usuario: string; acao: string; detalhe: string | null; motivo: string | null }
 
@@ -88,7 +96,7 @@ export interface ViagemInd {
   paradas: ParadaInd[];
   valores: ValoresInd;
   combinado: CombinadoInd | null;
-  /** Cadastro, Monitoramento e OC/Vínculo (ausente = nada marcado). */
+  /** Cadastro, Monitoramento, OC e Vínculo (ausente = nada marcado). */
   checagens?: ChecagensInd;
   // Emissão própria do Industrializado (fora do Apoio Operacional)
   emissao_assumida_por: string | null; emissao_assumida_em: string | null;

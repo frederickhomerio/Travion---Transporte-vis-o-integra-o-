@@ -574,7 +574,7 @@ export function ParadasTracking({ v, compacto }: { v: ViagemInd; compacto?: bool
   );
 }
 
-/** Cadastro, Monitoramento e OC/Vínculo: vermelho até conferir, verde depois. Clicar marca ou desmarca (fica no histórico). */
+/** Cadastro, Monitoramento, OC e Vínculo: vermelho até conferir, verde depois. Clicar marca ou desmarca (fica no histórico). */
 export function Checagens({ v, podeMarcar, checar, horizontal }: { v: ViagemInd; podeMarcar: boolean; horizontal?: boolean; checar: (v: ViagemInd, item: ChecagemInd, marcado: boolean) => void }) {
   return (
     <div className={`ind-checagens${horizontal ? ' horizontal' : ''}`}>
