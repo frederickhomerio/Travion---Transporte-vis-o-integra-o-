@@ -8,7 +8,8 @@
 //   cliente     enviado_cliente/pago_pendencia → retorno_cliente/concluído (Estadia: aguardando o cliente, não é atendimento ativo)
 // Nada é estimado: sequência de eventos incompleta deixa o chamado fora das medianas ("sem registro").
 
-import type { MotivoDevolucao, StatusDoc, TipoSolicitacaoDoc } from '../types';
+import type { MotivoDevolucao, SolicitacaoDoc, StatusDoc, TipoSolicitacaoDoc } from '../types';
+import { type FaixaCliente, relogiosEstadia } from './documentacao';
 import { FUSO } from './formato';
 
 export type EventoFluxo =
@@ -421,4 +422,112 @@ export function mesclarPainel(base: DadosPainel, novo: DadosPainel): DadosPainel
     solicitacoes: [...base.solicitacoes.filter((s) => !ids.has(s.id)), ...novo.solicitacoes],
     eventos: [...base.eventos.filter((e) => !ids.has(e.s)), ...novo.eventos],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Estadia: relógio do cliente (pedido de 05/11/2026, migração 4600)
+// ---------------------------------------------------------------------------
+type DocEstadia = Pick<SolicitacaoDoc, 'status' | 'enviado_em' | 'concluido_em' | 'cancelado_em' | 'est_cliente_desde' | 'est_cliente_seg' | 'est_rodadas_cliente'
+  | 'retrato' | 'est_valor_calculado' | 'est_valor_aprovado' | 'est_valor_pago' | 'est_resultado'>;
+
+/** O tempo do cliente sai dos relógios gravados na estadia (rodadas até a hora da resposta do cliente), não dos eventos de registro:
+ *  a demora entre a resposta e o registro volta para o atendimento, e o total da estadia passa a ser só o tempo com a TP. */
+export function aplicarRelogioCliente(linhas: LinhaChamado[], docs: Record<string, DocEstadia | undefined>, agora: number): LinhaChamado[] {
+  return linhas.map((l) => {
+    const d = l.s.tipo === 'estadia' ? docs[l.s.id] : undefined;
+    if (!d || !(d.est_rodadas_cliente || d.est_cliente_desde)) return l;
+    const r = relogiosEstadia(d, agora);
+    const delta = l.cliente_ms - r.cliente_ms;
+    return {
+      ...l, cliente_ms: r.cliente_ms, atendimento_ms: l.atendimento_ms + Math.max(0, delta),
+      total_ms: l.total_ms === null ? null : Math.max(0, l.total_ms - r.cliente_ms),
+    };
+  });
+}
+
+export interface LinhaRetornoCliente {
+  chave: string; nome: string;
+  /** Aguardando o cliente agora. */
+  abertas: number; valor_aguardando: number; maior_espera_ms: number | null;
+  /** Estadias do período que já tiveram resposta do cliente: mediana do tempo total com o cliente. */
+  respondidas: number; mediana_resposta_ms: number | null;
+  /** Estadias do período reenviadas ao cliente (mais de uma rodada). */
+  reenviadas: number;
+  /** Valor aprovado ÷ valor calculado das estadias do período com resultado do cliente. */
+  aprovacao: number | null;
+}
+export interface RetornoCliente {
+  abertas: Array<{ id: string; aberto_ms: number; faixa: FaixaCliente; valor: number }>;
+  faixas: Record<FaixaCliente, { n: number; valor: number }>;
+  valor_aguardando: number;
+  /** Pago ao motorista com a receita ainda pendente (Pago em pendência). */
+  pago_sem_receita: number; pagas_sem_receita: number;
+  maior_espera_ms: number | null;
+  mediana_resposta_ms: number | null; respondidas: number; reenviadas: number; aprovacao: number | null;
+  porCliente: LinhaRetornoCliente[]; porComercial: LinhaRetornoCliente[];
+}
+
+/** `atuais`: estadias no escopo (filial/centro) independente do período, para o que está com o cliente agora.
+ *  `periodo`: estadias enviadas no período, para tempos de resposta, reenvios e aprovação. */
+export function retornoCliente(atuais: LinhaChamado[], periodo: LinhaChamado[], docs: Record<string, DocEstadia | undefined>, agora: number): RetornoCliente {
+  const vazio = (): Record<FaixaCliente, { n: number; valor: number }> => ({ no_prazo: { n: 0, valor: 0 }, atencao: { n: 0, valor: 0 }, atrasado: { n: 0, valor: 0 } });
+  const r: RetornoCliente = {
+    abertas: [], faixas: vazio(), valor_aguardando: 0, pago_sem_receita: 0, pagas_sem_receita: 0, maior_espera_ms: null,
+    mediana_resposta_ms: null, respondidas: 0, reenviadas: 0, aprovacao: null, porCliente: [], porComercial: [],
+  };
+  type Acc = LinhaRetornoCliente & { _resp: number[]; _calc: number; _aprov: number };
+  const grupos = { cliente: new Map<string, Acc>(), comercial: new Map<string, Acc>() };
+  const acc = (tipo: 'cliente' | 'comercial', nome: string): Acc => {
+    let x = grupos[tipo].get(nome);
+    if (!x) {
+      x = { chave: nome, nome, abertas: 0, valor_aguardando: 0, maior_espera_ms: null, respondidas: 0, mediana_resposta_ms: null, reenviadas: 0, aprovacao: null, _resp: [], _calc: 0, _aprov: 0 };
+      grupos[tipo].set(nome, x);
+    }
+    return x;
+  };
+  const chaves = (d: DocEstadia) => [acc('cliente', d.retrato.cliente || 'Sem cliente'), acc('comercial', d.retrato.carteira || 'Sem comercial')];
+
+  for (const l of atuais) {
+    const d = l.s.tipo === 'estadia' ? docs[l.s.id] : undefined;
+    if (!d) continue;
+    if (d.status === 'pago_pendencia') { r.pago_sem_receita += d.est_valor_pago ?? 0; r.pagas_sem_receita++; }
+    const rel = relogiosEstadia(d, agora);
+    if (rel.aberto_ms === null || !rel.faixa) continue;
+    const valor = d.est_valor_calculado ?? 0;
+    r.abertas.push({ id: l.s.id, aberto_ms: rel.aberto_ms, faixa: rel.faixa, valor });
+    r.faixas[rel.faixa].n++; r.faixas[rel.faixa].valor += valor;
+    r.valor_aguardando += valor;
+    r.maior_espera_ms = Math.max(r.maior_espera_ms ?? 0, rel.aberto_ms);
+    for (const x of chaves(d)) { x.abertas++; x.valor_aguardando += valor; x.maior_espera_ms = Math.max(x.maior_espera_ms ?? 0, rel.aberto_ms); }
+  }
+
+  const resp: number[] = [];
+  let calc = 0; let aprov = 0;
+  for (const l of periodo) {
+    const d = l.s.tipo === 'estadia' ? docs[l.s.id] : undefined;
+    if (!d) continue;
+    const gs = chaves(d);
+    // Respondida: tem retorno do cliente e nenhuma rodada aberta (o tempo é a soma das rodadas).
+    if (d.est_resultado && !d.est_cliente_desde && (d.est_rodadas_cliente ?? 0) > 0) {
+      const ms = (d.est_cliente_seg ?? 0) * 1000;
+      resp.push(ms); for (const x of gs) { x.respondidas++; x._resp.push(ms); }
+    }
+    if ((d.est_rodadas_cliente ?? 0) > 1) { r.reenviadas++; for (const x of gs) x.reenviadas++; }
+    if (d.est_resultado && d.est_valor_calculado) {
+      const a = d.est_resultado === 'rejeitada' ? 0 : d.est_valor_aprovado ?? 0;
+      calc += d.est_valor_calculado; aprov += a;
+      for (const x of gs) { x._calc += d.est_valor_calculado; x._aprov += a; }
+    }
+  }
+  r.respondidas = resp.length;
+  r.mediana_resposta_ms = mediana(resp);
+  r.aprovacao = calc > 0 ? aprov / calc : null;
+  r.abertas.sort((a, b) => b.aberto_ms - a.aberto_ms);
+  const fechar = (m: Map<string, Acc>) => [...m.values()]
+    .map(({ _resp, _calc, _aprov, ...x }) => ({ ...x, mediana_resposta_ms: mediana(_resp), aprovacao: _calc > 0 ? _aprov / _calc : null }))
+    .filter((x) => x.abertas || x.respondidas || x.reenviadas || x.aprovacao !== null)
+    .sort((a, b) => (b.maior_espera_ms ?? -1) - (a.maior_espera_ms ?? -1) || b.valor_aguardando - a.valor_aguardando || a.nome.localeCompare(b.nome, 'pt-BR'));
+  r.porCliente = fechar(grupos.cliente);
+  r.porComercial = fechar(grupos.comercial);
+  return r;
 }

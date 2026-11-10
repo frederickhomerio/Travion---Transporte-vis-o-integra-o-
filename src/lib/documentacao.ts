@@ -142,8 +142,62 @@ export function duracao(ms: number): string {
 
 export const CONCLUIDOS: StatusDoc[] = ['documentacao_disponivel', 'cadastro_concluido', 'aprovada', 'aprovada_parcial', 'encerrado'];
 
-/** Tempo de espera (aberta) ou total até a conclusão. */
-export function tempoDoc(s: SolicitacaoDoc, agora: number): { rotulo: string; texto: string } {
+// ---------------------------------------------------------------------------
+// Estadia: dois relógios (pedido de 05/11/2026, migração 4600).
+// TP corre na fila, no atendimento e aguardando correção; pausa enquanto a estadia está com o cliente.
+// Cliente: do encaminhamento até a data e hora da resposta (soma das rodadas).
+// ---------------------------------------------------------------------------
+/** Prazo de resposta do cliente: até 7 dias no prazo, até 15 dias atenção, acima atrasado (igual ao aviso do banco). */
+export const PRAZO_CLIENTE_DIAS = { atencao: 7, atrasado: 15 } as const;
+export type FaixaCliente = 'no_prazo' | 'atencao' | 'atrasado';
+export const ROTULO_FAIXA_CLIENTE: Record<FaixaCliente, string> = {
+  no_prazo: `Até ${PRAZO_CLIENTE_DIAS.atencao} dias`, atencao: `${PRAZO_CLIENTE_DIAS.atencao + 1} a ${PRAZO_CLIENTE_DIAS.atrasado} dias`, atrasado: `Mais de ${PRAZO_CLIENTE_DIAS.atrasado} dias`,
+};
+export function faixaCliente(ms: number): FaixaCliente {
+  const dias = ms / 86400e3;
+  return dias <= PRAZO_CLIENTE_DIAS.atencao ? 'no_prazo' : dias <= PRAZO_CLIENTE_DIAS.atrasado ? 'atencao' : 'atrasado';
+}
+export interface RelogiosEstadia {
+  /** Tempo com a Transpanorama (envio até agora ou até o fim, menos o tempo com o cliente). */
+  tp_ms: number;
+  /** Tempo total com o cliente (rodadas fechadas + rodada aberta até agora). */
+  cliente_ms: number;
+  /** Rodada aberta: há quanto tempo o cliente não responde. */
+  aberto_ms: number | null;
+  rodadas: number;
+  /** Faixa de prazo da rodada aberta. */
+  faixa: FaixaCliente | null;
+}
+type CamposRelogio = Pick<SolicitacaoDoc, 'status' | 'enviado_em' | 'concluido_em' | 'cancelado_em' | 'est_cliente_desde' | 'est_cliente_seg' | 'est_rodadas_cliente'>;
+export function relogiosEstadia(s: CamposRelogio, agora: number): RelogiosEstadia {
+  const desde = s.est_cliente_desde ? Date.parse(s.est_cliente_desde) : NaN;
+  const aberto_ms = Number.isNaN(desde) ? null : Math.max(0, agora - desde);
+  const cliente_ms = (s.est_cliente_seg ?? 0) * 1000 + (aberto_ms ?? 0);
+  const fimTxt = CONCLUIDOS.includes(s.status) ? s.concluido_em : s.status === 'cancelado' ? s.cancelado_em : null;
+  const fim = fimTxt ? Date.parse(fimTxt) : agora;
+  return {
+    tp_ms: Math.max(0, fim - Date.parse(s.enviado_em) - cliente_ms), cliente_ms, aberto_ms,
+    rodadas: s.est_rodadas_cliente ?? 0, faixa: aberto_ms === null ? null : faixaCliente(aberto_ms),
+  };
+}
+
+export interface TempoDoc {
+  rotulo: string; texto: string;
+  /** Estadia já encaminhada ao cliente: o relógio do cliente, separado do relógio da TP. */
+  cliente?: { texto: string; faixa: FaixaCliente | null };
+}
+
+/** Tempo de espera (aberta) ou total até a conclusão. Na Estadia encaminhada ao cliente, o tempo da TP pausa e o do cliente aparece à parte. */
+export function tempoDoc(s: SolicitacaoDoc, agora: number): TempoDoc {
+  if (s.tipo === 'estadia' && (s.est_rodadas_cliente || s.est_cliente_desde) && s.status !== 'cancelado') {
+    const r = relogiosEstadia(s, agora);
+    const fim = CONCLUIDOS.includes(s.status);
+    return {
+      rotulo: fim ? 'Total na TP' : r.aberto_ms !== null ? 'TP (pausado)' : 'Com a TP',
+      texto: duracao(r.tp_ms),
+      cliente: { texto: r.aberto_ms !== null ? `Cliente há ${duracao(r.aberto_ms)}` : `Cliente levou ${duracao(r.cliente_ms)}`, faixa: r.faixa },
+    };
+  }
   if (CONCLUIDOS.includes(s.status) && s.concluido_em) return { rotulo: 'Total', texto: duracao(Date.parse(s.concluido_em) - Date.parse(s.enviado_em)) };
   if (s.status === 'cancelado') return { rotulo: 'Cancelada', texto: '—' };
   return { rotulo: s.status === 'enviado' ? 'Aguardando há' : 'Aberta há', texto: duracao(agora - Date.parse(s.enviado_em)) };

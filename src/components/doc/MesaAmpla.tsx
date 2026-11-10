@@ -10,7 +10,7 @@ import { Reabrir, ResultadoPill } from '../../pages/Estadia';
 import { mensagemErro, type ResultadoDoc } from '../../data/api';
 import { useDetalheDoc, useDoc } from '../../data/documentacao';
 import { useApp } from '../../data/store';
-import { fmtPlaca, resumoDoc, tempoDoc, vezDe } from '../../lib/documentacao';
+import { duracao, fmtPlaca, relogiosEstadia, resumoDoc, tempoDoc, vezDe } from '../../lib/documentacao';
 import {
   FINAIS_ESTADIA, LIMITES_ESTADIA, MODALIDADE_ESTADIA, MOTIVO_ESTADIA, REF_ESTADIA, RESULTADO_ESTADIA, TIPO_DOC_CURTO, calcularEstadia,
   fmtHoras, fmtHorasDec, fmtNumeroH, fmtReais, fmtTarifa, fmtToneladas, isoParaLocal, lerDecimal, localParaIso,
@@ -19,9 +19,12 @@ import { fmtDataAsHora, fmtDataHora, hojeSP } from '../../lib/formato';
 import type { ResultadoEstadia, SolicitacaoDoc } from '../../types';
 import { Layout } from '../Layout';
 import { Alerta, Carregando, useAviso } from '../ui';
-import { type ArquivoLocal, Copiar, Historico, SeletorArquivos, StatusDocPill, enviarArquivos, useAgora } from './Comum';
+import { type ArquivoLocal, Copiar, Historico, SeletorArquivos, StatusDocPill, TempoCliente, enviarArquivos, useAgora } from './Comum';
 import { CancelarDoc } from './DocumentacaoEmbarque';
 import { RotuloVoltarAmpliado, VisualizadorAnexo } from './VisualizadorAnexo';
+
+/** Data (AAAA-MM-DD) em Brasília de um horário ISO. */
+const dataSPdeIso = (iso: string) => isoParaLocal(iso).slice(0, 10);
 
 const REFERENCIAS = Object.entries(REF_ESTADIA);
 const num = (v: number | null | undefined) => (v == null ? '' : v.toLocaleString('pt-BR', { maximumFractionDigits: 6 }));
@@ -90,6 +93,7 @@ export function MesaAmpla({ s }: { s: SolicitacaoDoc }) {
             <Campo rot="Sindicato" valor={s.est_sindicato ? s.est_sindicato_nome : 'Não'} />
             <Campo rot="Filial / CC" valor={`${r.filial ?? 'Sem filial'}${r.centro_custo ? ` · ${r.centro_custo}` : ''}`} />
             <Campo rot={t.rotulo} valor={t.texto} />
+            {t.cliente && <Campo rot="Tempo do cliente" valor={<TempoCliente t={t} />} />}
             {vezDe(s) && <Campo rot="Vez de" valor={vezDe(s)} />}
             {s.est_modalidade === 'acordo' && (
               <Campo largo rot="Acordo com cliente ou mesa" valor={`${fmtReais(s.est_acordo_valor ?? 0)} · confirmado por ${s.est_acordo_confirmado_por ?? '—'} em ${s.est_acordo_data?.split('-').reverse().join('/') ?? '—'} · ${s.est_acordo_descricao ?? ''}`} />
@@ -221,7 +225,7 @@ function Calculo({ s, meu, executar, conferencias }: {
           </div>
           <div className="ma-acoes">
             <button className="btn" disabled={gravando || !ultima || naoSalvo} title={!ultima ? 'Salve a memória de cálculo antes' : naoSalvo ? 'Salve a alteração antes' : undefined}
-              onClick={async () => { setGravando(true); await executar(() => api.doc.encaminharClienteEstadia(s.id, obsCliente.trim() || null, s.versao), 'Situação: aguardando retorno do cliente. Nenhuma mensagem foi enviada pelo app.'); setGravando(false); }}>
+              onClick={async () => { setGravando(true); await executar(() => api.doc.encaminharClienteEstadia(s.id, obsCliente.trim() || null, s.versao), 'Situação: aguardando retorno do cliente. Relógio da TP pausado e relógio do cliente aberto. Nenhuma mensagem foi enviada pelo app.'); setGravando(false); }}>
               Aguardando retorno do cliente
             </button>
             <button className={`btn${acao === 'info' ? ' ativo' : ''}`} onClick={() => setAcao(acao === 'info' ? null : 'info')}>Aguardando informação</button>
@@ -273,6 +277,8 @@ function Calculo({ s, meu, executar, conferencias }: {
 // ---------------------------------------------------------------------------
 function RetornoCliente({ s, meu, executar, detalhe }: { s: SolicitacaoDoc; meu: boolean; executar: Executar; detalhe: ReturnType<typeof useDetalheDoc>['detalhe'] }) {
   const { api, pode } = useApp();
+  const agora = useAgora();
+  const rel = relogiosEstadia(s, agora);
   const anexos = detalhe?.anexos ?? [];
   const retornos = detalhe?.estadia?.retornos ?? [];
   const pagamentos = detalhe?.estadia?.pagamentos ?? [];
@@ -280,7 +286,7 @@ function RetornoCliente({ s, meu, executar, detalhe }: { s: SolicitacaoDoc; meu:
   const conferido = !!s.est_conferencia_id;
   const [resultado, setResultado] = useState<ResultadoEstadia | ''>('');
   const [valorAprovado, setValorAprovado] = useState('');
-  const [dataRetorno, setDataRetorno] = useState(hojeSP());
+  const [retornoEm, setRetornoEm] = useState(() => isoParaLocal(new Date().toISOString()));
   const [just, setJust] = useRascunho(`travion-rascunho-retorno-est-${s.id}`);
   const [evid, setEvid] = useState<ArquivoLocal[]>([]);
   const [valorPago, setValorPago] = useState('');
@@ -292,11 +298,16 @@ function RetornoCliente({ s, meu, executar, detalhe }: { s: SolicitacaoDoc; meu:
   const [tentouR, setTentouR] = useState(false);
   const [tentouP, setTentouP] = useState(false);
   const vAprov = lerDecimal(valorAprovado);
+  const retornoMs = retornoEm ? Date.parse(localParaIso(retornoEm)) : NaN;
+  const desdeMs = s.est_cliente_desde ? Date.parse(s.est_cliente_desde) : null;
   const vPago = lerDecimal(valorPago);
   const errosR = [
     !resultado && 'escolha o resultado',
     resultado === 'aprovada_parcial' && (vAprov === null || Number.isNaN(vAprov) || vAprov <= 0) && 'informe o valor aprovado',
     resultado === 'aprovada' && vAprov !== null && (Number.isNaN(vAprov) || vAprov <= 0) && 'valor aprovado inválido',
+    Number.isNaN(retornoMs) && 'informe a data e a hora em que o cliente respondeu',
+    !Number.isNaN(retornoMs) && retornoMs > Date.now() + 5 * 60e3 && 'a data e a hora do retorno não podem estar no futuro',
+    !Number.isNaN(retornoMs) && desdeMs !== null && retornoMs < desdeMs && `o retorno não pode ser antes do encaminhamento (${fmtDataHora(s.est_cliente_desde!)})`,
     !just.trim() && 'descreva o retorno',
     !evid.length && 'anexe a evidência',
   ].filter(Boolean) as string[];
@@ -306,7 +317,7 @@ function RetornoCliente({ s, meu, executar, detalhe }: { s: SolicitacaoDoc; meu:
     !comp.length && 'anexe o comprovante',
   ].filter(Boolean) as string[];
   const historicoFin = useMemo(() => [
-    ...retornos.map((x) => ({ em: x.criado_em, txt: <>Retorno <ResultadoPill r={x.resultado} />{x.valor_aprovado != null ? ` · aprovado ${fmtReais(x.valor_aprovado)}` : ''} · calculado {fmtReais(x.valor_calculado)} · retorno de {x.data_retorno.split('-').reverse().join('/')} · {x.justificativa}</>, por: x.autor_nome })),
+    ...retornos.map((x) => ({ em: x.criado_em, txt: <>Retorno <ResultadoPill r={x.resultado} />{x.valor_aprovado != null ? ` · aprovado ${fmtReais(x.valor_aprovado)}` : ''} · calculado {fmtReais(x.valor_calculado)} · retorno de {x.retorno_em ? fmtDataHora(x.retorno_em) : x.data_retorno.split('-').reverse().join('/')}{x.tempo_cliente_seg != null ? ` · cliente levou ${duracao(x.tempo_cliente_seg * 1000)}${x.rodada ? ` (rodada ${x.rodada})` : ''}` : ''} · {x.justificativa}</>, por: x.autor_nome })),
     ...pagamentos.map((x) => ({ em: x.criado_em, txt: <>Pago em pendência · {fmtReais(x.valor_pago)} em {x.data_pagamento.split('-').reverse().join('/')}{x.observacao ? ` · ${x.observacao}` : ''}</>, por: x.autor_nome })),
   ].sort((a, b) => b.em.localeCompare(a.em)), [retornos, pagamentos]);
 
@@ -316,10 +327,10 @@ function RetornoCliente({ s, meu, executar, detalhe }: { s: SolicitacaoDoc; meu:
     setGravando('retorno');
     try {
       const enviados = await enviarArquivos(evid, (f) => api.doc.enviarArquivo(f, true), setEvid);
-      if (await executar(() => api.doc.registrarRetornoEstadia(s.id, { resultado, valor_aprovado: resultado === 'rejeitada' ? null : vAprov, justificativa: just.trim(), data_retorno: dataRetorno }, enviados, s.versao),
+      if (await executar(() => api.doc.registrarRetornoEstadia(s.id, { resultado, valor_aprovado: resultado === 'rejeitada' ? null : vAprov, justificativa: just.trim(), data_retorno: dataSPdeIso(localParaIso(retornoEm)), retorno_em: localParaIso(retornoEm) }, enviados, s.versao),
         resultado === 'aprovada' ? `Retorno registrado: Aprovada${s.status === 'pago_pendencia' ? ' (Pago em pendência → Aprovada; o pagamento continua registrado)' : ''}.`
           : resultado === 'aprovada_parcial' ? 'Retorno registrado: Aprovada parcialmente.' : 'Retorno registrado: Rejeitada. Confira e encerre com o motivo.')) {
-        setResultado(''); setValorAprovado(''); setJust(''); setEvid([]); setTentouR(false);
+        setResultado(''); setValorAprovado(''); setJust(''); setEvid([]); setTentouR(false); setRetornoEm(isoParaLocal(new Date().toISOString()));
       }
     } catch { /* upload falhou: arquivos ficam na lista */ }
     setGravando(null);
@@ -343,6 +354,16 @@ function RetornoCliente({ s, meu, executar, detalhe }: { s: SolicitacaoDoc; meu:
       <div className="ma-cab"><h3>Retorno do cliente e encaminhamento</h3>
         <span className="pequeno suave">{s.est_encaminhado_em ? `Encaminhada ao cliente em ${fmtDataAsHora(s.est_encaminhado_em)} (fora do app)` : 'Ainda não encaminhada ao cliente'}</span>
       </div>
+      {(rel.rodadas > 0 || rel.aberto_ms !== null) && s.status !== 'cancelado' && (
+        <div className="ma-relogios" aria-label="Relógios da estadia">
+          <div className={rel.aberto_ms !== null ? 'pausado' : ''}><span>Relógio Transpanorama</span><strong>{duracao(rel.tp_ms)}</strong>
+            <span>{rel.aberto_ms !== null ? 'Parado enquanto aguarda o cliente' : 'Fila, atendimento e correções'}</span></div>
+          <div><span>Relógio do cliente</span><strong>{duracao(rel.aberto_ms ?? rel.cliente_ms)}</strong>
+            <TempoCliente t={tempoDoc(s, agora)} /></div>
+          <div><span>Rodadas com o cliente</span><strong>{rel.rodadas}</strong>
+            <span>{rel.rodadas > 1 ? `Total com o cliente: ${duracao(rel.cliente_ms)}` : 'Cada reenvio abre uma nova rodada'}</span></div>
+        </div>
+      )}
       <div className="ma-resumo-ret">
         <div><span>Resultado do cliente</span><strong>{s.est_resultado ? <ResultadoPill r={s.est_resultado} /> : 'Sem retorno registrado'}</strong></div>
         <div><span>Valor calculado</span><strong>{s.est_valor_calculado != null ? fmtReais(s.est_valor_calculado) : 'Aguardando conferência'}</strong></div>
@@ -350,6 +371,17 @@ function RetornoCliente({ s, meu, executar, detalhe }: { s: SolicitacaoDoc; meu:
         <div><span>Pago com receita pendente</span><strong>{s.est_valor_pago != null ? fmtReais(s.est_valor_pago) : '—'}</strong></div>
       </div>
 
+      {meu && conferido && s.status === 'pago_pendencia' && !s.est_cliente_desde && (
+        <div className="ma-form">
+          <strong>Pago antes de encaminhar ao cliente</strong>
+          <span className="pequeno suave">O relógio da Transpanorama continua correndo até a estadia ser encaminhada ao cliente.</span>
+          <div><button className="btn" disabled={!!gravando} onClick={async () => {
+            setGravando('encaminhar');
+            await executar(() => api.doc.encaminharClienteEstadia(s.id, null, s.versao), 'Encaminhada ao cliente: relógio da TP pausado e relógio do cliente aberto. Nenhuma mensagem foi enviada pelo app.');
+            setGravando(null);
+          }}>{gravando === 'encaminhar' ? 'Registrando…' : 'Aguardando retorno do cliente'}</button></div>
+        </div>
+      )}
       {pode_ && !conferido && <Alerta tipo="info">Salve a memória de cálculo antes de registrar retorno ou pagamento.</Alerta>}
       {pode_ && conferido && (
         <div className="ma-forms">
@@ -368,8 +400,10 @@ function RetornoCliente({ s, meu, executar, detalhe }: { s: SolicitacaoDoc; meu:
                   <input className="entrada" inputMode="decimal" value={valorAprovado} onChange={(e) => setValorAprovado(e.target.value)} />
                 </label>
               )}
-              <label className="campo"><span>Data do retorno recebido</span>
-                <input className="entrada" type="date" max={hojeSP()} value={dataRetorno} onChange={(e) => setDataRetorno(e.target.value)} />
+              <label className="campo"><span>Data e hora em que o cliente respondeu *</span>
+                <input className="entrada" type="datetime-local" min={isoParaLocal(s.est_cliente_desde)} max={isoParaLocal(new Date().toISOString())}
+                  value={retornoEm} onChange={(e) => setRetornoEm(e.target.value)} />
+                <small className="suave">Fecha o relógio do cliente. A demora para registrar volta para o relógio da TP.</small>
               </label>
             </div>
             <label className="campo"><span>Justificativa / descrição do retorno *</span>
