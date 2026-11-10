@@ -82,3 +82,16 @@ describe('relógio do cliente na estadia', () => {
     expect(r.porComercial.find((x) => x.nome === 'Leandro')?.aprovacao).toBe(0.75);
   });
 });
+
+describe('tempos de atendimento da evolução', () => {
+  it('médio, maior e menor só dos concluídos recebidos no período', async () => {
+    const { temposAtendimento } = await import('./painelOperacional');
+    const mk = (id: string, status: SolicitacaoDoc['status'], enviado: number, at: number, completo = true) =>
+      linha(est({ id, status, enviado_em: iso(enviado) }), { atendimento_ms: at, completo });
+    const de = agora - D;
+    const ls = [mk('a', 'aprovada', de + H, 10 * 60e3), mk('b', 'aprovada', de + 2 * H, 30 * 60e3), mk('c', 'em_atendimento', de + H, 99 * 60e3),
+      mk('d', 'aprovada', de - H, 99 * 60e3), mk('e', 'aprovada', de + H, 99 * 60e3, false)];
+    expect(temposAtendimento(ls, de, agora)).toEqual({ n: 2, medio_ms: 20 * 60e3, maior_ms: 30 * 60e3, menor_ms: 10 * 60e3 });
+    expect(temposAtendimento([], de, agora).n).toBe(0);
+  });
+});
