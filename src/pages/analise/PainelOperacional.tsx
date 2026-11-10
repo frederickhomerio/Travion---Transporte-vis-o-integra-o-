@@ -358,7 +358,7 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   const visiveis = linhas.slice(pagina * porPagina, (pagina + 1) * porPagina);
   return (
     <Quadro id="equipe" titulo="Atendimento por colaborador do apoio" modo={c.modo} aoExpandir={aoExpandir}
-      sub={`Enviados de ${c.txtPeriodo} · ${c.txtTipos}. Concluídos, média e mediana contam para quem encerrou o chamado.`}
+      sub={`Enviados de ${c.txtPeriodo} · ${c.txtTipos}. Concluídos e médias contam para quem encerrou o chamado.`}
       extra={tv && paginas > 1 ? (
         <span className="po-pag">
           <button className="btn peq" onClick={() => setPagina((p) => (p + paginas - 1) % paginas)} aria-label="Página anterior">‹</button>
@@ -373,7 +373,7 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
             <thead>
               <tr>
                 <th>Colaborador</th><th className="n">Assumidos</th><th className="n">Concluídos</th><th className="n">Em atendimento</th>
-                <th className="n">Em pendência</th><th className="n">Tempo em atendimento<small>média</small></th><th className="n">Prazo total<small>mediana</small></th>
+                <th className="n">Em pendência</th><th className="n">Tempo em atendimento<small>média</small></th><th className="n">Prazo total<small>média</small></th>
               </tr>
             </thead>
             <tbody>
@@ -385,7 +385,7 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
                   <td className="n">{x.em_atendimento}</td>
                   <td className="n">{x.em_pendencia}</td>
                   <td className="n"><strong>{x.amostra ? fmtDur(x.media_atendimento_ms) : 'Sem registro'}</strong><small>{x.amostra ? `amostra ${x.amostra}` : ''}</small></td>
-                  <td className="n"><strong>{x.amostra ? fmtDur(x.mediana_total_ms) : 'Sem registro'}</strong><small>{x.amostra ? `amostra ${x.amostra}` : ''}</small></td>
+                  <td className="n"><strong>{x.amostra ? fmtDur(x.media_total_ms) : 'Sem registro'}</strong><small>{x.amostra ? `amostra ${x.amostra}` : ''}</small></td>
                 </tr>
               ))}
             </tbody>

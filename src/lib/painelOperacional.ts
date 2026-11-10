@@ -241,7 +241,7 @@ export interface LinhaEquipe {
   assumidos: number; concluidos: number; em_atendimento: number; em_pendencia: number;
   mediana_atendimento_ms: number | null; mediana_total_ms: number | null;
   /** Média do tempo em atendimento (pedido de 10/11/2026: a tabela mostra a média). */
-  media_atendimento_ms: number | null;
+  media_atendimento_ms: number | null; media_total_ms: number | null;
   /** Concluídos com sequência completa usados nas medianas. */
   amostra: number;
   /** Concluídos sem registro completo (fora das medianas). */
@@ -261,7 +261,7 @@ export function porColaborador(grupo: LinhaChamado[]): LinhaEquipe[] {
   const linha = (id: string, nome: string) => {
     let x = por.get(id);
     if (!x) {
-      x = { id, nome, assumidos: 0, concluidos: 0, em_atendimento: 0, em_pendencia: 0, mediana_atendimento_ms: null, mediana_total_ms: null, media_atendimento_ms: null,
+      x = { id, nome, assumidos: 0, concluidos: 0, em_atendimento: 0, em_pendencia: 0, mediana_atendimento_ms: null, mediana_total_ms: null, media_atendimento_ms: null, media_total_ms: null,
         amostra: 0, sem_registro: 0, tipos: {}, _at: [], _tot: [] };
       por.set(id, x);
     }
@@ -287,6 +287,7 @@ export function porColaborador(grupo: LinhaChamado[]): LinhaEquipe[] {
   return [...por.values()].map(({ _at, _tot, ...x }) => ({
     ...x, amostra: _at.length, mediana_atendimento_ms: mediana(_at), mediana_total_ms: mediana(_tot),
     media_atendimento_ms: _at.length ? _at.reduce((s, v) => s + v, 0) / _at.length : null,
+    media_total_ms: _tot.length ? _tot.reduce((s, v) => s + v, 0) / _tot.length : null,
   })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 }
 

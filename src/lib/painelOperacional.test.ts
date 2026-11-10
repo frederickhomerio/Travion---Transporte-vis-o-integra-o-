@@ -73,7 +73,7 @@ describe('linha do tempo', () => {
     expect(l.intervalos.filter((i) => i.etapa === 'atendimento').map((i) => [i.responsavel_id, i.ate - i.de])).toEqual([['ana', 30 * MIN], ['bruno', 30 * MIN]]);
     const eq = porColaborador([l]);
     expect(eq.find((x) => x.id === 'ana')).toMatchObject({ assumidos: 1, concluidos: 0 });
-    expect(eq.find((x) => x.id === 'bruno')).toMatchObject({ assumidos: 1, concluidos: 1, amostra: 1, mediana_atendimento_ms: 60 * MIN, media_atendimento_ms: 60 * MIN });
+    expect(eq.find((x) => x.id === 'bruno')).toMatchObject({ assumidos: 1, concluidos: 1, amostra: 1, mediana_atendimento_ms: 60 * MIN, media_atendimento_ms: 60 * MIN, media_total_ms: eq.find((x) => x.id === 'bruno')!.mediana_total_ms });
   });
 });
 
