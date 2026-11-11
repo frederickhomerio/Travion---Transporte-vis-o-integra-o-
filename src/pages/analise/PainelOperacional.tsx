@@ -71,7 +71,8 @@ function lerPreferencias(chave: string, hoje: string): Preferencias {
 
 /** Período do quadro Atendimento por colaborador: o próprio, se escolhido; senão, o do painel. */
 function periodoEquipe(p: Preferencias) {
-  return p.equipeInicio && p.equipeFim ? { inicio: p.equipeInicio, fim: p.equipeFim, proprio: true } : { inicio: p.inicio, fim: p.fim, proprio: false };
+  const ok = (d?: string) => !!d && /^20\d\d-\d\d-\d\d$/.test(d);
+  return ok(p.equipeInicio) && ok(p.equipeFim) && p.equipeInicio! <= p.equipeFim! ? { inicio: p.equipeInicio!, fim: p.equipeFim!, proprio: true } : { inicio: p.inicio, fim: p.fim, proprio: false };
 }
 const fmtPeriodo = (inicio: string, fim: string) => (inicio === fim ? fmtDataCurta(inicio) : `${fmtDataCurta(inicio)} a ${fmtDataCurta(fim)}`);
 
@@ -349,7 +350,13 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   const grupo = useMemo(() => (per.proprio
     ? grupoHistorico(c.linhas, { ...c.pref, inicio: per.inicio, fim: per.fim })
     : c.grupo).filter((l) => tiposEq.includes(l.s.tipo)), [c.grupo, c.linhas, c.pref, per.proprio, per.inicio, per.fim, tiposEq]);
-  const mudarPeriodo = (inicio: string, fim: string) => c.mudar({ equipeInicio: inicio, equipeFim: fim });
+  // Rascunho das datas: só vale depois de clicar em Aplicar (digitar a data não recarrega o quadro).
+  const [rasc, setRasc] = useState({ inicio: per.inicio, fim: per.fim });
+  useEffect(() => { setRasc({ inicio: per.inicio, fim: per.fim }); }, [per.inicio, per.fim]);
+  const dataOk = (d: string) => /^20\d\d-\d\d-\d\d$/.test(d) && !Number.isNaN(Date.parse(d));
+  const rascOk = dataOk(rasc.inicio) && dataOk(rasc.fim) && rasc.inicio <= rasc.fim;
+  const rascMudou = rasc.inicio !== per.inicio || rasc.fim !== per.fim;
+  const aplicarPeriodo = () => { if (rascOk) c.mudar({ equipeInicio: rasc.inicio, equipeFim: rasc.fim }); };
   const tiposVistos = c.pref.tipos.filter((t) => tiposEq.includes(t));
   const linhas = useMemo(() => porColaborador(grupo), [grupo]);
   const seg = useMemo(() => quemSegura(grupo), [grupo]);
@@ -389,13 +396,15 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
           <SeletorTipos rotulo="Tipos" valor={tiposEq} aoMudar={(t) => c.mudar({ tiposEquipe: t })} />
           <div className="po-equipe-datas" role="group" aria-label="Período do quadro">
             <label className="campo po-data"><span>Data de início</span>
-              <input type="date" className="entrada" value={per.inicio} max={per.fim}
-                onChange={(e) => e.target.value && mudarPeriodo(e.target.value, per.fim < e.target.value ? e.target.value : per.fim)} />
+              <input type="date" className="entrada" value={rasc.inicio} min="2020-01-01" max={rasc.fim || undefined}
+                onChange={(e) => setRasc((r) => ({ ...r, inicio: e.target.value }))} onKeyDown={(e) => e.key === 'Enter' && aplicarPeriodo()} />
             </label>
             <label className="campo po-data"><span>Data de fim</span>
-              <input type="date" className="entrada" value={per.fim} min={per.inicio}
-                onChange={(e) => e.target.value && mudarPeriodo(per.inicio > e.target.value ? e.target.value : per.inicio, e.target.value)} />
+              <input type="date" className="entrada" value={rasc.fim} min={rasc.inicio || '2020-01-01'}
+                onChange={(e) => setRasc((r) => ({ ...r, fim: e.target.value }))} onKeyDown={(e) => e.key === 'Enter' && aplicarPeriodo()} />
             </label>
+            <button type="button" className="btn primario peq" disabled={!rascOk || !rascMudou} onClick={aplicarPeriodo}
+              title={rascOk ? undefined : 'Informe datas válidas, com o início antes do fim'}>Aplicar período</button>
             {per.proprio && (
               <button type="button" className="btn sutil peq" onClick={() => c.mudar({ equipeInicio: '', equipeFim: '' })}>Usar o período do painel</button>
             )}
