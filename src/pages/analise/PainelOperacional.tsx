@@ -17,7 +17,7 @@ import { documentosEstadia, fmtReais, periodoEstadia } from '../../lib/estadia';
 import { fmtDataCurta, fmtDataHora, fmtHora, fmtNum, fmtPct, hojeSP } from '../../lib/formato';
 import {
   DIAS_CURTOS, DIAS_SEMANA, type FiltrosPainel, type LinhaChamado, TIPOS_DEMANDA, type TipoDemanda, type VisaoEvolucao,
-  type LinhaRetornoCliente, aplicarRelogioCliente, temposAtendimento, dataSP, evolucao, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo, retornoCliente,
+  type LinhaRetornoCliente, aplicarRelogioCliente, quemSegura, temposAtendimento, dataSP, evolucao, grupoHistorico, intervaloMs, linhasDoPainel, mapaCalor, noEscopo, porColaborador, resumo, retornoCliente,
 } from '../../lib/painelOperacional';
 import type { MotivoDevolucao, StatusDoc } from '../../types';
 import { ResultadoPill } from '../Estadia';
@@ -335,6 +335,7 @@ function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
 
 function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   const linhas = useMemo(() => porColaborador(c.grupo), [c.grupo]);
+  const seg = useMemo(() => quemSegura(c.grupo), [c.grupo]);
   const tv = c.modo === 'tv';
   const caixa = useRef<HTMLDivElement>(null);
   const [cabem, setCabem] = useState(6);
@@ -372,8 +373,9 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
           <table className="tabela po-tab">
             <thead>
               <tr>
-                <th>Colaborador</th><th className="n">Assumidos</th><th className="n">Concluídos</th><th className="n">Em atendimento</th>
-                <th className="n">Em pendência</th><th className="n">Tempo em atendimento<small>média</small></th><th className="n">Prazo total<small>média</small></th>
+                <th>Colaborador</th><th className="n">Assumidos</th><th className="n">Concluídos</th><th className="n">Em<br />atendimento</th>
+                <th className="n">Em<br />pendência</th><th className="n">Tempo em<br />atendimento<small>média</small></th><th className="n">Prazo<br />total<small>média</small></th>
+                <th className="n po-th-parte">Espera p/ apoio<br />assumir<small>média · fila</small></th><th className="n po-th-parte">Retorno da<br />correção<small>média · solicitante</small></th>
               </tr>
             </thead>
             <tbody>
@@ -386,15 +388,47 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
                   <td className="n">{x.em_pendencia}</td>
                   <td className="n"><strong>{x.amostra ? fmtDur(x.media_atendimento_ms) : 'Sem registro'}</strong><small>{x.amostra ? `amostra ${x.amostra}` : ''}</small></td>
                   <td className="n"><strong>{x.amostra ? fmtDur(x.media_total_ms) : 'Sem registro'}</strong><small>{x.amostra ? `amostra ${x.amostra}` : ''}</small></td>
+                  {(() => {
+                    const maior = x.amostra && (x.media_fila_ms ?? 0) !== (x.media_pendencia_ms ?? 0) ? ((x.media_fila_ms ?? 0) > (x.media_pendencia_ms ?? 0) ? 'fila' : 'pend') : null;
+                    return (
+                      <>
+                        <td className={`n po-parte${maior === 'fila' ? ' po-parte-maior' : ''}`}><strong>{x.amostra ? fmtDur(x.media_fila_ms) : '—'}</strong>{maior === 'fila' && <small>segura mais</small>}</td>
+                        <td className={`n po-parte${maior === 'pend' ? ' po-parte-maior' : ''}`}><strong>{x.amostra ? fmtDur(x.media_pendencia_ms) : '—'}</strong>
+                          <small>{maior === 'pend' ? 'segura mais · ' : ''}{x.amostra ? `${x.com_correcao} com correção` : ''}</small></td>
+                      </>
+                    );
+                  })()}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       ))}
+      {linhas.length > 0 && seg.amostra > 0 && (
+        <p className="po-quem">
+          <strong>Quem segura mais o prazo:</strong>{' '}
+          {(seg.fila_ms ?? 0) === (seg.pendencia_ms ?? 0) ? 'empate' : (seg.fila_ms ?? 0) > (seg.pendencia_ms ?? 0) ? <b className="po-quem-apoio">o apoio, para assumir</b> : <b className="po-quem-sol">o solicitante, para devolver a correção</b>}
+          {' · '}espera para o apoio assumir {fmtDur(seg.fila_ms)} por chamado · retorno da correção {fmtDur(seg.pendencia_ms)} por chamado
+          {seg.com_correcao > 0 && <> ({seg.com_correcao} de {seg.amostra} tiveram correção, em média {fmtDur(seg.pendencia_corrigidos_ms)} cada)</>}
+        </p>
+      )}
+      {!tv && seg.solicitantes.length > 0 && (
+        <div className="po-sol-corr">
+          <strong>Solicitantes que mais demoram a devolver a correção</strong>
+          <table className="tabela po-tab">
+            <thead><tr><th>Solicitante</th><th className="n">Correções pedidas</th><th className="n">Tempo médio para devolver</th><th className="n">Aguardando agora</th></tr></thead>
+            <tbody>
+              {seg.solicitantes.slice(0, 5).map((x) => (
+                <tr key={x.id}><td>{x.nome}</td><td className="n">{x.correcoes}</td><td className="n"><strong>{fmtDur(x.media_ms)}</strong></td><td className="n">{x.aguardando_agora || '—'}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          {seg.solicitantes.length > 5 && <small className="suave">Mostrando os 5 maiores de {seg.solicitantes.length}.</small>}
+        </div>
+      )}
       {!tv && linhas.length > 0 && (
         <p className="po-nota">Ordem alfabética, sem ranking. Tempo em atendimento mede a permanência na etapa (não atividade contínua); pendência é situação do processo e
-          não indica falha do colaborador. Amostra = concluídos com registro completo.</p>
+          não indica falha do colaborador. Amostra = concluídos com registro completo. Espera para o apoio assumir inclui a volta à fila depois da correção recebida; prazo total = espera + atendimento + retorno da correção + tempo com o cliente (Estadia).</p>
       )}
     </Quadro>
   );

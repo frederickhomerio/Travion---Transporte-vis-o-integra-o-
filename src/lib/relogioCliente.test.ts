@@ -95,3 +95,24 @@ describe('tempos de atendimento da evolução', () => {
     expect(temposAtendimento([], de, agora).n).toBe(0);
   });
 });
+
+describe('quem segura o prazo', () => {
+  it('compara a espera para assumir com o retorno da correção e lista os solicitantes', async () => {
+    const { quemSegura, porColaborador } = await import('./painelOperacional');
+    const mk = (id: string, sol: string, fila: number, pend: number, dev: number, status: SolicitacaoDoc['status'] = 'aprovada') => {
+      const l = linha(est({ id, status }), { fila_ms: fila, atendimento_ms: 10 * 60e3, pendencia_ms: pend, devolucoes: dev, total_ms: fila + pend + 10 * 60e3,
+        concluido_por: { id: 'ap', nome: 'Apoio' } });
+      return { ...l, s: { ...l.s, solicitante_id: sol, solicitante_nome: sol.toUpperCase() } };
+    };
+    const g = [mk('a', 'ana', 5 * 60e3, 0, 0), mk('b', 'bia', 15 * 60e3, 60 * 60e3, 2), mk('c', 'ana', 10 * 60e3, 10 * 60e3, 1),
+      mk('d', 'bia', 0, 30 * 60e3, 1, 'aguardando_informacao')];
+    const r = quemSegura(g);
+    expect(r.amostra).toBe(3);
+    expect(r.fila_ms).toBe(10 * 60e3);
+    expect(r.pendencia_ms).toBeCloseTo(70 / 3 * 60e3);
+    expect(r.solicitantes.map((x) => [x.nome, x.correcoes, x.media_ms, x.aguardando_agora])).toEqual([['BIA', 3, 30 * 60e3, 1], ['ANA', 1, 10 * 60e3, 0]]);
+    const eq = porColaborador(g)[0];
+    expect(eq.media_fila_ms).toBe(10 * 60e3);
+    expect(eq.com_correcao).toBe(2);
+  });
+});

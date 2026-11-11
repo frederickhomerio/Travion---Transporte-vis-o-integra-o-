@@ -242,6 +242,10 @@ export interface LinhaEquipe {
   mediana_atendimento_ms: number | null; mediana_total_ms: number | null;
   /** Média do tempo em atendimento (pedido de 10/11/2026: a tabela mostra a média). */
   media_atendimento_ms: number | null; media_total_ms: number | null;
+  /** Partes do prazo total (médias na mesma amostra): espera na fila até o apoio assumir ou retomar, e espera pela correção do solicitante. */
+  media_fila_ms: number | null; media_pendencia_ms: number | null;
+  /** Concluídos da amostra que tiveram pedido de correção. */
+  com_correcao: number;
   /** Concluídos com sequência completa usados nas medianas. */
   amostra: number;
   /** Concluídos sem registro completo (fora das medianas). */
@@ -257,12 +261,12 @@ export function mediana(v: number[]): number | null {
 }
 
 export function porColaborador(grupo: LinhaChamado[]): LinhaEquipe[] {
-  const por = new Map<string, LinhaEquipe & { _at: number[]; _tot: number[] }>();
+  const por = new Map<string, LinhaEquipe & { _at: number[]; _tot: number[]; _fila: number[]; _pend: number[] }>();
   const linha = (id: string, nome: string) => {
     let x = por.get(id);
     if (!x) {
-      x = { id, nome, assumidos: 0, concluidos: 0, em_atendimento: 0, em_pendencia: 0, mediana_atendimento_ms: null, mediana_total_ms: null, media_atendimento_ms: null, media_total_ms: null,
-        amostra: 0, sem_registro: 0, tipos: {}, _at: [], _tot: [] };
+      x = { id, nome, assumidos: 0, concluidos: 0, em_atendimento: 0, em_pendencia: 0, mediana_atendimento_ms: null, mediana_total_ms: null, media_atendimento_ms: null, media_total_ms: null, media_fila_ms: null, media_pendencia_ms: null, com_correcao: 0,
+        amostra: 0, sem_registro: 0, tipos: {}, _at: [], _tot: [], _fila: [], _pend: [] };
       por.set(id, x);
     }
     return x;
@@ -281,13 +285,16 @@ export function porColaborador(grupo: LinhaChamado[]): LinhaEquipe[] {
       if (!c) continue;
       const x = linha(c.id, c.nome);
       x.concluidos++;
-      if (l.completo && l.total_ms !== null) { x._at.push(l.atendimento_ms); x._tot.push(l.total_ms); } else x.sem_registro++;
+      if (l.completo && l.total_ms !== null) {
+        x._at.push(l.atendimento_ms); x._tot.push(l.total_ms); x._fila.push(l.fila_ms); x._pend.push(l.pendencia_ms);
+        if (l.devolucoes > 0) x.com_correcao++;
+      } else x.sem_registro++;
     }
   }
-  return [...por.values()].map(({ _at, _tot, ...x }) => ({
+  const media = (v: number[]) => (v.length ? v.reduce((s, n) => s + n, 0) / v.length : null);
+  return [...por.values()].map(({ _at, _tot, _fila, _pend, ...x }) => ({
     ...x, amostra: _at.length, mediana_atendimento_ms: mediana(_at), mediana_total_ms: mediana(_tot),
-    media_atendimento_ms: _at.length ? _at.reduce((s, v) => s + v, 0) / _at.length : null,
-    media_total_ms: _tot.length ? _tot.reduce((s, v) => s + v, 0) / _tot.length : null,
+    media_atendimento_ms: media(_at), media_total_ms: media(_tot), media_fila_ms: media(_fila), media_pendencia_ms: media(_pend),
   })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 }
 
@@ -545,4 +552,26 @@ export function temposAtendimento(linhas: LinhaChamado[], de: number, ate: numbe
   }).map((l) => l.atendimento_ms);
   if (!v.length) return { n: 0, medio_ms: null, maior_ms: null, menor_ms: null };
   return { n: v.length, medio_ms: v.reduce((a, b) => a + b, 0) / v.length, maior_ms: Math.max(...v), menor_ms: Math.min(...v) };
+}
+
+/** Quem segura mais o prazo no grupo: a espera para o apoio assumir (fila) ou o retorno da correção pelo solicitante (pendência).
+ *  Médias por chamado concluído com registro completo, a mesma amostra do prazo total. */
+export interface SolicitanteCorrecao { id: string; nome: string; correcoes: number; media_ms: number; aguardando_agora: number }
+export function quemSegura(grupo: LinhaChamado[]): { amostra: number; fila_ms: number | null; pendencia_ms: number | null; com_correcao: number; pendencia_corrigidos_ms: number | null;
+  /** Solicitantes por tempo médio para devolver cada correção (inclui as que estão aguardando agora, contadas até agora). */
+  solicitantes: SolicitanteCorrecao[] } {
+  const por = new Map<string, { nome: string; ms: number; n: number; agora: number }>();
+  for (const l of grupo) {
+    if (!l.completo || !l.devolucoes) continue;
+    const x = por.get(l.s.solicitante_id) ?? { nome: l.s.solicitante_nome, ms: 0, n: 0, agora: 0 };
+    x.ms += l.pendencia_ms; x.n += l.devolucoes; if (l.s.status === 'aguardando_informacao') x.agora++;
+    por.set(l.s.solicitante_id, x);
+  }
+  const solicitantes = [...por.entries()].map(([id, x]) => ({ id, nome: x.nome, correcoes: x.n, media_ms: x.ms / x.n, aguardando_agora: x.agora }))
+    .sort((a, b) => b.media_ms - a.media_ms || a.nome.localeCompare(b.nome, 'pt-BR'));
+  const ls = grupo.filter((l) => CONCLUIDO.includes(l.s.status) && l.completo && l.total_ms !== null);
+  const media = (v: number[]) => (v.length ? v.reduce((s, n) => s + n, 0) / v.length : null);
+  const corr = ls.filter((l) => l.devolucoes > 0);
+  return { amostra: ls.length, fila_ms: media(ls.map((l) => l.fila_ms)), pendencia_ms: media(ls.map((l) => l.pendencia_ms)),
+    com_correcao: corr.length, pendencia_corrigidos_ms: media(corr.map((l) => l.pendencia_ms)), solicitantes };
 }
