@@ -1837,3 +1837,14 @@ dd .ind-contratou::before { content: ''; }
 .po-evol-tempos > span { display: contents; }
 .po-evol-tempos > span.suave { display: block; grid-column: 1 / -1; font-size: 0.7rem; }
 .po-evol-tempos strong { color: var(--vinho-escuro); font-variant-numeric: tabular-nums; margin-left: 3px; }
+
+/* Atendimento por colaborador: partes do prazo total */
+.po-th-parte { border-left: 1px solid var(--borda); }
+.po-parte { border-left: 1px solid var(--borda); }
+.po-parte strong { color: var(--cinza-700); font-weight: 600; }
+.po-parte-maior strong { color: #a8232c; font-weight: 700; }
+.po-parte-maior small { color: #a8232c; }
+.po-quem { margin: 10px 0 0; font-size: 0.85rem; color: var(--cinza-700); }
+.po-quem b { color: #a8232c; }
+.po-sol-corr { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.po-sol-corr > strong { font-size: 0.9rem; color: var(--vinho-escuro); }
