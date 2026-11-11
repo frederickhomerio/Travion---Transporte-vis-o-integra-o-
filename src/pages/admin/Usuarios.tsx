@@ -79,7 +79,7 @@ export function Usuarios() {
             <tbody>
               {usuarios.map((u) => (
                 <tr key={u.id}>
-                  <td><strong>{u.nome}</strong><div className="pequeno suave">{u.email}{u.telefone ? ` · ${u.telefone}` : ''}</div></td>
+                  <td><strong>{u.nome}</strong><div className="pequeno suave">{u.email}{u.telefone ? ` · ${u.telefone}` : ''}{u.whatsapp_avisos ? ' · avisos no WhatsApp' : ''}</div></td>
                   <td>{ROTULO_PAPEL[u.papel]}</td>
                   <td>{u.acesso_pendente
                     ? <span className="badge aviso" title="Recebeu o convite e ainda não criou a senha nem entrou no app">Convite pendente</span>
@@ -175,10 +175,13 @@ function centrosDoPapel(papel: Papel, atuais: string[], centros: CentroCusto[]) 
   return atuais.filter((x) => !ger.includes(x));
 }
 
+/** Celular com DDD (10 ou 11 dígitos, ou já com o 55 do Brasil). */
+const telefoneCelular = (t: string) => /^\d{10,13}$/.test(t.replace(/\D/g, ''));
+
 function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: MatrizPermissoes; aoFechar: (salvou: boolean) => void }) {
   const { api, estado, pode } = useApp();
   const avisar = useAviso();
-  const [d, setD] = useState({ nome: u.nome, telefone: u.telefone ?? '', papel: u.papel, status: u.status === 'pendente' ? 'ativo' as StatusUsuario : u.status, centros: u.centros });
+  const [d, setD] = useState({ nome: u.nome, telefone: u.telefone ?? '', whatsapp: !!u.whatsapp_avisos, papel: u.papel, status: u.status === 'pendente' ? 'ativo' as StatusUsuario : u.status, centros: u.centros });
   const [perm, setPerm] = useState<Record<string, boolean | null>>({ ...u.permissoes });
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -203,7 +206,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
         if (antes !== depois) mudou[c.chave] = depois;
       }
       await api.atualizarUsuario(u.id, {
-        nome: d.nome.trim(), telefone: d.telefone.trim() || null, papel: d.papel, status: d.status, centros: d.centros,
+        nome: d.nome.trim(), telefone: d.telefone.trim() || null, whatsapp_avisos: d.whatsapp, papel: d.papel, status: d.status, centros: d.centros,
         ...(Object.keys(mudou).length ? { permissoes: mudou } : {}),
       });
       avisar('ok', 'Usuário atualizado.');
@@ -218,7 +221,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
   return (
     <Modal titulo={u.status === 'pendente' ? 'Aprovar acesso' : 'Editar usuário'} aoFechar={() => aoFechar(false)} rodape={<>
       <button className="btn" onClick={() => aoFechar(false)}>Cancelar</button>
-      <button className="btn primario" disabled={salvando || !d.nome.trim() || (!d.centros.length && d.papel !== 'administrador')} onClick={salvar}>{salvando ? 'Salvando…' : u.status === 'pendente' && d.status === 'ativo' ? 'Aprovar' : 'Salvar'}</button>
+      <button className="btn primario" disabled={salvando || !d.nome.trim() || (d.whatsapp && !telefoneCelular(d.telefone)) || (!d.centros.length && d.papel !== 'administrador')} onClick={salvar}>{salvando ? 'Salvando…' : u.status === 'pendente' && d.status === 'ativo' ? 'Aprovar' : 'Salvar'}</button>
     </>}>
       <div className="pequeno suave" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>{u.email}</span>
@@ -252,6 +255,12 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
       <div className="grade-campos">
         <label className="campo"><span>Nome</span><input className="entrada" value={d.nome} onChange={(e) => setD({ ...d, nome: e.target.value })} /></label>
         <label className="campo"><span>Telefone</span><input className="entrada" type="tel" inputMode="tel" maxLength={40} placeholder="(64) 99999-0000" value={d.telefone} onChange={(e) => setD({ ...d, telefone: e.target.value })} /></label>
+        <div className="campo" style={{ gridColumn: '1 / -1' }}>
+          <label className="check"><input type="checkbox" checked={d.whatsapp} onChange={(e) => setD({ ...d, whatsapp: e.target.checked })} />Receber avisos também no WhatsApp</label>
+          <span className="pequeno suave">{d.whatsapp && !telefoneCelular(d.telefone)
+            ? <span style={{ color: 'var(--perigo, #b42318)' }}>Informe o celular com DDD no campo Telefone.</span>
+            : 'Vão pelo WhatsApp: prazo estourado, cancelamento, ajuste solicitado, documentação disponível, correção recebida e embarque suspenso, encerrado ou reativado. Todos os avisos continuam no sino.'}</span>
+        </div>
         <label className="campo"><span>Papel</span>
           <select className="entrada" value={d.papel} onChange={(e) => { const papel = e.target.value as Papel; setD({ ...d, papel, centros: centrosDoPapel(papel, d.centros, estado.cadastros.centros_custo) }); }}>
             {PAPEIS.map((p) => <option key={p} value={p}>{ROTULO_PAPEL[p]}</option>)}

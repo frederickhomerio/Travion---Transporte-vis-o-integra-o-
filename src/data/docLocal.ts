@@ -1353,7 +1353,7 @@ export function criarDocLocal(ctx: CtxDocLocal): ApiDocLocal {
       await pronto;
       const p = ctx.perfil();
       if (!p) return [];
-      return clone(db.notificacoes.filter((n) => n.destinatario_id === p.id && db.solicitacoes.some((s) => s.id === n.solicitacao_id && podeVerReg(s)))
+      return clone(db.notificacoes.filter((n) => n.destinatario_id === p.id && (n.solicitacao_id === null || db.solicitacoes.some((s) => s.id === n.solicitacao_id && podeVerReg(s))))
         .sort((a, b) => b.criada_em.localeCompare(a.criada_em)));
     },
     async marcarLidas(ids) {

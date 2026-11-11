@@ -224,7 +224,7 @@ export interface Api {
 
   // Administração
   listarUsuarios(): Promise<UsuarioAdmin[]>;
-  atualizarUsuario(id: string, dados: { nome?: string; telefone?: string | null; papel?: Papel; status?: StatusUsuario; centros?: string[]; permissoes?: Record<string, boolean | null> }): Promise<void>;
+  atualizarUsuario(id: string, dados: { nome?: string; telefone?: string | null; whatsapp_avisos?: boolean; papel?: Papel; status?: StatusUsuario; centros?: string[]; permissoes?: Record<string, boolean | null> }): Promise<void>;
   listarConvites(): Promise<Convite[]>;
   criarConvite(dados: { email: string; nome?: string; telefone?: string | null; papel: Papel; centros: string[] }): Promise<void>;
   excluirConvite(id: string): Promise<void>;

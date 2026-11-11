@@ -38,6 +38,7 @@ export function Sino() {
     if (n.destino === 'apoio') nav(`/apoio/${n.solicitacao_id}`);
     else if (n.destino === 'cadastro') nav(`/cadastro?s=${n.solicitacao_id}`);
     else if (n.destino === 'estadia') nav(`/estadia/consultar?s=${n.solicitacao_id}`);
+    else if (n.destino === 'lista' || !n.solicitacao_id) nav(`/?emb=${n.embarque_id}`);
     else nav(`/?emb=${n.embarque_id}&doc=${n.solicitacao_id}`);
   };
   return (
