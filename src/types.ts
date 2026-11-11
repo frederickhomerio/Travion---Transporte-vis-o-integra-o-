@@ -23,7 +23,8 @@ export type Permissao =
   | 'cadastro.solicitar' | 'cadastro.ver' | 'cadastro.cancelar' | 'cadastro.cancelar_propria' | 'permissoes.gerenciar' | 'analise.operacional' | 'analise.fila'
   | 'estadia.solicitar' | 'estadia.ver' | 'estadia.reabrir' | 'usuarios.inativar' | 'usuarios.excluir'
   | 'ind.pagina' | 'ind.lancar' | 'ind.avancar' | 'ind.voltar' | 'ind.cancelar' | 'ind.emissao' | 'ind.ocorrencias'
-  | 'ind.ocorrencias_aprovar' | 'ind.pos_entrega' | 'ind.financeiro' | 'ind.clientes' | 'ind.meta';
+  | 'ind.ocorrencias_aprovar' | 'ind.pos_entrega' | 'ind.financeiro' | 'ind.clientes' | 'ind.meta'
+  | 'avisos.fila_nova' | 'avisos.prazo' | 'avisos.embarque_novo' | 'avisos.embarque_estado';
 
 export interface Filial { id: string; nome: string; codigo: string | null; supervisor?: string | null; centro_custo_id?: string | null; ativo: boolean; is_demo: boolean }
 export interface CentroCusto { id: string; nome: string; ativo: boolean; is_demo: boolean; acesso_total?: boolean }
@@ -61,6 +62,8 @@ export interface Local {
 export interface Perfil {
   id: string; nome: string; email: string | null; telefone?: string | null; papel: Papel; status: StatusUsuario;
   comercial_id: string | null; criado_em: string;
+  /** Recebe também no WhatsApp os avisos importantes (ligado pelo administrador; migração 4700). */
+  whatsapp_avisos?: boolean;
 }
 
 export interface Embarque {
@@ -287,8 +290,11 @@ export interface ConferenciaParticipantes {
 }
 
 export interface NotificacaoApp {
-  id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada' | 'cadastro_concluido' | 'cadastro_cancelado' | 'estadia_atualizada' | 'documentacao_devolvida'; titulo: string; texto: string;
-  solicitacao_id: string; embarque_id: string | null; destino: 'embarque' | 'apoio' | 'cadastro' | 'estadia'; criada_em: string; lida_em: string | null;
+  id: string; tipo: 'ajuste_solicitado' | 'documentacao_disponivel' | 'resposta_enviada' | 'cadastro_concluido' | 'cadastro_cancelado' | 'estadia_atualizada' | 'documentacao_devolvida'
+    | 'fila_nova' | 'solicitacao_assumida' | 'solicitacao_cancelada' | 'prazo_estourado' | 'embarque_novo' | 'embarque_estado';
+  titulo: string; texto: string;
+  /** Nulo nos avisos de embarque (novo, suspenso, encerrado, reativado), que abrem a Lista de Fretes (destino 'lista'). */
+  solicitacao_id: string | null; embarque_id: string | null; destino: 'embarque' | 'apoio' | 'cadastro' | 'estadia' | 'lista'; criada_em: string; lida_em: string | null;
 }
 
 /** Dados do formulário (os do embarque vêm sozinhos, pelo servidor). */

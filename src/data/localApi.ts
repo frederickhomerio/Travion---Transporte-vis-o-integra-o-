@@ -88,6 +88,10 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['ind.financeiro', 'Industrializado', 'Ver e lançar valores da viagem e a margem final'],
   ['ind.clientes', 'Industrializado', 'Gerenciar a lista de clientes do Industrializado'],
   ['ind.meta', 'Industrializado', 'Definir a meta diária de cargas a retirar'],
+  ['avisos.fila_nova', 'Avisos', 'Receber aviso de cada solicitação nova na fila do Apoio (Lote e Emissão, Emissão, Cadastro, Estadia) e de prazo estourado sem responsável'],
+  ['avisos.prazo', 'Avisos', 'Receber cópia dos avisos de fila com prazo estourado'],
+  ['avisos.embarque_novo', 'Avisos', 'Receber aviso de novo embarque liberado no seu centro de custo'],
+  ['avisos.embarque_estado', 'Avisos', 'Receber aviso de embarque suspenso, encerrado ou reativado no seu centro de custo'],
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
 
 /** Mesma matriz inicial de supabase/migrations/20261026000200_permissoes.sql */
@@ -100,26 +104,30 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'embarques.encerrar', 'posicoes.pagina',
     'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'cadastro.cancelar',
     'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote',
-    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
+    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta',
+    'avisos.prazo'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
     'compartilhamento.links', 'financeiro.ver', 'financeiro.editar', 'posicoes.pagina', 'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver',
-    'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote'],
+    'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote',
+    'avisos.embarque_novo', 'avisos.embarque_estado'],
   embarcador: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'financeiro.ver', 'financeiro.editar', 'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver',
-    'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila'],
+    'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila',
+    'avisos.embarque_novo'],
   // Apoio Operacional reúne o antigo papel Operação (contadores e observação) e a fila de documentação.
   apoio: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'cadastro.cancelar', 'analise.operacional', 'estadia.ver', 'analise.fila'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'cadastro.cancelar', 'analise.operacional', 'estadia.ver', 'analise.fila', 'avisos.fila_nova'],
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'cadastro.cancelar', 'analise.operacional', 'estadia.ver', 'analise.fila'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'cadastro.cancelar', 'analise.operacional', 'estadia.ver', 'analise.fila', 'avisos.fila_nova'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
     'embarques.editar_lote', 'embarques.editar_cadastro', 'embarques.editar_capacidade', 'embarques.corrigir_lote_pc_tabela',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
     'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver',
     'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila',
-    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta'],
+    'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta',
+    'avisos.embarque_estado'],
   consulta: ['embarques.ver'],
   // Industrializado: o módulo, mais Lista de Fretes (ver e divulgar), Cadastro e Estadia do módulo Embarques (10/11).
   // Industrializado (10/11): as mesmas funções do Travion, com regras só do módulo. Emissão liberada para toda a equipe.
@@ -1186,6 +1194,10 @@ export function criarLocalApi(): Api {
       if (d.status && d.status !== p.status && (d.status === 'bloqueado' || p.status === 'bloqueado') && !tem('usuarios.inativar')) erro('Somente o administrador pode inativar ou reativar usuários.');
       if (d.nome !== undefined) p.nome = d.nome;
       if (d.telefone !== undefined) p.telefone = d.telefone?.trim().slice(0, 40) || null;
+      if (d.whatsapp_avisos !== undefined) {
+        if (d.whatsapp_avisos && !/^\d{10,13}$/.test((p.telefone ?? '').replace(/\D/g, ''))) erro('Para receber avisos no WhatsApp, informe o celular com DDD.');
+        p.whatsapp_avisos = d.whatsapp_avisos;
+      }
       if (d.papel) p.papel = d.papel;
       if (d.status) p.status = d.status;
       if (d.centros) {

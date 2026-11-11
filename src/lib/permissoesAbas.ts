@@ -16,6 +16,7 @@ export const ABAS_APP: Array<{ id: string; rotulo: string; chaves: Permissao[] }
   { id: 'apoio', rotulo: 'Apoio Operacional', chaves: ['apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'documentacao.ver', 'documentacao.cancelar', 'cadastro.cancelar', 'estadia.ver'] },
   { id: 'cadastro', rotulo: 'Cadastro', chaves: ['cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'cadastro.cancelar'] },
   { id: 'estadia', rotulo: 'Estadia', chaves: ['estadia.solicitar', 'estadia.ver', 'estadia.reabrir'] },
+  { id: 'avisos', rotulo: 'Avisos (sino e WhatsApp)', chaves: ['avisos.fila_nova', 'avisos.prazo', 'avisos.embarque_novo', 'avisos.embarque_estado'] },
   { id: 'admin', rotulo: 'Administração', chaves: ['usuarios.gerenciar', 'usuarios.inativar', 'usuarios.excluir', 'permissoes.gerenciar', 'cadastros.gerenciar', 'importacao.executar', 'configuracoes.gerenciar'] },
 ];
 
