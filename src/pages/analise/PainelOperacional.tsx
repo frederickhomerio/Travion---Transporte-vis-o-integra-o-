@@ -38,7 +38,9 @@ const ROTULO_TIPO = Object.fromEntries(TIPOS_DEMANDA.map((t) => [t.id, t.rotulo]
 type Modo = 'normal' | 'expandido' | 'tv';
 
 interface Preferencias { atalho: Atalho; inicio: string; fim: string; tipos: TipoDemanda[]; filial: string; centro: string; colaborador: string;
-  solicitante: string; visaoEvol: VisaoEvolucao; tiposEvol: TipoDemanda[]; tiposEquipe: TipoDemanda[]; tv: IdQuadro[]; passoMapa: 1 | 2; filtrosRecolhidos: boolean;
+  solicitante: string; visaoEvol: VisaoEvolucao; tiposEvol: TipoDemanda[]; tiposEquipe: TipoDemanda[];
+  /** Período próprio do quadro Atendimento por colaborador (vazio = segue o período do painel). */
+  equipeInicio?: string; equipeFim?: string; tv: IdQuadro[]; passoMapa: 1 | 2; filtrosRecolhidos: boolean;
   /** Preferência já ajustada para incluir a Estadia (28/10/2026). */
   tiposV2?: boolean }
 
@@ -67,6 +69,12 @@ function lerPreferencias(chave: string, hoje: string): Preferencias {
   } catch { return padrao; }
 }
 
+/** Período do quadro Atendimento por colaborador: o próprio, se escolhido; senão, o do painel. */
+function periodoEquipe(p: Preferencias) {
+  return p.equipeInicio && p.equipeFim ? { inicio: p.equipeInicio, fim: p.equipeFim, proprio: true } : { inicio: p.inicio, fim: p.fim, proprio: false };
+}
+const fmtPeriodo = (inicio: string, fim: string) => (inicio === fim ? fmtDataCurta(inicio) : `${fmtDataCurta(inicio)} a ${fmtDataCurta(fim)}`);
+
 const fmtDur = (ms: number | null) => (ms === null ? '—' : duracao(ms));
 
 export function PainelOperacional() {
@@ -90,9 +98,11 @@ function Painel({ perfilId }: { perfilId: string }) {
 
   // Janela da consulta: período histórico + período da evolução e o anterior equivalente.
   const hist = intervaloMs(pref.inicio, pref.fim);
+  const eq = periodoEquipe(pref);
+  const histEq = intervaloMs(eq.inicio, eq.fim);
   const ev0 = useMemo(() => evolucao([], pref.visaoEvol, dataEvol, 0, null), [pref.visaoEvol, dataEvol]);
-  const desde = new Date(Math.min(hist.de, ev0.periodoAnterior.de)).toISOString();
-  const ate = new Date(Math.max(hist.ate, ev0.periodo.ate)).toISOString();
+  const desde = new Date(Math.min(hist.de, histEq.de, ev0.periodoAnterior.de)).toISOString();
+  const ate = new Date(Math.max(hist.ate, histEq.ate, ev0.periodo.ate)).toISOString();
   const painel = usePainel(desde, ate, true);
 
   const [tique, setTique] = useState(Date.now());
@@ -335,7 +345,11 @@ function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
 
 function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   const tiposEq = c.pref.tiposEquipe;
-  const grupo = useMemo(() => c.grupo.filter((l) => tiposEq.includes(l.s.tipo)), [c.grupo, tiposEq]);
+  const per = periodoEquipe(c.pref);
+  const grupo = useMemo(() => (per.proprio
+    ? grupoHistorico(c.linhas, { ...c.pref, inicio: per.inicio, fim: per.fim })
+    : c.grupo).filter((l) => tiposEq.includes(l.s.tipo)), [c.grupo, c.linhas, c.pref, per.proprio, per.inicio, per.fim, tiposEq]);
+  const mudarPeriodo = (inicio: string, fim: string) => c.mudar({ equipeInicio: inicio, equipeFim: fim });
   const tiposVistos = c.pref.tipos.filter((t) => tiposEq.includes(t));
   const linhas = useMemo(() => porColaborador(grupo), [grupo]);
   const seg = useMemo(() => quemSegura(grupo), [grupo]);
@@ -362,7 +376,7 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   const visiveis = linhas.slice(pagina * porPagina, (pagina + 1) * porPagina);
   return (
     <Quadro id="equipe" titulo="Atendimento por colaborador do apoio" modo={c.modo} aoExpandir={aoExpandir}
-      sub={`Enviados de ${c.txtPeriodo} · ${tiposVistos.length ? tiposVistos.map((t) => ROTULO_TIPO[t]).join(', ') : 'nenhum tipo'}. Concluídos e médias contam para quem encerrou o chamado.`}
+      sub={`Enviados de ${fmtPeriodo(per.inicio, per.fim)}${per.proprio ? ' (período deste quadro)' : ''} · ${tiposVistos.length ? tiposVistos.map((t) => ROTULO_TIPO[t]).join(', ') : 'nenhum tipo'}. Concluídos e médias contam para quem encerrou o chamado.`}
       extra={tv && paginas > 1 ? (
         <span className="po-pag">
           <button className="btn peq" onClick={() => setPagina((p) => (p + paginas - 1) % paginas)} aria-label="Página anterior">‹</button>
@@ -373,6 +387,19 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
       {!tv && (
         <div className="po-evol-filtros po-equipe-filtros">
           <SeletorTipos rotulo="Tipos" valor={tiposEq} aoMudar={(t) => c.mudar({ tiposEquipe: t })} />
+          <div className="po-equipe-datas" role="group" aria-label="Período do quadro">
+            <label className="campo po-data"><span>Data de início</span>
+              <input type="date" className="entrada" value={per.inicio} max={per.fim}
+                onChange={(e) => e.target.value && mudarPeriodo(e.target.value, per.fim < e.target.value ? e.target.value : per.fim)} />
+            </label>
+            <label className="campo po-data"><span>Data de fim</span>
+              <input type="date" className="entrada" value={per.fim} min={per.inicio}
+                onChange={(e) => e.target.value && mudarPeriodo(per.inicio > e.target.value ? e.target.value : per.inicio, e.target.value)} />
+            </label>
+            {per.proprio && (
+              <button type="button" className="btn sutil peq" onClick={() => c.mudar({ equipeInicio: '', equipeFim: '' })}>Usar o período do painel</button>
+            )}
+          </div>
         </div>
       )}
       <SemTipos tipos={tiposVistos} />
