@@ -7,6 +7,8 @@
 --      As atualizações do Apoio (encaminhada ao cliente, paga, encerrada, reaberta, cancelada, rejeitada) não avisam.
 --      O alerta de cliente sem retorno há 7/15 dias (relógio do cliente, 10/11) continua.
 --   4. Valores em reais nos avisos no formato brasileiro (R$ 7.959,06), também no WhatsApp.
+--   5. 11/11 11h16: Frederick pediu tirar os avisos de prazo estourado POR ENQUANTO. O agendamento
+--      travion-avisos-prazo é desligado (a função fica pronta; para voltar, agendar de novo a cada 5 min).
 -- Não apaga nenhum dado.
 
 -- ---------------------------------------------------------------------------
@@ -108,3 +110,11 @@ create trigger notificacoes_filtrar before insert on public.notificacoes
   for each row execute function private.notificacoes_filtrar();
 
 revoke all on function private.reais_br(text), private.notificacoes_filtrar() from public, anon, authenticated;
+
+-- 5. Prazo estourado desligado por enquanto (já desligado no banco em 11/11 11h16).
+do $agenda$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule(jobid) from cron.job where jobname = 'travion-avisos-prazo';
+  end if;
+end $agenda$;
