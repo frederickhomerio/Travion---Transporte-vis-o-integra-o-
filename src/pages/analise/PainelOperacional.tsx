@@ -38,7 +38,7 @@ const ROTULO_TIPO = Object.fromEntries(TIPOS_DEMANDA.map((t) => [t.id, t.rotulo]
 type Modo = 'normal' | 'expandido' | 'tv';
 
 interface Preferencias { atalho: Atalho; inicio: string; fim: string; tipos: TipoDemanda[]; filial: string; centro: string; colaborador: string;
-  solicitante: string; visaoEvol: VisaoEvolucao; tiposEvol: TipoDemanda[]; tv: IdQuadro[]; passoMapa: 1 | 2; filtrosRecolhidos: boolean;
+  solicitante: string; visaoEvol: VisaoEvolucao; tiposEvol: TipoDemanda[]; tiposEquipe: TipoDemanda[]; tv: IdQuadro[]; passoMapa: 1 | 2; filtrosRecolhidos: boolean;
   /** Preferência já ajustada para incluir a Estadia (28/10/2026). */
   tiposV2?: boolean }
 
@@ -51,7 +51,7 @@ function periodoDoAtalho(a: Atalho, hoje: string, atual: { inicio: string; fim: 
 
 function lerPreferencias(chave: string, hoje: string): Preferencias {
   const padrao: Preferencias = { atalho: 'mes', ...intervaloPeriodo(hoje, 'mes'), tipos: TIPOS_ATIVOS, filial: '', centro: '', colaborador: '',
-    solicitante: '', visaoEvol: 'dia', tiposEvol: TIPOS_ATIVOS, tv: ['filas', 'equipe', 'evolucao'], passoMapa: 2, filtrosRecolhidos: false, tiposV2: true };
+    solicitante: '', visaoEvol: 'dia', tiposEvol: TIPOS_ATIVOS, tiposEquipe: TIPOS_ATIVOS, tv: ['filas', 'equipe', 'evolucao'], passoMapa: 2, filtrosRecolhidos: false, tiposV2: true };
   try {
     const p = JSON.parse(localStorage.getItem(chave) ?? 'null') as Partial<Preferencias> | null;
     if (!p) return padrao;
@@ -334,8 +334,11 @@ function QFilas({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
 }
 
 function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
-  const linhas = useMemo(() => porColaborador(c.grupo), [c.grupo]);
-  const seg = useMemo(() => quemSegura(c.grupo), [c.grupo]);
+  const tiposEq = c.pref.tiposEquipe;
+  const grupo = useMemo(() => c.grupo.filter((l) => tiposEq.includes(l.s.tipo)), [c.grupo, tiposEq]);
+  const tiposVistos = c.pref.tipos.filter((t) => tiposEq.includes(t));
+  const linhas = useMemo(() => porColaborador(grupo), [grupo]);
+  const seg = useMemo(() => quemSegura(grupo), [grupo]);
   const tv = c.modo === 'tv';
   const caixa = useRef<HTMLDivElement>(null);
   const [cabem, setCabem] = useState(6);
@@ -359,7 +362,7 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
   const visiveis = linhas.slice(pagina * porPagina, (pagina + 1) * porPagina);
   return (
     <Quadro id="equipe" titulo="Atendimento por colaborador do apoio" modo={c.modo} aoExpandir={aoExpandir}
-      sub={`Enviados de ${c.txtPeriodo} · ${c.txtTipos}. Concluídos e médias contam para quem encerrou o chamado.`}
+      sub={`Enviados de ${c.txtPeriodo} · ${tiposVistos.length ? tiposVistos.map((t) => ROTULO_TIPO[t]).join(', ') : 'nenhum tipo'}. Concluídos e médias contam para quem encerrou o chamado.`}
       extra={tv && paginas > 1 ? (
         <span className="po-pag">
           <button className="btn peq" onClick={() => setPagina((p) => (p + paginas - 1) % paginas)} aria-label="Página anterior">‹</button>
@@ -367,8 +370,13 @@ function QEquipe({ c, aoExpandir }: { c: CtxQuadro; aoExpandir?: () => void }) {
           <button className="btn peq" onClick={() => setPagina((p) => (p + 1) % paginas)} aria-label="Próxima página">›</button>
         </span>
       ) : undefined}>
-      <SemTipos tipos={c.pref.tipos} />
-      {c.pref.tipos.length > 0 && (linhas.length === 0 ? <p className="po-vazio">Nenhum chamado assumido no período.</p> : (
+      {!tv && (
+        <div className="po-evol-filtros po-equipe-filtros">
+          <SeletorTipos rotulo="Tipos" valor={tiposEq} aoMudar={(t) => c.mudar({ tiposEquipe: t })} />
+        </div>
+      )}
+      <SemTipos tipos={tiposVistos} />
+      {tiposVistos.length > 0 && (linhas.length === 0 ? <p className="po-vazio">Nenhum chamado assumido no período.</p> : (
         <div className={tv ? 'po-tab-caixa' : 'rolagem-x'} ref={caixa}>
           <table className="tabela po-tab">
             <thead>

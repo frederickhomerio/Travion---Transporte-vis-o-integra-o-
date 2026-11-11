@@ -1003,6 +1003,7 @@ label.btn.desabilitado { opacity: 0.55; pointer-events: none; }
 
 /* Evolução */
 .po-evol-filtros { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.po-equipe-filtros { margin-bottom: 12px; }
 .po-evol-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .po-evol-kpis > div, .po-resumo > div { border: 1px solid var(--borda); border-radius: var(--raio-campo); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
 .po-evol-kpis span, .po-resumo span { font-size: 0.76rem; color: var(--cinza-600); }
