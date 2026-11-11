@@ -9,7 +9,8 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000a7a2', 'av-ana@teste.local', '{"nome":"Ana Apoio"}'),
   ('00000000-0000-0000-0000-00000000a7a3', 'av-sup@teste.local', '{"nome":"Saulo Supervisor"}'),
   ('00000000-0000-0000-0000-00000000a7a4', 'av-ges@teste.local', '{"nome":"Gil Gestor"}'),
-  ('00000000-0000-0000-0000-00000000a7a5', 'av-out@teste.local', '{"nome":"Otto Outra Filial"}');
+  ('00000000-0000-0000-0000-00000000a7a5', 'av-out@teste.local', '{"nome":"Otto Outra Filial"}'),
+  ('00000000-0000-0000-0000-00000000a7a6', 'av-pau@teste.local', '{"nome":"Paula Supervisora do Apoio"}');
 insert into filiais (id, nome) values ('00000000-0000-0000-0000-00000000a7f1', 'FILIAL AVISOS'), ('00000000-0000-0000-0000-00000000a7f2', 'FILIAL LONGE');
 insert into clientes (id, nome) values ('00000000-0000-0000-0000-00000000a7e1', 'CLIENTE AVISOS');
 update perfis set papel = 'embarcador', status = 'ativo', telefone = '(64) 99999-1234', whatsapp_avisos = true where id = '00000000-0000-0000-0000-00000000a7a1';
@@ -17,9 +18,10 @@ update perfis set papel = 'apoio', status = 'ativo' where id = '00000000-0000-00
 update perfis set papel = 'supervisor', status = 'ativo' where id = '00000000-0000-0000-0000-00000000a7a3';
 update perfis set papel = 'gestor', status = 'ativo' where id = '00000000-0000-0000-0000-00000000a7a4';
 update perfis set papel = 'supervisor', status = 'ativo' where id = '00000000-0000-0000-0000-00000000a7a5';
+update perfis set papel = 'operacao', status = 'ativo' where id = '00000000-0000-0000-0000-00000000a7a6';
 insert into perfil_filiais (perfil_id, filial_id)
 select p, '00000000-0000-0000-0000-00000000a7f1'::uuid from unnest(array['00000000-0000-0000-0000-00000000a7a1', '00000000-0000-0000-0000-00000000a7a2',
-  '00000000-0000-0000-0000-00000000a7a3', '00000000-0000-0000-0000-00000000a7a4']::uuid[]) p;
+  '00000000-0000-0000-0000-00000000a7a3', '00000000-0000-0000-0000-00000000a7a4', '00000000-0000-0000-0000-00000000a7a6']::uuid[]) p;
 insert into perfil_filiais (perfil_id, filial_id) values ('00000000-0000-0000-0000-00000000a7a5', '00000000-0000-0000-0000-00000000a7f2');
 insert into vault.secrets (name, secret) values ('travion_n8n_auditoria_token', 'tok-teste') on conflict (name) do nothing;
 insert into storage.objects (bucket_id, name, owner, metadata) values
@@ -58,8 +60,9 @@ end $$;
 reset role;
 do $$ begin
   assert (select count(*) from notificacoes where tipo = 'fila_nova' and destinatario_id = '00000000-0000-0000-0000-00000000a7a2') = 1, 'apoio avisado da fila';
-  assert (select count(*) from notificacoes where tipo = 'fila_nova') = 1, 'só o apoio (gestor e supervisor não)';
-  assert (select titulo from notificacoes where tipo = 'fila_nova') = 'Nova na fila: Lote e Emissão', 'título fila';
+  assert (select count(*) from notificacoes where tipo = 'fila_nova' and destinatario_id = '00000000-0000-0000-0000-00000000a7a6') = 1, 'supervisora do apoio também';
+  assert (select count(*) from notificacoes where tipo = 'fila_nova') = 2, 'só o apoio (gestor e supervisor de embarque não)';
+  assert (select titulo from notificacoes where tipo = 'fila_nova' limit 1) = 'Nova na fila: Lote e Emissão', 'título fila';
 end $$;
 
 -- 2. Ana assume → Carla avisada. 7. Ana pede ajuste → Carla recebe no sino e no WhatsApp.
@@ -100,7 +103,7 @@ do $$ begin
   assert (select count(*) from net.pedidos) = 2, 'cancelamento no WhatsApp da Carla (Ana não ligou)';
 end $$;
 
--- 4. Prazo: Emissão sem ninguém assumir há 26 min → Ana (fila) e Gil (cópia). Repetir não duplica.
+-- 4. Prazo (ajuste 5000): Emissão sem ninguém assumir há 26 min → só Gil (gestor) e Paula (supervisora do Apoio); Ana (apoio) não.
 set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000a7a1', false);
 do $$ declare r jsonb; begin
@@ -118,8 +121,9 @@ update solicitacoes_doc set enviado_em = now() - interval '26 minutes' where id 
 do $$ begin
   assert private.avisar_prazos_fila() = 1, 'uma solicitação estourada';
   perform private.avisar_prazos_fila();
-  assert (select count(*) from notificacoes where tipo = 'prazo_estourado' and destinatario_id = '00000000-0000-0000-0000-00000000a7a2') = 1, 'apoio, sem repetir';
-  assert (select count(*) from notificacoes where tipo = 'prazo_estourado' and destinatario_id = '00000000-0000-0000-0000-00000000a7a4') = 1, 'cópia gestor';
+  assert (select count(*) from notificacoes where tipo = 'prazo_estourado' and destinatario_id = '00000000-0000-0000-0000-00000000a7a2') = 0, 'apoio não recebe prazo';
+  assert (select count(*) from notificacoes where tipo = 'prazo_estourado' and destinatario_id = '00000000-0000-0000-0000-00000000a7a4') = 1, 'gestor, sem repetir';
+  assert (select count(*) from notificacoes where tipo = 'prazo_estourado' and destinatario_id = '00000000-0000-0000-0000-00000000a7a6') = 1, 'supervisora do apoio';
   assert (select count(*) from notificacoes where tipo = 'prazo_estourado') = 2, 'só os dois';
 end $$;
 -- Antigo demais (mais de 1 h depois do prazo) não avisa.
@@ -152,6 +156,23 @@ do $$ begin
   exception when sqlstate '22023' then null; end;
   perform admin_atualizar_usuario('00000000-0000-0000-0000-00000000a7a2', '{"whatsapp_avisos":true,"telefone":"(62) 98888-7777"}');
   assert (select whatsapp_avisos from perfis where id = '00000000-0000-0000-0000-00000000a7a2'), 'ligado';
+end $$;
+
+-- 9. Estadia (ajuste 5000): só a autorização do cliente avisa; valores em reais no formato brasileiro.
+select set_config('request.jwt.claim.sub', '', false);
+do $$ declare v_s uuid := (select v from tr where k = 's2'); begin
+  delete from notificacoes where destinatario_id = '00000000-0000-0000-0000-00000000a7a1';
+  insert into notificacoes (destinatario_id, tipo, titulo, texto, solicitacao_id, destino, chave) values
+    ('00000000-0000-0000-0000-00000000a7a1', 'estadia_atualizada', 'Estadia aguardando retorno do cliente', 'x · valor calculado R$ 7,959.06', v_s, 'estadia', 't1'),
+    ('00000000-0000-0000-0000-00000000a7a1', 'estadia_atualizada', 'Estadia encerrada', 'x', v_s, 'estadia', 't2'),
+    ('00000000-0000-0000-0000-00000000a7a1', 'estadia_atualizada', 'Estadia rejeitada pelo cliente', 'x', v_s, 'estadia', 't3'),
+    ('00000000-0000-0000-0000-00000000a7a1', 'estadia_atualizada', 'Estadia aprovada pelo cliente', 'EST-1 · CLIENTE · R$ 1,234,567.89', v_s, 'estadia', 't4'),
+    ('00000000-0000-0000-0000-00000000a7a1', 'estadia_atualizada', 'Estadia aprovada parcialmente', 'EST-1 · CLIENTE · R$ 261.70', v_s, 'estadia', 't5'),
+    ('00000000-0000-0000-0000-00000000a7a1', 'estadia_atualizada', 'Cliente sem retorno há mais de 7 dias', 'EST-1 · R$ 7,959.06 aguardando', v_s, 'estadia', 't6');
+  assert (select count(*) from notificacoes where destinatario_id = '00000000-0000-0000-0000-00000000a7a1' and tipo = 'estadia_atualizada') = 3, 'só aprovadas e cliente sem retorno';
+  assert (select texto from notificacoes where chave = 't4') = 'EST-1 · CLIENTE · R$ 1.234.567,89', 'milhar brasileiro';
+  assert (select texto from notificacoes where chave = 't5') = 'EST-1 · CLIENTE · R$ 261,70', 'centavos com vírgula';
+  assert (select texto from notificacoes where chave = 't6') = 'EST-1 · R$ 7.959,06 aguardando', 'alerta do cliente';
 end $$;
 
 \o

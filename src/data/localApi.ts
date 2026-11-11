@@ -88,8 +88,8 @@ export const CATALOGO: MatrizPermissoes['catalogo'] = [
   ['ind.financeiro', 'Industrializado', 'Ver e lançar valores da viagem e a margem final'],
   ['ind.clientes', 'Industrializado', 'Gerenciar a lista de clientes do Industrializado'],
   ['ind.meta', 'Industrializado', 'Definir a meta diária de cargas a retirar'],
-  ['avisos.fila_nova', 'Avisos', 'Receber aviso de cada solicitação nova na fila do Apoio (Lote e Emissão, Emissão, Cadastro, Estadia) e de prazo estourado sem responsável'],
-  ['avisos.prazo', 'Avisos', 'Receber cópia dos avisos de fila com prazo estourado'],
+  ['avisos.fila_nova', 'Avisos', 'Receber aviso de cada solicitação nova na fila do Apoio (Lote e Emissão, Emissão, Cadastro, Estadia)'],
+  ['avisos.prazo', 'Avisos', 'Receber aviso de solicitação com prazo estourado na fila do Apoio'],
   ['avisos.embarque_novo', 'Avisos', 'Receber aviso de novo embarque liberado no seu centro de custo'],
   ['avisos.embarque_estado', 'Avisos', 'Receber aviso de embarque suspenso, encerrado ou reativado no seu centro de custo'],
 ].map(([chave, grupo, descricao]) => ({ chave: chave as Permissao, grupo, descricao }));
@@ -119,8 +119,10 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
   // Apoio Operacional reúne o antigo papel Operação (contadores e observação) e a fila de documentação.
   apoio: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
     'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'cadastro.cancelar', 'analise.operacional', 'estadia.ver', 'analise.fila', 'avisos.fila_nova'],
+  // Supervisor do Apoio Operacional (11/11): o mesmo do Apoio + aviso de prazo estourado.
   operacao: ['embarques.ver', 'posicoes.abrir', 'posicoes.editar_contadores', 'posicoes.editar_obs_operacional',
-    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'cadastro.cancelar', 'analise.operacional', 'estadia.ver', 'analise.fila', 'avisos.fila_nova'],
+    'documentacao.ver', 'apoio.pagina', 'apoio.atender', 'apoio.reassumir', 'cadastro.ver', 'cadastro.cancelar', 'analise.operacional', 'estadia.ver', 'analise.fila', 'avisos.fila_nova',
+    'avisos.prazo'],
   comercial: ['embarques.ver', 'embarques.criar', 'embarques.liberar', 'financeiro.ver', 'financeiro.editar', 'embarques.editar_cadencia',
     'embarques.editar_lote', 'embarques.editar_cadastro', 'embarques.editar_capacidade', 'embarques.corrigir_lote_pc_tabela',
     'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar', 'compartilhamento.links',
@@ -315,7 +317,7 @@ function completarEquipe(db: Banco): Banco {
   return db;
 }
 
-const PAPEIS_GERENCIAL: Papel[] = ['apoio', 'comercial', 'gestor', 'administrador'];
+const PAPEIS_GERENCIAL: Papel[] = ['apoio', 'operacao', 'comercial', 'gestor', 'administrador'];
 
 /** Filiais que os centros de custo do usuário liberam (Gerencial: todas). */
 function sincronizarEscopo(db: Banco, perfilId: string) {
