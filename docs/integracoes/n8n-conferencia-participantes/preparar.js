@@ -67,12 +67,28 @@ const PROMPT = [
   'observacao: uma frase curta só se algo dificultou a leitura; senão vazio.'
 ].join('\n');
 
+// Economia de crédito (pedido do Frederick, 10/11/2026):
+//  1) leitura já guardada para o anexo (tabela auditoria_leituras) -> reaproveita, sem IA;
+//  2) lê primeiro com o gpt-4.1-mini; o gpt-4.1 só entra se a leitura não fechar (ver "Leitura confere?");
+//  3) PDF digital (com texto embutido) vai como TEXTO para o mini; foto/PDF escaneado vai como arquivo.
+const salvas = {};
+try {
+  for (const it of $('Buscar leituras salvas').all()) {
+    const j = it.json || {};
+    if (j.anexo_id && Array.isArray(j.documentos) && j.documentos.length) salvas[j.anexo_id] = j;
+  }
+} catch (e) { /* sem cache: segue lendo */ }
 const itens = $input.all();
-const meta = $('Listar arquivos').all();
 const saida = [];
 for (let i = 0; i < itens.length; i++) {
-  const m = meta[i] ? meta[i].json : {};
+  let m = {};
+  try { m = $('Listar arquivos').itemMatching(i).json; } catch (e) { m = {}; }
   const base = { auditoria_id: m.auditoria_id, anexo_id: m.id, papel: m.papel, nome: m.nome, tipo_mime: m.tipo_mime };
+  const salva = salvas[m.id];
+  if (salva) {
+    saida.push({ json: Object.assign({}, base, { modo: 'cache', documentos: salva.documentos, modelo: salva.modelo || '' }) });
+    continue;
+  }
   const bin = itens[i].binary && itens[i].binary.data;
   if (!bin) {
     saida.push({ json: Object.assign({}, base, { modo: 'erro', erro: 'Arquivo não baixado do Travion' }) });
@@ -88,20 +104,29 @@ for (let i = 0; i < itens.length; i++) {
   const arquivo = mime === 'application/pdf'
     ? { type: 'input_file', filename: m.nome || 'documento.pdf', file_data: 'data:application/pdf;base64,' + b64 }
     : { type: 'input_image', image_url: 'data:' + mime + ';base64,' + b64, detail: 'high' };
-  const corpo = {
-    // Modelo completo: o mini errava CNPJ e chave em fotos e PDFs escaneados (conferências de 04/11/2026).
-    model: 'gpt-4.1',
+  // Texto embutido no PDF (nó "Extrair texto do PDF"): só vale se parecer um DANFE/DACTE de verdade.
+  const texto = String((itens[i].json && itens[i].json.text) || '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  const digitos = texto.replace(/\D/g, '');
+  const temTexto = texto.length >= 400 && /CNPJ|CPF/i.test(texto) && digitos.length >= 44;
+  const rotulo = 'Arquivo anexado no Travion como ' + (m.papel === 'cte' ? 'CT-e (DACTE)' : 'Nota Fiscal (DANFE)') + '. Nome: ' + (m.nome || '');
+  const corpo = (modelo, conteudo) => ({
+    model: modelo,
     temperature: 0,
     max_output_tokens: 6000,
     input: [
       { role: 'system', content: PROMPT },
-      { role: 'user', content: [
-        { type: 'input_text', text: 'Arquivo anexado no Travion como ' + (m.papel === 'cte' ? 'CT-e (DACTE)' : 'Nota Fiscal (DANFE)') + '. Nome: ' + (m.nome || '') },
-        arquivo
-      ] }
+      { role: 'user', content: [{ type: 'input_text', text: rotulo }].concat(conteudo) }
     ],
     text: { format: { type: 'json_schema', name: 'documentos_fiscais', strict: true, schema: SCHEMA } }
-  };
-  saida.push({ json: Object.assign({}, base, { modo: 'ia', corpo: corpo }) });
+  });
+  const conteudoBarato = temTexto
+    ? [{ type: 'input_text', text: 'Texto extraído do PDF (a ordem das linhas pode estar embaralhada; use os rótulos dos quadros):\n' + texto.slice(0, 16000) }]
+    : [arquivo];
+  saida.push({ json: Object.assign({}, base, {
+    modo: 'ia', leitura: temTexto ? 'texto' : 'arquivo',
+    corpo: corpo('gpt-4.1-mini', conteudoBarato),
+    // Releitura com o modelo completo, sempre com o arquivo (foto/scan/texto confuso).
+    corpo_forte: corpo('gpt-4.1', [arquivo])
+  }) });
 }
 return saida;

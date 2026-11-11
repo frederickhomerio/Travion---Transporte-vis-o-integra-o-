@@ -69,6 +69,8 @@ function lerCte(xml) {
 return $input.all().map(item => {
   const j = item.json;
   const base = { auditoria_id: j.auditoria_id, anexo_id: j.anexo_id, papel: j.papel, nome: j.nome, origem: 'xml' };
+  // Leitura guardada (↻ sem gastar IA): passa adiante como estava.
+  if (j.modo === 'cache') return { json: Object.assign(base, { origem: 'pdf_imagem', documentos: j.documentos || [], erro: '', modelo: j.modelo || '', de_cache: true, tokens: { entrada: 0, saida: 0 } }) };
   if (j.modo !== 'xml') return { json: Object.assign(base, { origem: 'pdf_imagem', documentos: [], erro: j.erro || 'Arquivo não lido' }) };
   const xml = String(j.xml || '');
   const documentos = [];

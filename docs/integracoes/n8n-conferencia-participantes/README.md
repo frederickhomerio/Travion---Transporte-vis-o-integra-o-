@@ -43,3 +43,16 @@ bloco de retirada/entrega (ex.: bloco em Montividiu, observação "LOCAL DE RETI
 Vermelho: CNPJ diferente com os dois dígitos verificadores válidos, CT-e citando outra NF, e CT-e com o mesmo
 CNPJ como remetente e destinatário (exceto quando a própria NF tem emitente = destinatário).
 CNPJ/CPF e chave com dígito verificador inválido são tratados como leitura ruim (amarelo ou conferência por aproximação).
+
+## Economia de crédito da IA (11/11/2026)
+
+- **Leitura guardada:** cada leitura por IA que "fecha" fica na tabela `auditoria_leituras` (por anexo, migração
+  `auditoria_leituras_cache`, sem acesso pelo app). O ↻ e as reconferências reaproveitam a leitura e não gastam crédito.
+  Nós: "Buscar leituras salvas" (antes de baixar) e "Montar leituras para guardar" → "Guardar leituras" (`guardar-leituras.js`).
+- **gpt-4.1-mini primeiro:** "Converter leitura da IA" (`converter.js`) confere a leitura: chave com dígito verificador,
+  CNPJ/CPF válidos, partes principais com documento e município, emitente da NF = CNPJ da chave e início da prestação
+  no CT-e. Se não fechar, "Leitura confere?" manda o arquivo para o gpt-4.1 ("Ler de novo", `converter-forte.js`),
+  que soma os tokens das duas leituras. Se o 4.1 falhar, fica a leitura do mini (sem guardar).
+- **PDF digital como texto:** "Extrair texto do PDF" tira o texto embutido; com pelo menos 400 caracteres, CNPJ/CPF e
+  44 dígitos, o mini recebe só o texto (bem mais barato). Foto e PDF escaneado continuam indo como arquivo.
+- Sem crédito na OpenAI, a conferência mostra "Sem créditos na OpenAI: recarregar em platform.openai.com (Billing)".

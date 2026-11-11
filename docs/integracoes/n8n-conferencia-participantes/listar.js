@@ -1,5 +1,4 @@
-// Uma linha por arquivo: o CT-e anexado e todas as NFs da solicitação.
-const bruto = $input.first().json;
+const bruto = $('Buscar dados da conferência').first().json;
 const dados = Array.isArray(bruto) ? bruto[0] : bruto;
 if (!dados || !dados.auditoria_id) {
   throw new Error('Conferência não encontrada no Travion');
