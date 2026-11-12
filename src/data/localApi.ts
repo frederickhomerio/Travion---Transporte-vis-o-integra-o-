@@ -105,7 +105,7 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver', 'documentacao.cancelar', 'apoio.pagina', 'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'cadastro.cancelar',
     'permissoes.gerenciar', 'analise.operacional', 'estadia.solicitar', 'estadia.ver', 'estadia.reabrir', 'embarques.editar_cadencia_proprio', 'analise.fila', 'embarques.editar_lote',
     'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta',
-    'avisos.prazo'],
+    'avisos.prazo', 'avisos.embarque_novo'],
   supervisor: ['embarques.ver', 'embarques.criar', 'embarques.editar_cadastro', 'embarques.liberar', 'embarques.editar_cadencia',
     'embarques.editar_capacidade', 'embarques.arquivar', 'posicoes.abrir', 'posicoes.editar_contadores',
     'posicoes.editar_obs_operacional', 'posicoes.editar_obs_cliente', 'historico.ver', 'compartilhamento.preparar',
@@ -129,7 +129,7 @@ export const MATRIZ_INICIAL: Record<Exclude<Papel, 'administrador'>, Permissao[]
     'posicoes.pagina', 'posicoes.editar_contadores', 'documentacao.ver', 'documentacao.solicitar', 'documentacao.devolver',
     'cadastro.solicitar', 'cadastro.ver', 'cadastro.cancelar_propria', 'estadia.solicitar', 'estadia.ver', 'embarques.editar_cadencia_proprio', 'analise.fila',
     'ind.pagina', 'ind.lancar', 'ind.avancar', 'ind.voltar', 'ind.cancelar', 'ind.emissao', 'ind.ocorrencias', 'ind.ocorrencias_aprovar', 'ind.pos_entrega', 'ind.financeiro', 'ind.clientes', 'ind.meta',
-    'avisos.embarque_estado'],
+    'avisos.embarque_estado', 'avisos.embarque_novo'],
   consulta: ['embarques.ver'],
   // Industrializado: o módulo, mais Lista de Fretes (ver e divulgar), Cadastro e Estadia do módulo Embarques (10/11).
   // Industrializado (10/11): as mesmas funções do Travion, com regras só do módulo. Emissão liberada para toda a equipe.

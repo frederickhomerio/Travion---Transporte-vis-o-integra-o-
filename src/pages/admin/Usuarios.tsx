@@ -259,7 +259,7 @@ function EditarUsuario({ u, matriz, aoFechar }: { u: UsuarioAdmin; matriz: Matri
           <label className="check"><input type="checkbox" checked={d.whatsapp} onChange={(e) => setD({ ...d, whatsapp: e.target.checked })} />Receber avisos também no WhatsApp</label>
           <span className="pequeno suave">{d.whatsapp && !telefoneCelular(d.telefone)
             ? <span style={{ color: 'var(--perigo, #b42318)' }}>Informe o celular com DDD no campo Telefone.</span>
-            : 'Vão pelo WhatsApp: prazo estourado, cancelamento, ajuste solicitado, documentação disponível, correção recebida e embarque suspenso, encerrado ou reativado. Todos os avisos continuam no sino.'}</span>
+            : 'Vão pelo WhatsApp: prazo estourado, cancelamento, ajuste solicitado, documentação disponível, correção recebida, novo embarque liberado e embarque suspenso, encerrado ou reativado. Todos os avisos continuam no sino.'}</span>
         </div>
         <label className="campo"><span>Papel</span>
           <select className="entrada" value={d.papel} onChange={(e) => { const papel = e.target.value as Papel; setD({ ...d, papel, centros: centrosDoPapel(papel, d.centros, estado.cadastros.centros_custo) }); }}>
